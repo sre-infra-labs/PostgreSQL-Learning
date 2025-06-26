@@ -153,7 +153,7 @@ select * from check_indexes('public', 'users_demo');
  * 
  * If I want to find my local friends:
  */
-EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 select *
 	from users_demo
 	where location = 'Las Vegas, NV, US';
@@ -178,7 +178,7 @@ select *
  * Let's use a more popular location,
  * and run this a couple of times:
  */
-EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 select *
 	from users_demo
 	where location = 'India';
@@ -215,7 +215,7 @@ vacuum full users_demo;
 
 
 /* And then try India again: */
-EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 select *
 	from users_demo
 	where location = 'India';

@@ -72,7 +72,7 @@ Indexes:
 
 
 -- #1 - departure airport has high selectivity, and passenger name has low selectivity.
-explain (ANALYZE, verbose, buffers, costs, format json)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 SELECT  p.last_name,
         p.first_name
 FROM passenger p
@@ -88,7 +88,7 @@ AND lower(last_name)='clark';
 
 
 -- #2 - both departure airport and passenger name have high selectivity
-explain (ANALYZE, verbose, buffers, costs, format json)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 SELECT  p.last_name,
         p.first_name
 FROM passenger p
@@ -104,7 +104,7 @@ AND lower(last_name)='smith';
 
 
 -- #3 - departure airport has low selectivity, and passenger name has high selectivity
-explain (ANALYZE, verbose, buffers, costs, format json)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 SELECT  p.last_name,
         p.first_name
 FROM passenger p

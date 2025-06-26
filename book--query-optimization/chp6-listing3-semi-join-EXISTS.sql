@@ -9,7 +9,7 @@ Second, rows from the first table are not duplicated where there is more than on
 Most often, a semi-join doesn’t include a JOIN keyword at all.
 */
 
-explain (analyze, VERBOSE, buffers, costs)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 SELECT * FROM flight f WHERE EXISTS
   (SELECT flight_id FROM booking_leg WHERE flight_id=f.flight_id);
 /*

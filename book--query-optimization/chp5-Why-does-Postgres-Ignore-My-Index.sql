@@ -5,7 +5,7 @@ set search_path to postgres_air;
 select max(update_ts) from postgres_air.boarding_pass_large
 -- 2023-11-12 21:56:43.46788+05:30
 
-explain (ANALYZE, buffers, verbose, costs)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 select * from postgres_air.boarding_pass_large
 where update_ts::date between '2023-11-05' and '2023-11-12'
 limit 100;
@@ -27,7 +27,7 @@ Execution Time: 8398.193 ms
 */
 
 
-explain (ANALYZE, buffers, verbose, costs)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 select * from postgres_air.boarding_pass_large
 --where update_ts between '2023-08-05' and '2023-11-13'
 where update_ts::date between '2023-11-05' and '2023-11-13'
@@ -49,7 +49,7 @@ Execution Time: 8337.464 ms
 */
 
 
-explain (ANALYZE, buffers, verbose, costs)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 select * from postgres_air.boarding_pass_large
 where update_ts between '2023-11-05' and '2023-11-12'
 order by 1

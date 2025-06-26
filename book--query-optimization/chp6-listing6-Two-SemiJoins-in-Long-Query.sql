@@ -10,7 +10,7 @@ create index booking__update_ts on booking (update_ts);
 **
 ** 1) Optimizer chooses Hash Join over Semi Join because 
 */
-explain (analyze, costs, verbose, buffers)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 --explain
 SELECT departure_airport, booking_id, is_returning
 FROM booking_leg bl
@@ -47,7 +47,7 @@ JIT:
 
 
 
-explain (analyze, costs, verbose, buffers)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 --explain
 SELECT departure_airport, booking_id, is_returning
 FROM booking_leg bl
@@ -61,7 +61,7 @@ AND bl.booking_id IN (SELECT booking_id FROM booking WHERE update_ts>'2023-08-01
 --SELECT booking_id FROM booking WHERE update_ts>'2023-08-01'; -- (471,393 row(s) affected)
 
 
-explain (analyze, costs, verbose, buffers)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 --explain
 SELECT departure_airport, booking_id, is_returning
 FROM booking_leg bl
@@ -71,7 +71,7 @@ AND departure_airport IN (SELECT airport_code FROM airport WHERE iso_country='US
 AND bl.booking_id IN (SELECT booking_id FROM booking WHERE coalesce(update_ts,'2023-08-03') > '2023-08-02');
 
 
-explain (analyze, costs, verbose, buffers)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 --explain
 SELECT departure_airport, booking_id, is_returning
 FROM booking_leg bl

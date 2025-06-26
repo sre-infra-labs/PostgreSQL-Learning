@@ -8,7 +8,7 @@ create table if not exists myusers (
 );
 
 drop table if exists temp_posts;
-explain (analyze, verbose, costs, buffers)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 create temp table temp_posts as
     select * from public.posts;
 /*
@@ -20,7 +20,7 @@ Execution Time: 4785.761 ms
 */
 
 drop table temp2_posts;
-explain (analyze, verbose, costs, buffers)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 create UNLOGGED table temp2_posts as
     select * from public.posts;
 /*
