@@ -7,7 +7,7 @@
     create 0640 postgres postgres
     su postgres postgres
     prerotate
-        for logfile in /var/lib/postgresql/16/main/log/*.log; do
+        for logfile in {{ postgresql_log_directory }}/*.log; do
             if [ -f "$logfile" ] && [ "$(stat -c %s "$logfile")" -gt $((500 * 1024 * 1024)) ]; then
                 base=$(basename "$logfile")
                 resized_file="/tmp/${base}.resized"
@@ -24,3 +24,4 @@
 
 # sudo logrotate -f /etc/logrotate.d/postgresql
 # Create a cron job /etc/cron.d/logrotate_postgresql
+# */5 * * * * /usr/sbin/logrotate -f /etc/logrotate.d/postgresql
