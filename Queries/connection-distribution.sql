@@ -22,26 +22,57 @@ SELECT
     GREATEST(0, s.reserved - c.superuser_conn) AS free_reserved_slots
 FROM settings s, conn c;
 
-SELECT
-  usename AS username,
-  COALESCE(client_hostname, client_addr::text, 'local') AS client,
-  datname,
-  COUNT(*) AS connection_count,
-  --GROUPING(application_name) AS g_app,
-  GROUPING(usename) AS g_user,
-  GROUPING(client_hostname, client_addr) AS g_client,
-  GROUPING(datname) AS g_db
-FROM pg_stat_activity
-GROUP BY GROUPING SETS (
-  ( usename, client_hostname, client_addr, datname),
-  (usename),
-  (client_hostname, client_addr),
-  (datname)
+WITH base AS (
+  SELECT
+    -- COALESCE(application_name, 'unknown') AS application,
+    usename AS username,
+    COALESCE(client_hostname, client_addr::text, 'local') AS client,
+    COALESCE(datname, 'unknown') as datname,
+    COUNT(*) AS conn_count
+  FROM pg_stat_activity
+  GROUP BY username, client, datname
+),
+totals AS (
+  SELECT
+    SUM(conn_count) AS total_conns
+  FROM base
+),
+user_totals AS (
+  SELECT
+    username,
+    SUM(conn_count) AS total_user_conns
+  FROM base
+  GROUP BY username
+),
+client_totals AS (
+  SELECT
+    client,
+    SUM(conn_count) AS total_client_conns
+  FROM base
+  GROUP BY client
+),
+database_totals AS (
+  SELECT
+    datname,
+    SUM(conn_count) AS total_database_conns
+  FROM base
+  GROUP BY datname
 )
-ORDER BY
-  GROUPING(usename),
-  GROUPING(client_hostname, client_addr),
-  GROUPING(datname);
+SELECT
+--   b.application,
+  b.username,
+  b.client,
+  b.datname,
+  b.conn_count,
+  u.total_user_conns,
+  c.total_client_conns,
+  d.total_database_conns
+FROM base b
+-- JOIN totals t ON b.application = t.application
+JOIN user_totals u ON b.username = u.username
+JOIN client_totals c ON b.client = c.client
+JOIN database_totals d on d.datname = b.datname
+ORDER BY u.total_user_conns DESC, d.total_database_conns desc, c.total_client_conns DESC;
 
 /*
 SHOW max_connections;
