@@ -127,8 +127,32 @@ tar -tvf /tmp/pg_backup/stackoverflow2010.tar
 */
 
 
-/* ************ Performing a Selective Restore ************* */
-/*
+/* ************ Performing a Selective Restore **************
+
+# Get directory type dump
+pg_dump -Fd -Z 9 -v -f /tmp/backup__postgres_air postgres_air
+
+# Get content list
+  # Get source, version, is_compressed, backup date
+pg_restore --list /tmp/backup__postgres_air
+
+3562; 0 6904635 TABLE DATA postgres_air passenger postgres
+│     │ │       │          │            │         │
+│     │ │       │          │            │         └─ Owner of the table: postgres
+│     │ │       │          │            └─────────── Table name: passenger
+│     │ │       │          └──────────────────────── Schema: postgres_air
+│     │ │       └─────────────────────────────────── Object type: TABLE DATA (the data, not the definition)
+│     │ └─────────────────────────────────────────── Object OID: 6904635
+│     └───────────────────────────────────────────── Object ID of the object type (table data in this case). 
+└─────────────────────────────────────────────────── Internal id of object inside dump: 3562
 
 
+# Save Table of Content (ToC) in a file
+pg_restore --list /tmp/backup__postgres_air > /tmp/backup__postgres_air__TOC.txt
+
+# Edit the ToC file
+vim /tmp/backup__postgres_air__TOC.txt
+
+# Restore database [postgres_air] using new TOC file
+pg_restore -C -d postgres -L /tmp/backup__postgres_air__TOC.txt /tmp/backup__postgres_air
 */
