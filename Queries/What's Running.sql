@@ -1,3 +1,4 @@
+-- What is running right now
 WITH blocking_info AS (
     SELECT 
         pid,
