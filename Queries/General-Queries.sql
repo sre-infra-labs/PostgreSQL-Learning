@@ -31,4 +31,5 @@ $ pg_dump -U username -h hostname databasename > dump.sql
 $ psql -d newdb -f dump.sql
 
 
-
+-- Backup cluster objects only, that  is, intra cluster objects like roles, tablespaces, replication slots etc
+$ pg_dumpall --globals-only -f /tmp/$HOSTNAME\_cluster.sql

@@ -156,3 +156,85 @@ vim /tmp/backup__postgres_air__TOC.txt
 # Restore database [postgres_air] using new TOC file
 pg_restore -C -d postgres -L /tmp/backup__postgres_air__TOC.txt /tmp/backup__postgres_air
 */
+
+/*  COPY Command
+
+psql>
+
+copy forum.categories to '/tmp/categories.bak.txt';
+
+
+*/
+
+/*  ********* IMPORT DATA FROM SQLSERVER TO POSTGRESQL *********************
+export MSSQLPASSWORD='YourStrongPasswordHere'
+
+# BCP out data from sql server
+  # Postgres COPY does not support multi character column delimiter, and any row delimiter.
+rm -f /tmp/backups/users.bak.txt
+bcp "SELECT top 100 * FROM dbo.users" queryout /tmp/backups/users.bak.txt -S localhost -d StackOverflow2013 -U sa -P $MSSQLPASSWORD -c -t "!!c!!" -r "!!r!!" -u
+
+-C 65001
+
+| Option      | Meaning                           |
+| ----------- | --------------------------------- |
+| `queryout`  | Export based on SQL query         |
+| `-c`        | Use character format (text)       |
+| `-C`        | Use character encoding UTF-8      |
+| `-t"\t"`    | Use tab `\t` as field delimiter   |
+| `-r"\n"`    | Use newline `\n` as row delimiter |
+| `-S`        | SQL Server name (or IP + port)    |
+| `-u`        | Trust Server Certificate          |
+| `-U` / `-P` | SQL Server login credentials      |
+
+
+# COPY FROM in PostgreSQL
+psql>
+
+\c scratchpad
+
+CREATE TABLE public.users (
+    id               INTEGER PRIMARY KEY,
+    aboutme          TEXT,
+    age              INTEGER,
+    creationdate     TIMESTAMP NOT NULL,
+    displayname      VARCHAR(40) NOT NULL,
+    downvotes        INTEGER NOT NULL,
+    emailhash        VARCHAR(40),
+    lastaccessdate   TIMESTAMP NOT NULL,
+    location         VARCHAR(100),
+    reputation       INTEGER NOT NULL,
+    upvotes          INTEGER NOT NULL,
+    views            INTEGER NOT NULL,
+    websiteurl       VARCHAR(200),
+    accountid        INTEGER
+);
+
+\COPY users (
+  id,
+  aboutme,
+  age,
+  creationdate,
+  displayname,
+  downvotes,
+  emailhash,
+  lastaccessdate,
+  location,
+  reputation,
+  upvotes,
+  views,
+  websiteurl,
+  accountid
+)
+FROM '/tmp/backups/users.bak.txt'
+WITH (
+  FORMAT csv,
+  DELIMITER ',',
+  HEADER false,
+  QUOTE '"',
+  NULL ''
+);
+
+
+*/
+
