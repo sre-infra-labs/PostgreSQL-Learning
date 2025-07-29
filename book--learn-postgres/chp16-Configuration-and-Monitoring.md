@@ -1,4 +1,6 @@
 # Chp#16 - Configuring and Monitoring
+- [pgtune](https://pgtune.leopard.in.ua/)
+- [pgconfig](https://www.pgconfig.org/#/?max_connections=100&pg_version=16&environment_name=WEB&total_ram=4&cpus=2&drive_type=SSD&arch=x86-64&os_type=linux)
 
 ## Modifying the configuration from live system
 ```
