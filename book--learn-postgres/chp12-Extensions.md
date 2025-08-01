@@ -1,4 +1,5 @@
-/*  Extending the Database - The Extension Ecosystem
+
+# Extending the Database - The Extension Ecosystem
 -----------------------------------------------------
 
 -> An extension is a packaged set of files that can be installed in the cluster
@@ -100,3 +101,68 @@ select * from pg_extension;
 
 
 */ 
+
+```
+✅ General-Purpose Extensions
+Extension	Purpose
+pg_stat_statements	Tracks execution statistics of all SQL statements (used for performance tuning).
+auto_explain	Logs execution plans of slow queries automatically.
+pg_hint_plan	Allows query planner hints to influence execution plan (useful when the planner doesn’t pick the best plan).
+uuid-ossp	Provides functions to generate UUIDs (uuid_generate_v4() etc).
+pgcrypto	Provides cryptographic functions for hashing, encryption, etc.
+
+✅ Performance / Indexing
+Extension	Purpose
+btree_gin	Enables GIN indexing for B-tree-like operators.
+btree_gist	Allows B-tree indexable types to be used with GiST indexes.
+pg_trgm	Enables trigram-based indexing for fast LIKE/ILIKE/fuzzy searches.
+fuzzystrmatch	Functions for approximate string matching.
+hypopg	Simulates hypothetical indexes (used for "what-if" planning).
+
+✅ Partitioning / Table Management
+Extension	Purpose
+pg_partman	Automates time- or ID-based partitioning.
+tablefunc	Provides functions like crosstab() (pivot tables).
+pg_repack	Reorganizes tables/indexes to reduce bloat without locks.
+
+✅ Monitoring / Introspection
+Extension	Purpose
+pg_stat_kcache	Tracks OS-level metrics like CPU time per query (requires Linux perf stats).
+pg_stat_monitor	Enhanced replacement for pg_stat_statements (by Percona).
+pg_buffercache	Shows what data is in PostgreSQL’s shared buffer cache.
+pg_visibility	Shows visibility map and heap tuple visibility.
+pg_freespacemap	Views free space available in each table block.
+
+✅ Logical / Physical Replication
+Extension	Purpose
+pglogical	Logical replication plugin with rich features like conflict resolution, DDL replication.
+wal2json	Output plugin for logical decoding (WAL -> JSON), used with Kafka pipelines etc.
+test_decoding	Simple output plugin for logical replication (mainly for testing).
+
+✅ Foreign Data Wrappers (FDW)
+Extension	Purpose
+postgres_fdw	Connects to another PostgreSQL server.
+mysql_fdw	Connects to MySQL databases.
+oracle_fdw	Connects to Oracle databases.
+odbc_fdw	Generic ODBC-based FDW for various DBs.
+file_fdw	Access CSV or other flat files as foreign tables.
+multicorn	Python-based FDW framework (supports MongoDB, Elasticsearch, etc.).
+
+✅ Time-Series / Advanced Use Cases
+Extension	Purpose
+timescaledb	Adds time-series database features (hypertables, compression, etc.).
+pipelineDB	SQL-based stream processing (now merged into TimescaleDB).
+zombodb	Full-text search integration with Elasticsearch.
+
+✅ Security / Auditing
+Extension	Purpose
+pgaudit	Provides detailed session and/or object audit logging.
+sepgsql	Adds SELinux integration for access control.
+pg_statement_rollback	Adds SAVEPOINT rollback on errors in psql.
+
+🔧 Utility / Admin Tools
+Extension	Purpose
+plpgsql_check	Static analysis and linting for PL/pgSQL functions.
+pg_cron	Run cron jobs directly in PostgreSQL (e.g., periodic VACUUM, ANALYZE, etc.).
+pg_proctab	Returns system process information (top-like view inside Postgres).
+```

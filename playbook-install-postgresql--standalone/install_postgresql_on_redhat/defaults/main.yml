@@ -14,6 +14,12 @@ pgpass_entries:
     database: "*"
     hostname: "*"
     port: "*"
+  - linux_user: postgres
+    pg_role: postgres
+    pg_role_pwd: "{{ pg_superuser_pwd}}"
+    database: "*"
+    hostname: "*"
+    port: "*"
 
 # Networks Allowed inside pg_hba.conf
 allowed_hosts:

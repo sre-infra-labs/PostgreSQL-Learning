@@ -43,25 +43,18 @@
   debug:
     var: result_set_password
 
-# Create .pgpass file for the postgres user
-- name: Ensure home directory exists for postgres user
-  file:
-    path: "/home/postgres"
-    state: directory
-    owner: postgres
-    group: postgres
-    mode: '0700'
-  ignore_errors: yes
+- name: Include custom/pgpass_file.yml to setup .pgpass file
+  include_tasks: custom/pgpass_file.yml
 
-- name: Create .pgpass file for postgres user
-  copy:
-    dest: "/home/postgres/.pgpass"
-    content: "*:*:*:postgres:{{ pg_superuser_pwd }}"
-    owner: postgres
-    group: postgres
-    mode: '0600'
-  become: yes
-  become_user: root
+# - name: Create .pgpass file for postgres user
+#   copy:
+#     dest: "/home/postgres/.pgpass"
+#     content: "*:*:*:postgres:{{ pg_superuser_pwd }}"
+#     owner: postgres
+#     group: postgres
+#     mode: '0600'
+#   become: yes
+#   become_user: root
 
 - name: Configure UFW to allow PostgreSQL connections
   ansible.posix.firewalld:
