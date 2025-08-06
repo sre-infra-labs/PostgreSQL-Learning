@@ -1,6 +1,7 @@
 ---
 pg_data_dir: "/var/lib/pgsql/{{ postgresql_version }}/data"
 pg_conf_path: "/var/lib/pgsql/{{ postgresql_version }}/data"
+pg_bin_path: "/usr/pgsql-{{ postgresql_version }}/bin"
 pg_port: 5432
 
 # pg_superuser_pwd: "{{ lookup('env', 'PG_SUPERUSER_PWD') }}"
@@ -31,7 +32,7 @@ allowed_hosts:
 
 # Postgres Extensions to install that are installed by PostgreSQL
 pg_extensions_core:
-  - pg_stat_statments
+  - pg_stat_statements
 
 # Postgres Extensions to install that are external
 pg_extensions_packages:

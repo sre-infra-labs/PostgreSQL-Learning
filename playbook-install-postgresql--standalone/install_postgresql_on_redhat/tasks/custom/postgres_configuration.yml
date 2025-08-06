@@ -3,6 +3,9 @@
   debug:
     msg: "Begin {{ role_name }}/tasks/custom/postgres_configuration.yml"
 
+- name: Include custom/configure_pgsql_bin_path.yml
+  include_tasks: custom/configure_pgsql_bin_path.yml
+
 - name: Update PostgreSQL configuration to listen on all interfaces
   lineinfile:
     path: "{{ pg_conf_path }}/postgresql.conf"
@@ -31,7 +34,7 @@
     state: present
   notify: restart postgresql
 
-- name: Set postgres user password
+- name: Set postgres user password using postgresql_user module
   community.postgresql.postgresql_user:
     name: postgres
     password: "{{ pg_superuser_pwd }}"
@@ -40,10 +43,26 @@
   become: true
   become_user: postgres
 
-- name: Set postgres user password
+# - name: Find PostgreSQL bin directory
+#   ansible.builtin.find:
+#     paths: /usr
+#     patterns: "pgsql-*"
+#     file_type: directory
+#   register: pg_dirs
+
+# - name: Set postgres user password using psql
+#   ansible.builtin.shell: |
+#     PASSWORD='{{ pg_superuser_pwd }}'
+#     sudo -u postgres {{ pg_dirs.files[0].path }}/bin/psql -c "alter role postgres with login password '$PASSWORD';"
+#   args:
+#     executable: /bin/bash
+#   register: result_set_password
+#   when: pg_dirs.files | length > 0
+
+- name: Set postgres user password using psql
   ansible.builtin.shell: |
     PASSWORD='{{ pg_superuser_pwd }}'
-    sudo -u postgres psql -c "alter role postgres with login password '$PASSWORD';"
+    sudo -u postgres {{ pg_bin_path }}/psql -c "alter role postgres with login password '$PASSWORD';"
   args:
     executable: /bin/bash
   register: result_set_password
