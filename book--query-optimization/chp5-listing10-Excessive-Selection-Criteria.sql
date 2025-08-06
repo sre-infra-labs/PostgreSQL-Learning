@@ -5,7 +5,7 @@ set
 ** Optimization making good choice to merge 2 flight_scheduled_departure filters 
 */
 --explain ANALYZE
-EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 SELECT
     last_name,
     first_name,
@@ -66,7 +66,7 @@ Execution Time: 0.369 ms
 **
 */
 explain ANALYZE
---EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
+--EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 SELECT bp.update_ts Boarding_pass_issued,
        scheduled_departure,
        actual_departure,
@@ -113,7 +113,7 @@ CREATE INDEX boarding_pass_update_ts ON postgres_air.boarding_pass  (update_ts);
 
 
 explain ANALYZE
---EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
+--EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 SELECT bp.update_ts Boarding_pass_issued,
        scheduled_departure,
        actual_departure,

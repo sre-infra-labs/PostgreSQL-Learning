@@ -6,7 +6,7 @@
 
 set search_path to public;
 
-EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 SELECT
     COUNT(a.id) AS "Accepted Answers",
     SUM(CASE WHEN a.score = 0 THEN 0 ELSE 1 END) AS "Scored Answers",  

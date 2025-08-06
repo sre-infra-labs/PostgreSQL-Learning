@@ -25,7 +25,7 @@ order by reputation desc
 limit 100;
 
 -- https://explain.dalibo.com/
-EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 select *
 from public.users
 where location = 'Las Vegas, NV, USA'
@@ -36,7 +36,7 @@ limit 100;
 create index users_location_reputation on public.users (location, reputation);
 
 -- https://explain.dalibo.com/
-EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 select *
 from public.users
 where location = 'Las Vegas, NV, USA'

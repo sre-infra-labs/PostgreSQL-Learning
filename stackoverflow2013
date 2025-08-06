@@ -1,0 +1,352 @@
+quit()
+\q
+quit()
+\q
+\c stackoverflow
+\c stackoverflow_large
+\d users
+\l
+alter role postgres set search_path to public, postgres_air, forum;
+\d users
+show search_path;
+alter user postgres set search_path to public, postgres_air, forum;
+\d users
+alter database set search_path to public;
+alter database stackoverflow_large set search_path to public;
+alter database stackoverflow set search_path to public;
+alter database stackoverflow2010 set search_path to public;
+#alter database postgres set search_path to postgres;
+alter database forumdb set search_path to forum;
+\c stackoverflow
+show search_path;
+\d users
+\c stackoverflow_large
+show search_path;
+\d users
+create index users__displayname_location on users (displayname, location);
+\d users
+select current_user;
+select inet_server_ip;
+select inet_server_ip();
+select inet_server_addr() as server_ip;
+\q
+SELECT DISTINCT b.booking_id, b.booking_ref,
+b.booking_name, b.email
+FROM booking b
+JOIN  booking_leg bl USING (booking_id)
+JOIN flight f USING (flight_id)
+WHERE lower(email) like 'lawton510%'
+AND departure_airport='JFK' \gdesc
+SELECT DISTINCT b.booking_id, b.booking_ref,
+b.booking_name, b.email
+FROM booking b
+JOIN  booking_leg bl USING (booking_id)
+JOIN flight f USING (flight_id)
+WHERE lower(email) like 'lawton510%'
+AND departure_airport='JFK' \gdesc
+\q
+\q
+\q
+\l
+\q
+\q
+\q
+\q
+\q
+\set PROMPT1 '(%[%033[96m%]%n@%[%033[95m%]%m) %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 '(%[%033[96m%]%n@%[%033[95m%]%m%) %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 '(%[%033[96m%]%n@%[%033[95m%]%m) %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 '(%[%033[96m%]%n@%[%033[95m%]%m)) %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 '(%[%033[96m%]%n@%[%033[95m%]%m) %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 "(%[%033[96m%]%n@%[%033[95m%]%m) %[%033[92m%]%/%[%033[0m%]%R%# "
+\set PROMPT1 '(%[%033[96m%]%n@%[%033[95m%]%m) %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 '([%[%033[96m%]%n@%[%033[95m%]%m]) %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 '(%[%033[96m%]%n@%[%033[95m%]%m) %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 '%[%033[1;33;40m%]%n@%/%R%[%033[0m%]%# '
+\set PROMPT1 '%[%033[96m%]%n@%[%033[95m%]%m %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 '(%[%033[96m%]%n@%[%033[95m%]%m) %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 '(%[%033[96m%]%n@%[%033[95m%]%m%[39m%]) %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 '%[%033[96m%]%n@%[%033[95m%]%m %[%033[39m%]]) %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 '%[%033[96m%]%n@%[%033[95m%]%m %[%033[39m%]) %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 '(%[%033[96m%]%n@%[%033[95m%]%m%[%033[39m%]) %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 '(%n@%M:%>) %`date +%H:%M:%S` [%/] \n%x%# '
+\set PROMPT1 '%[%033[96m%]%n@%[%033[95m%]%m %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 '%[%033[96m%]%n@%[%033[95m%]%m  %`date +%H:%M:%S` %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 '%[%033[96m%]%n@%[%033[95m%]%m %`date +%H:%M:%S` %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 '%[%033[96m%]%n@%[%033[95m%]%m [%033[39m%]%`date +%H:%M:%S`] %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 '%[%033[96m%]%n@%[%033[95m%]%m %[%033[39m%]%`date +%H:%M:%S`] %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 '%[%033[96m%]%n@%[%033[95m%]%m %[%033[39m%][%`date +%H:%M:%S`] %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 '(%n@%M:%>) %`date +%H:%M:%S` [%/] \n%x%# '
+\set PROMPT1 '%[%033[96m%]%n@%[%033[95m%]%m %[%033[39m%][%`date +%H:%M:%S`] %[%033[92m%](%/)%[%033[0m%]%R%# '
+\set PROMPT1 '(%n@%M:%>) %`date +%H:%M:%S` [%/] \n%x%# '
+\set PROMPT1 '%[%033[96m%]%n@%[%033[95m%]%m %[%033[39m%][%`date +%H:%M:%S`] %[%033[92m%](%/) \n%[%033[0m%]%R%# '
+select current_database,
+version();
+;
+;
+\set PROMPT1 '%[%033[96m%]%n@%[%033[95m%]%m %[%033[39m%][%`date +%H:%M:%S`] %[%033[92m%]%/%[%033[0m%]%R%# '
+\set PROMPT1 '%[%033[96m%]%n@%[%033[95m%]%m %[%033[39m%][%`date +%H:%M:%S`] %[%033[92m%](%/) \n%[%033[0m%]%R%# '
+\set PROMPT1 '%[%033[96m%]%n@%[%033[95m%]%m %[%033[39m%][%`date +%H:%M:%S`] %[%033[92m%](%/) \n%[%033[33m%]%R%# '
+select
+version();
+\set PROMPT1 '%[%033[96m%]%n@%[%033[95m%]%m %[%033[39m%][%`date +%H:%M:%S`] %[%033[92m%](%/) \n%[%033[33m%]%R%#%] '
+\set PROMPT1 '%[%033[96m%]%n@%[%033[95m%]%m %[%033[39m%][%`date +%H:%M:%S`] %[%033[92m%](%/) \n%[%033[1;33;40m%]%R%#%] '
+asdf
+\set PROMPT1 '%[%033[96m%]%n@%[%033[95m%]%m %[%033[39m%][%`date +%H:%M:%S`] %[%033[92m%](%/) \n%[%033[1;33m%]%R%#%] '
+;
+\set PROMPT1 '%[%033[96m%]%n@%[%033[95m%]%m %[%033[39m%][%`date +%H:%M:%S`] %[%033[92m%](%/) \n%[%033[1;33m%]%R%#%]%[%033[39m%]] '
+\set PROMPT1 '%[%033[96m%]%n@%[%033[95m%]%m %[%033[39m%][%`date +%H:%M:%S`] %[%033[92m%](%/) \n%[%033[1;33m%]%R%#%]%[%033[39m%]%] '
+asfd
+;
+\q
+select
+version();
+select
+version();
+\q
+\l
+\d
+\d airport
+\da check
+\A
+\A check
+\da check
+\da
+\db
+\dconfig
+\sf check_indexes
+\c postgres
+\sf check_indexes
+\sf check_indexes \o Private/check_indexes.sql
+\i Private/test.sql
+\x
+\i Private/test.sql
+\x
+\conninfo
+\c Private
+\cd Private
+\! pwd
+\d+ check_indexes
+\?
+\sf check_indexes
+\q
+show data_directory;
+\q
+\q
+\i Security/qry-pg_hba.conf-file.sql 
+\i Security/qry-pg_hba.conf-file.sql 
+\q
+\c forumdb
+\d categories
+\d tags
+select * from tags;
+with recursive tags_tree as (
+    -- non recursive statement
+    select tag, pk, 1 as level
+    from tags
+    where parent is null
+    --
+    union
+    --
+    -- recursive statement
+    select tt.tag || ' -> ' || ct.tag, ct.pk, tt.level + 1
+    from tags ct
+    join tags_tree tt
+      on tt.pk = ct.parent
+)
+select level, tag
+from tags_tree;
+select current_time();
+select current_time;
+select current_timestamp;
+select clock_timestamp
+;
+selecclock_timestamp();
+selecclock_timestamp;
+select clock_timestamp;
+select clock_timestamp();
+begin;
+select current_timestamp;
+select pg_sleep_for('5 seconds');
+select current_timestamp, clock_timestamp;
+select current_timestamp, clock_timestamp();
+commit;
+clear
+;
+\q
+begin;
+\q
+begin;
+\q
+begin;
+\q
+\q
+\q
+selct current_user;
+select current_role;
+\q
+select current_role;
+clear
+;
+\q
+\q
+\q
+! hostname
+;
+\! hostname
+\d
+\l+
+\l
+\du+
+\d
+\ld
+\dl+
+\?
+\l+
+\q
+select version();
+show max_wal_size;
+show checkpoint_timeout;
+select * from pg_settings limit 1;
+select * from pg_settings where name ilike '%checkpoint%';
+\x
+select * from pg_settings where name ilike '%checkpoint%';
+select name, setting, unit, short_desc from pg_settings where name ilike '%checkpoint%';
+\x
+select name, setting, unit, short_desc from pg_settings where name ilike '%checkpoint%';
+show checkpoint_timeout;
+show max_wal_size;
+\c postgres
+alter system set autovacuum = off;
+select pg_reload_conf();
+show autovacuum;
+select * from pg_settings;
+select * from pg_settings where name = 'autovaccum';
+select * from pg_settings where name = 'autovacuum';
+select * from pg_settings where name = 'autovacuum' \gdesc
+\x
+select * from pg_settings where name = 'autovacuum';
+alter system set autovacuum = on;
+select * from pg_settings where name = 'autovacuum';
+show autovacuum;
+select pg_reload_conf();
+show pg_reload_conf;
+show autovacuum;
+select * from pg_settings where name = 'autovacuum';
+alter system set autovacuum = off;
+select * from pg_settings where name = 'autovacuum';
+select version();
+\q
+create role saanvi with login password '03031992' superuser;
+\q
+\q
+select version();
+show config_file;
+show hba_file;
+\q
+select version();
+create role saanvi with login password 'Pa$$w0rd' superuser;
+\q
+alter role saanvi with password '03031992';
+\q
+select current_role;
+\du
+select version();
+\c forumdb 
+\e
+\l
+show data_directory;
+show data_directory;
+show data_directory;
+show log_destination ;
+show log_directory ;
+show log_filename ;
+show log_rotation_size ;
+ls
+;
+show log_filename ;
+show log_filename ;
+show log_filename ;
+q
+\q
+show log_directory;
+show log_destination;
+show log_destination;
+show log_min_duration_statement ;
+select version();
+\q
+\l
+\l
+\c forumdb
+clear
+;
+select pk, title from categories
+;
+set enable_seqscan to 'off';
+select pk, title from categories;
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON) select pk, title from categories;
+create index on categories using btree (title varchar_pattern_ops);
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON) select pk, title from categories;
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON) select pk, title from categories;
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON) select * from categories;
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON) select * from categories where title like 'Da%';
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON) select * from categories where title like '%Da%';
+create extension pg_trgm;
+create index on categories using gin (title gin_trgm_ops);
+\t
+\t
+\i
+\di
+\di+
+\dt categories
+\di categories
+\di
+clear
+;
+\di
+\?
+\d categories
+\di "categories"
+\di categories
+\di *categories*
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON) select * from categories where title like 'Da%';
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON) select * from categories where title like '%Da%';
+clear
+;
+DROP INDEX IF EXISTS categories_title_varchar_pattern_ops_idx;
+DROP EXTENSION IF EXISTS pg_trgm;
+DROP INDEX IF EXISTS categories_title_gin_trgm_ops_idx;
+DROP EXTENSION IF EXISTS pg_trgm;
+DROP INDEX IF EXISTS categories_title_varchar_pattern_ops_idx;
+DROP INDEX IF EXISTS categories_title_gin_trgm_ops_idx;
+\d categories
+DROP INDEX IF EXISTS categories_title_idx;
+DROP INDEX IF EXISTS categories_title_id1;
+DROP EXTENSION IF EXISTS pg_trgm;
+\d categories
+drop index categories_title_idx1;
+\d categories
+DROP EXTENSION IF EXISTS pg_trgm;
+RESET enable_seqscan;
+create index categories_title_btree on categories using btree (title varchar_pattern_ops);
+create index categories_title_trgm on categories using gin (title gin_trgm_ops);
+clear
+;
+\! clear
+DROP INDEX IF EXISTS categories_title_btree;
+DROP INDEX IF EXISTS categories_title_trgm;
+\d categories
+\q
+\q
+\l
+\c forumdb 
+\du
+alter role forum with login password 'LearnPostgreSQL';
+CREATE USER MAPPING FOR forum SERVER remote_ryzen9 OPTIONS (user 'forum', password 'LeanPostgreSQL');
+\! hostnamectl
+select * from categories;
+select current_role;
+\q
+\l
+create database stackoverflow2013;
+\s stackoverflow2013

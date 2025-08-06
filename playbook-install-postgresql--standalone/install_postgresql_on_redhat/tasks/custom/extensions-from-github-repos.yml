@@ -1,0 +1,125 @@
+---
+- name: "Begin {{ role_name }}/tasks/custom/extensions-from-github-repos.yml"
+  debug:
+    msg: "Begin {{ role_name }}/tasks/custom/extensions-from-github-repos.yml"
+
+- name: Ensure build dependencies are present (RHEL/CentOS)
+  yum:
+    name:
+      - make
+      - gcc
+      - unzip
+      # - postgresql-server-devel
+    state: present
+
+- name: Create extension source directory
+  file:
+    path: "{{ pg_ext_src_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Remove extension directories before recreating
+  file:
+    path: "{{ pg_ext_src_dir }}/{{ item.common_name }}"
+    state: absent
+  loop: "{{ pg_extensions_from_github }}"
+  loop_control:
+    label: "{{ pg_ext_src_dir }}/{{ item.common_name }}"
+  become: true
+
+- name: Download extension zip from GitHub
+  get_url:
+    url: "{{ item.github_url }}"
+    dest: "{{ pg_ext_src_dir }}/{{ item.common_name }}.zip"
+    mode: '0644'
+  loop: "{{ pg_extensions_from_github }}"
+  loop_control:
+    label: "{{ item.common_name }}"
+
+- name: Ensure extension subdirectories exist
+  file:
+    path: "{{ pg_ext_src_dir }}/{{ item.common_name }}"
+    state: directory
+    mode: '0755'
+  loop: "{{ pg_extensions_from_github }}"
+  loop_control:
+    label: "{{ pg_ext_src_dir }}/{{ item.common_name }}"
+
+- name: Unarchive extension source
+  ansible.builtin.unarchive:
+    src: "{{ pg_ext_src_dir }}/{{ item.common_name }}.zip"
+    dest: "{{ pg_ext_src_dir }}/{{ item.common_name }}"
+    remote_src: yes
+  loop: "{{ pg_extensions_from_github }}"
+  loop_control:
+    label: "{{ item.common_name }}"
+
+- name: Find first-level directory under extracted source for {{ item.common_name }}
+  ansible.builtin.find:
+    paths: "{{ pg_ext_src_dir }}/{{ item.common_name }}"
+    file_type: directory
+    depth: 1
+  register: ext_dir
+  loop: "{{ pg_extensions_from_github }}"
+  loop_control:
+    label: "{{ item.common_name }}"
+
+# - name: Debug ext_build_dir
+#   ansible.builtin.debug:
+#     var: ext_dir
+
+# - name: Debug ext_build_dir
+#   ansible.builtin.debug:
+#     msg: "common_name: {{ ext_dir_dict.item.common_name }}, extracted_dir_path: {{ ext_dir_dict.files[0].path }}"
+#   loop: "{{ ext_dir.results }}"
+#   loop_control:
+#     loop_var: ext_dir_dict
+#     label: "{{ ext_dir_dict.item.common_name }}"
+
+- name: Initialize ext_build_dir
+  ansible.builtin.set_fact:
+    ext_build_dir: []
+
+- name: Build ext_build_dir list
+  ansible.builtin.set_fact:
+    ext_build_dir: "{{ ext_build_dir + [ {
+        'common_name': ext_dir_dict.item.common_name,
+        'extract_dir_path': ext_dir_dict.files[0].path
+      } ] }}"
+  loop: "{{ ext_dir.results }}"
+  loop_control:
+    loop_var: ext_dir_dict
+    label: "{{ ext_dir_dict.item.common_name }}"
+  when: ext_dir_dict.files | length > 0
+
+- name: Ensure postgres user owns the extension source directory
+  ansible.builtin.file:
+    path: "{{ item.extract_dir_path }}"
+    state: directory
+    recurse: true
+    owner: postgres
+    group: postgres
+  loop: "{{ ext_build_dir }}"
+  loop_control:
+    label: "{{ item.common_name }}"
+
+- name: Install redhat-rpm-config for GCC spec files
+  ansible.builtin.package:
+    name: redhat-rpm-config
+    state: present
+
+- name: Build and install extension
+  ansible.builtin.shell: |
+    PATH="{{ pg_bin_path }}:$PATH"  make && make install
+  args:
+    chdir: "{{ item.extract_dir_path }}"
+  become: true
+  become_user: postgres
+  loop: "{{ ext_build_dir }}"
+  loop_control:
+    label: "{{ item.common_name }}"
+
+
+- name: "End {{ role_name }}/tasks/custom/extensions-from-github-repos.yml"
+  debug:
+    msg: "End {{ role_name }}/tasks/custom/extensions-from-github-repos.yml"

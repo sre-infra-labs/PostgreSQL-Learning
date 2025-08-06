@@ -12,6 +12,9 @@
 - name: Include custom/postgres_configuration.yml
   include_tasks: custom/postgres_configuration.yml
 
+- name: Include custom/extensions.yml
+  include_tasks: custom/extensions.yml
+
 - name: "End {{ role_name }}/main.yml"
   debug:
     msg: "End {{ role_name }}/main.yml"

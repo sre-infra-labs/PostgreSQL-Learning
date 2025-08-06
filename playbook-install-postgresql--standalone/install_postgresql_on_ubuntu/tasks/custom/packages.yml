@@ -20,6 +20,8 @@
       - wget
       - lsb-release
       - ca-certificates
+      - pgbackrest
+      - pgloader
       - postgresql-server-dev-{{ postgresql_version }}
       - postgresql-client-{{ postgresql_version }}
       - postgresql-{{ postgresql_version }}

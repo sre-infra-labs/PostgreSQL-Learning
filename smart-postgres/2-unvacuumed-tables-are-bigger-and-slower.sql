@@ -168,7 +168,7 @@ select * from check_indexes('public', 'users_demo');
  * Run this query 2-3 times because if you only run it once,
  * the comparison will be unfair:
  */
-EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 select COUNT(*) from users_demo;
 
 /* COPY THE PERFORMANCE METRICS BELOW:
@@ -191,7 +191,7 @@ vacuum full users_demo;
 
 
 /* Run the select again and note its new performance metrics: */
-EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 select COUNT(*) from users_demo;
 
 /* The number of buffers read is down quite a bit

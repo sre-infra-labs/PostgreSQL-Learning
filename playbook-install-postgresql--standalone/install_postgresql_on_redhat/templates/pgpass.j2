@@ -1,3 +1,2 @@
-{% for entry in pgpass_entries %}
-{{ entry.hostname }}:{{ entry.port }}:{{ entry.database }}:{{ entry.pg_role }}:{{ entry.pg_role_pwd }}
-{% endfor %}
+# Format: hostname:port:database:username:password
+{{ item.item.hostname }}:{{ item.item.port }}:{{ item.item.database }}:{{ item.item.pg_role }}:{{ item.item.pg_role_pwd }}

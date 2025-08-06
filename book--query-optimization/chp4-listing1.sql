@@ -1,6 +1,6 @@
 set search_path to postgres_air;
 
---EXPLAIN (ANALYZE, VERBOSE, COSTS, FORMAT JSON, BUFFERS)
+--EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 explain analyze
 SELECT f.flight_no,
        f.actual_departure,

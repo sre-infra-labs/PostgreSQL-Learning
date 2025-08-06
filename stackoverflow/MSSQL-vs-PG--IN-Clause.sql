@@ -24,14 +24,14 @@ Second for DisplayName = 'David' & Location = 'India'
 /* ********************************************************************************************************************* */
 create index users__display_name__location on users (displayname, location);
 
-explain (analyze, buffers, costs, verbose)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 SELECT *
 FROM users u
 WHERE u.displayname in ('Ajay','David')
   AND u.location = 'India'
 -- Index not used
 
-explain (analyze, buffers, costs, verbose)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 SELECT *
 FROM users u
 WHERE u.displayname ILIKE ANY (ARRAY['Ajay', 'David'])
@@ -40,7 +40,7 @@ WHERE u.displayname ILIKE ANY (ARRAY['Ajay', 'David'])
 
 create index users__display_name_lowercase__location_lowercase on users (lower(displayname), lower(location));
 
-explain (analyze, buffers, costs, verbose)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 SELECT *
 FROM users u
 WHERE lower(u.displayname) in (lower('Ajay'), lower('David'))

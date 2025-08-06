@@ -1,0 +1,67 @@
+---
+- name: "Begin {{ role_name }}/tasks/custom/extensions.yml"
+  debug:
+    msg: "Begin {{ role_name }}/tasks/custom/extensions.yml"
+
+- name: Install PostgreSQL extension packages mentioned in pg_extension_packages
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ pg_extension_packages }}"
+  become: true
+
+- name: Include custom/extensions-from-external-repos.yml
+  include_tasks: custom/extensions-from-external-repos.yml
+  when:
+    - pg_extensions_from_repos is defined
+    - pg_extensions_from_repos is not none
+    - pg_extensions_from_repos | length > 0
+
+- name: Include custom/extensions-from-github-repos.yml
+  include_tasks: custom/extensions-from-github-repos.yml
+  when:
+    - pg_extensions_from_github is defined
+    - pg_extensions_from_github is not none
+    - pg_extensions_from_github | length > 0
+
+- name: Ensure shared_preload_libraries contains required extensions
+  community.postgresql.postgresql_set:
+    name: shared_preload_libraries
+    value: "{{ extensions_for_postgresql_conf | join(',') }}"
+  become: true
+  become_user: postgres
+
+- name: Ensure PostgreSQL is restarted
+  service:
+    name: postgresql-{{ postgresql_version }}
+    state: restarted
+
+- name: Ensure PostgreSQL extensions are installed in databases
+  vars:
+    databases:
+      - postgres
+      - template1
+      - "{{ app_db_name }}"
+  postgresql_ext:
+    name: "{{ item.1 }}"
+    db: "{{ item.0 }}"
+    state: present
+  when: >
+    item.1 != 'pg_cron' or (item.1 == 'pg_cron' and item.0 == 'postgres')
+  loop: "{{ databases | product(extensions_for_databases) | list }}"
+  loop_control:
+    label: "{{ item.1 }} on {{ item.0 }}"
+  become_user: postgres
+
+- name: Set cron.database_name for pg_cron
+  community.postgresql.postgresql_set:
+    name: cron.database_name
+    value: postgres  # Or whichever DB pg_cron should use
+  when: "'pg_cron' in extensions_for_postgresql_conf"
+  become: true
+  become_user: postgres
+
+
+- name: "End {{ role_name }}/tasks/custom/extensions.yml"
+  debug:
+    msg: "End {{ role_name }}/tasks/custom/extensions.yml"

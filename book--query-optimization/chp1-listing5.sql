@@ -2,7 +2,7 @@
 
 set search_path to postgres_air;
 
-EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 WITH bk_chi AS (
 WITH bk AS (
 WITH level4 AS (SELECT * FROM account WHERE
@@ -25,7 +25,7 @@ SELECT count(*) from passenger WHERE booking_id IN (
       SELECT booking_id FROM bk_chi);
 
 
-EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
+EXPLAIN (ANALYZE, TIMING, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
 SELECT count(*) FROM
 booking bk
 JOIN booking_leg bl ON bk.booking_id=bl.booking_id
