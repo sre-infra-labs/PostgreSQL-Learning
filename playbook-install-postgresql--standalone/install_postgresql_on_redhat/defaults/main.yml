@@ -28,3 +28,12 @@ allowed_hosts:
       - "192.168.1.0/24"
       - "0.0.0.0/0"
       - "::/0"
+
+# Postgres Extensions to install that are installed by PostgreSQL
+pg_extensions_core:
+  - pg_stat_statments
+
+# Postgres Extensions to install that are external
+pg_extensions_packages:
+  - "pg_cron_{{ postgresql_version }}"
+

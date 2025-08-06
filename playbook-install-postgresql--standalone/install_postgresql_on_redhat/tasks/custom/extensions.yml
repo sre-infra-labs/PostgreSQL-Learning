@@ -1,0 +1,55 @@
+---
+- name: "Begin {{ role_name }}/tasks/custom/extensions.yml"
+  debug:
+    msg: "Begin {{ role_name }}/tasks/custom/extensions.yml"
+
+- name: Install PostgreSQL extension packages
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ pg_extensions_packages }}"
+  become: true
+
+- name: Ensure shared_preload_libraries contains required extensions
+  community.postgresql.postgresql_set:
+    name: shared_preload_libraries
+    value: "{{ pg_extensions_core | join(',') }}"
+  become: true
+  become_user: postgres
+
+- name: Ensure PostgreSQL is restarted
+  service:
+    name: postgresql-{{ postgresql_version }}
+    state: restarted
+
+- name: Ensure PostgreSQL extensions are installed in postgres database
+  community.postgresql.postgresql_ext:
+    name: "{{ item }}"
+    db: postgres
+    state: present
+  loop: "{{ pg_extensions_core }}"
+  become: true
+  become_user: postgres
+
+- name: Ensure PostgreSQL extensions are installed in template1 database
+  community.postgresql.postgresql_ext:
+    name: "{{ item }}"
+    db: template1
+    state: present
+  loop: "{{ pg_extensions_core }}"
+  become: true
+  become_user: postgres
+
+- name: Set cron.database_name for pg_cron
+  community.postgresql.postgresql_set:
+    name: cron.database_name
+    value: postgres  # or whatever DB you want pg_cron to use
+    state: present
+    reload: yes
+  when: "'pg_cron' in pg_extensions_core"
+  become: true
+  become_user: postgres
+
+- name: "End {{ role_name }}/tasks/custom/extensions.yml"
+  debug:
+    msg: "End {{ role_name }}/tasks/custom/extensions.yml"

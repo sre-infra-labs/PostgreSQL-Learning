@@ -32,6 +32,15 @@
   notify: restart postgresql
 
 - name: Set postgres user password
+  community.postgresql.postgresql_user:
+    name: postgres
+    password: "{{ pg_superuser_pwd }}"
+    login_user: postgres
+    login_unix_socket: "{{ postgresql_unix_socket_dir | default('/var/run/postgresql') }}"
+  become: true
+  become_user: postgres
+
+- name: Set postgres user password
   ansible.builtin.shell: |
     PASSWORD='{{ pg_superuser_pwd }}'
     sudo -u postgres psql -c "alter role postgres with login password '$PASSWORD';"

@@ -27,6 +27,16 @@
   register: pg_data_dir_stat
   changed_when: false
 
+- name: Set PostgreSQL path system-wide for all users
+  copy:
+    dest: "/etc/profile.d/postgresql.sh"
+    content: |
+      # Added by Ansible - PostgreSQL {{ postgresql_version }}
+      export PATH=/usr/pgsql-{{ postgresql_version }}/bin:$PATH
+    owner: root
+    group: root
+    mode: '0644'
+
 - name: Initialize PostgreSQL database
   command: /usr/pgsql-{{ postgresql_version }}/bin/postgresql-{{ postgresql_version }}-setup initdb
   register: pg_init
