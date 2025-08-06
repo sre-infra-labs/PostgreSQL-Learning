@@ -3,17 +3,31 @@
   debug:
     msg: "Begin {{ role_name }}/tasks/custom/extensions.yml"
 
-- name: Install PostgreSQL extension packages
+- name: Install PostgreSQL extension packages mentioned in pg_extension_packages
   ansible.builtin.package:
     name: "{{ item }}"
     state: present
-  loop: "{{ pg_extensions_packages }}"
+  loop: "{{ pg_extension_packages }}"
   become: true
+
+- name: Include custom/extensions-from-external-repos.yml
+  include_tasks: custom/extensions-from-external-repos.yml
+  when:
+    - pg_extensions_from_repos is defined
+    - pg_extensions_from_repos is not none
+    - pg_extensions_from_repos | length > 0
+
+- name: Include custom/extensions-from-github-repos.yml
+  include_tasks: custom/extensions-from-github-repos.yml
+  when:
+    - pg_extensions_from_github is defined
+    - pg_extensions_from_github is not none
+    - pg_extensions_from_github | length > 0
 
 - name: Ensure shared_preload_libraries contains required extensions
   community.postgresql.postgresql_set:
     name: shared_preload_libraries
-    value: "{{ pg_extensions_core | join(',') }}"
+    value: "{{ extensions_for_postgresql_conf | join(',') }}"
   become: true
   become_user: postgres
 
@@ -22,22 +36,21 @@
     name: postgresql-{{ postgresql_version }}
     state: restarted
 
-- name: Ensure PostgreSQL extensions are installed in postgres database
-  community.postgresql.postgresql_ext:
-    name: "{{ item }}"
-    db: postgres
+- name: Ensure PostgreSQL extensions are installed in databases
+  vars:
+    databases:
+      - postgres
+      - template1
+      - "{{ app_db_name }}"
+  postgresql_ext:
+    name: "{{ item.1 }}"
+    db: "{{ item.0 }}"
     state: present
-  loop: "{{ pg_extensions_core }}"
-  become: true
-  become_user: postgres
-
-- name: Ensure PostgreSQL extensions are installed in template1 database
-  community.postgresql.postgresql_ext:
-    name: "{{ item }}"
-    db: template1
-    state: present
-  loop: "{{ pg_extensions_core }}"
-  become: true
+  when: >
+    item.1 != 'pg_cron' or (item.1 == 'pg_cron' and item.0 == 'postgres')
+  loop: "{{ databases | product(extensions_for_databases) | list }}"
+  loop_control:
+    label: "{{ item.1 }} on {{ item.0 }}"
   become_user: postgres
 
 - name: Set cron.database_name for pg_cron
@@ -46,7 +59,7 @@
     value: postgres  # or whatever DB you want pg_cron to use
     state: present
     reload: yes
-  when: "'pg_cron' in pg_extensions_core"
+  when: "'pg_cron' in extensions_for_postgresql_conf"
   become: true
   become_user: postgres
 

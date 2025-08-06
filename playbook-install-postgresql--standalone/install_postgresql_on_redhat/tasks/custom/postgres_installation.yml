@@ -19,6 +19,7 @@
     name:
       - postgresql{{ postgresql_version }}-server
       - postgresql{{ postgresql_version }}-contrib
+      - postgresql{{ postgresql_version }}-devel
     state: present
 
 - name: Check PGDATA directory

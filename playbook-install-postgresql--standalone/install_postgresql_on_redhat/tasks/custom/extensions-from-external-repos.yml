@@ -1,0 +1,58 @@
+---
+- name: "Begin {{ role_name }}/tasks/custom/extensions-from-external-repos.yml"
+  debug:
+    msg: "Begin {{ role_name }}/tasks/custom/extensions-from-external-repos.yml"
+
+- name: Install extension repository packages
+  dnf:
+    name: "{{ item.repo_url }}"
+    state: present
+    disable_gpg_check: yes
+  loop: "{{ pg_extensions_from_repos }}"
+  loop_control:
+    label: "{{ item.common_name }} repository"
+  register: repo_install_result
+
+- name: Enable extension repositories
+  shell: "{{ item.command_to_enable }}"
+  loop: "{{ pg_extensions_from_repos }}"
+  loop_control:
+    label: "{{ item.common_name }}"
+  register: repo_enable_result
+  changed_when: "'enabled' in repo_enable_result.stdout or 'configured' in repo_enable_result.stdout"
+  failed_when: 
+    - repo_enable_result.rc != 0
+    - "'already enabled' not in repo_enable_result.stderr"
+    - "'already configured' not in repo_enable_result.stderr"
+
+- name: Update package cache after repository changes
+  dnf:
+    update_cache: yes
+  when: (repo_install_result.results | selectattr('changed', 'equalto', true) | list | length > 0) or
+        (repo_enable_result.results | selectattr('changed', 'equalto', true) | list | length > 0)
+
+- name: Install extension packages
+  dnf:
+    name: "{{ item.package_name }}"
+    state: present
+  loop: "{{ pg_extensions_from_repos }}"
+  loop_control:
+    label: "{{ item.common_name }} - {{ item.package_name }}"
+  register: package_install_result
+
+# - name: Display installation summary
+#   debug:
+#     msg: |
+#       Extension Repository: {{ item.common_name }}
+#       Repository URL: {{ item.repo_url }}
+#       Package: {{ item.package_name }}
+#       Repository Status: {% if repo_install_result.results[loop.index0].changed %}Installed{% else %}Already present{% endif %}
+#       Package Status: {% if package_install_result.results[loop.index0].changed %}Installed{% else %}Already present{% endif %}
+#   loop: "{{ pg_extensions_from_repos }}"
+#   loop_control:
+#     index_var: loop_index0
+#     label: "{{ item.common_name }}"
+
+- name: "End {{ role_name }}/tasks/custom/extensions-from-external-repos.yml"
+  debug:
+    msg: "End {{ role_name }}/tasks/custom/extensions-from-external-repos.yml"
