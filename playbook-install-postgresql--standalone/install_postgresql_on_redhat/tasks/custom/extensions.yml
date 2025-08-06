@@ -56,12 +56,11 @@
 - name: Set cron.database_name for pg_cron
   community.postgresql.postgresql_set:
     name: cron.database_name
-    value: postgres  # or whatever DB you want pg_cron to use
-    state: present
-    reload: yes
+    value: postgres  # Or whichever DB pg_cron should use
   when: "'pg_cron' in extensions_for_postgresql_conf"
   become: true
   become_user: postgres
+
 
 - name: "End {{ role_name }}/tasks/custom/extensions.yml"
   debug:
