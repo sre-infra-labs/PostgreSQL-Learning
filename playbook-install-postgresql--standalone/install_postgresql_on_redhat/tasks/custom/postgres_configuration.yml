@@ -20,6 +20,7 @@
     path: "{{ pg_conf_path }}/pg_hba.conf"
     block: |
       # Allow access from any IP with password authentication
+      host    replication     all             0.0.0.0/0               scram-sha-256
       host    all             all             0.0.0.0/0               scram-sha-256
       host    all             all             ::/0                    scram-sha-256
     marker: "# {mark} ANSIBLE MANAGED BLOCK FOR REMOTE ACCESS"

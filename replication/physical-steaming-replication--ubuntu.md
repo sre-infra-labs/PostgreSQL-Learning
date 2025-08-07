@@ -1,5 +1,8 @@
 # PostgreSQL Replication: Physical Steaming Replication
 
+primary -> pg-pub (192.168.100.45)
+secondary -> pg-sub (192.168.200.45)
+
 ## Physical streaming replication
 Streaming replication is the process of sending WAL records as and when they are generated to another PostgreSQL server for the purpose of creating a standby server by replaying WAL records. The standby server is configured to be in recovery mode. The sole purpose of this server is to apply any new WAL records when they arrive. This second server then becomes a warm backup of the primary server. The standby can also be configured to be a read replica, where it can also serve read-only queries. This is called a hot standby.
 

@@ -1,4 +1,5 @@
-/*
+# `pg_dump` Help
+```
 |------------$ pg_dump --help
 pg_dump dumps a database as a text file or to other formats.
 
@@ -55,11 +56,10 @@ Connection options:
 
 If no database name is supplied, then the PGDATABASE environment
 variable value is used.
-*/
+```
 
-
-/* **** Dumping a single database **** */
-/*
+# Dumping a single database
+```
 -- Dumping a single database with default format
     -- -F, --format=c|d|t|p         output file format (custom, directory, tar, plain text (default))
 pg_dump stackoverflow2010 > /tmp/stackoverflow2010.sql
@@ -71,12 +71,10 @@ pg_dump --column-inserts -f /tmp/stackoverflow2010.sql stackoverflow2010
 
 -- Create create database script is required
 pg_dump --create --column-inserts stackoverflow2010 > /tmp/stackoverflow2010.sql
+```
 
-
-*/
-
-/* **** Restore a single database **** */
-/*
+# Restore a single database
+```
 -- Create a database for restore. By default, database creation does not happen in backup script.
 psql -c 'create database stackoverflow2010_copy with owner postgres;'
 
@@ -85,20 +83,19 @@ psql -U postgres -d stackoverflow2010_copy
 
 -- set search_path which is erased during restore to avoid issues.
 select pg_catalog.set_config('search_path', 'public', "$user", false);
-*/
+```
 
-/* **** Compression **** */
-/*
+# Compression
+```
 # backup with no compression
 pg_dump -Z 9 stackoverflow2010 > /tmp/stackoverflow2010.sql
 
 # backup with gzip compression
 pg_dump -Z 9 -f /tmp/stackoverflow2010_compressed.sql.gz stackoverflow2010
+```
 
-*/
-
-/* ******** Dump formats and pg_restore ******* */
-/*
+# Dump formats and pg_restore
+```
 # backup with custom format
 pg_dump -Fc --create --verbose -Z 9 -f /tmp/pg_backup/stackoverflow2010.bkp stackoverflow2010
 
@@ -123,17 +120,16 @@ pg_restore --verbose -d stackoverflow2010_copy /tmp/pg_backup.d
 pg_dump -Ft --verbose -f /tmp/pg_backup/stackoverflow2010.tar stackoverflow2010
 # Check tar file
 tar -tvf /tmp/pg_backup/stackoverflow2010.tar
+```
 
-*/
 
+# Performing a Selective Restore
 
-/* ************ Performing a Selective Restore **************
-
-# Get directory type dump
+## Get directory type dump
 pg_dump -Fd -Z 9 -v -f /tmp/backup__postgres_air postgres_air
 
-# Get content list
-  # Get source, version, is_compressed, backup date
+## Get content list
+  >Get source, version, is_compressed, backup date
 pg_restore --list /tmp/backup__postgres_air
 
 3562; 0 6904635 TABLE DATA postgres_air passenger postgres
@@ -147,26 +143,25 @@ pg_restore --list /tmp/backup__postgres_air
 └─────────────────────────────────────────────────── Internal id of object inside dump: 3562
 
 
-# Save Table of Content (ToC) in a file
+## Save Table of Content (ToC) in a file
 pg_restore --list /tmp/backup__postgres_air > /tmp/backup__postgres_air__TOC.txt
 
-# Edit the ToC file
+## Edit the ToC file
 vim /tmp/backup__postgres_air__TOC.txt
 
-# Restore database [postgres_air] using new TOC file
+## Restore database [postgres_air] using new TOC file
 pg_restore -C -d postgres -L /tmp/backup__postgres_air__TOC.txt /tmp/backup__postgres_air
-*/
 
-/*  COPY Command
 
+# COPY Command
+```
 psql>
 
 copy forum.categories to '/tmp/categories.bak.txt';
+```
 
-
-*/
-
-/*  ********* IMPORT DATA FROM SQLSERVER TO POSTGRESQL *********************
+# IMPORT DATA FROM SQLSERVER TO POSTGRESQL
+```
 export MSSQLPASSWORD='YourStrongPasswordHere'
 
 # BCP out data from sql server
@@ -234,7 +229,21 @@ WITH (
   QUOTE '"',
   NULL ''
 );
+```
 
+# Physical Backup using `pg_basebackup`
+```
+# perform physical backup into directory /backup
+pg_basebackup -D /backup/data -l 'My physical backup' -v -h localhost \
+        -p 5432 -U postgres -T /data/tablespaces/ts_b=/backup/tablespaces/ts_b \
+        -T /data/tablespaces/ts_a=/backup/tablespaces/ts_a \
+        -T /data/tablespaces/ts_c=/backup/tablespaces/ts_c
 
-*/
+# verify the backup
+pg_verifybackup /backup/data/
+
+# Start the cloned cluster
+pg_ctl -D /backup/data/ -o '-p 5433' start
+```
+
 
