@@ -1,0 +1,62 @@
+---
+- name: "Begin {{ role_name }}/custom/packages.yml"
+  debug:
+    msg: "Begin {{ role_name }}/custom/packages.yml"
+
+- name: Update apt cache
+  ansible.builtin.package:
+    update_cache: yes
+    cache_valid_time: 3600
+  become: true
+
+- name: Install system packages
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ system_packages }}"
+  register: package_status
+  until: package_status is success
+  delay: 5
+  retries: 3
+  environment: "{{ proxy_env | default({}) }}"
+  when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: Install PostgreSQL packages and extensions
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ postgres_packages }}"
+  register: package_status
+  until: package_status is success
+  delay: 5
+  retries: 3
+  environment: "{{ proxy_env | default({}) }}"
+  when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: Install Patroni packages
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ patroni_packages }}"
+  register: package_status
+  until: package_status is success
+  delay: 5
+  retries: 3
+  environment: "{{ proxy_env | default({}) }}"
+  when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: Check user "{{ postgres_user }}" exists
+  ansible.builtin.user:
+    name: "{{ postgres_user }}"
+    shell: /bin/bash
+    state: present
+
+# - name: Install watchdog package
+#   ansible.builtin.package:
+#     name: watchdog
+#     state: present
+#   when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: "End {{ role_name }}/custom/packages.yml"
+  debug:
+    msg: "End {{ role_name }}/custom/packages.yml"

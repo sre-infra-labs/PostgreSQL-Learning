@@ -1,0 +1,92 @@
+---
+- name: Download Postgres Exporter
+  ansible.builtin.get_url:
+    url: "https://github.com/prometheus-community/postgres_exporter/releases/download/v0.15.0/postgres_exporter-0.15.0.linux-amd64.tar.gz"
+    dest: "/var/lib/pgsql/{{ postgresql_version }}/scripts"
+    mode: '0744'
+  when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: Extract postgres_exporter tar file 
+  ansible.builtin.unarchive:
+    src: /var/lib/pgsql/{{ postgresql_version }}/scripts/postgres_exporter-0.15.0.linux-amd64.tar.gz
+    dest: /var/lib/pgsql/{{ postgresql_version }}/scripts/
+    remote_src: yes
+  when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: Verify postgres_exporter binary exists after extraction
+  ansible.builtin.stat:
+    path: /var/lib/pgsql/{{ postgresql_version }}/scripts/postgres_exporter-0.15.0.linux-amd64/postgres_exporter
+  register: extracted_binary_status
+
+- name: Fail if postgres_exporter binary is missing after extraction
+  ansible.builtin.fail:
+    msg: "The postgres_exporter binary was not found after extracting the tar file."
+  when:
+    - not extracted_binary_status.stat.exists
+    - not (reinit_cluster is defined and reinit_cluster)
+
+- name: Move postgres_exporter binary to /usr/local/bin
+  ansible.builtin.copy:
+    src: /var/lib/pgsql/{{ postgresql_version }}/scripts/postgres_exporter-0.15.0.linux-amd64/postgres_exporter
+    dest: /usr/local/bin/postgres_exporter
+    mode: '0755'
+    remote_src: yes
+  become: true
+  when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: Verify postgres_exporter binary in /usr/local/bin
+  ansible.builtin.stat:
+    path: /usr/local/bin/postgres_exporter
+  register: final_binary_status
+
+- name: Fail if postgres_exporter binary is not found in /usr/local/bin
+  ansible.builtin.fail:
+    msg: "Postgres_exporter binary is not found in /usr/local/bin after moving."
+  when:
+    - not final_binary_status.stat.exists
+    - not (reinit_cluster is defined and reinit_cluster)
+
+
+- name: Create postgres_exporter user
+  ansible.builtin.user:
+    name: postgres_exporter
+    shell: /bin/false
+    create_home: no
+
+- name: Create environment file for postgres_exporter
+  ansible.builtin.copy:
+    dest: /etc/systemd/postgres_exporter.env
+    content: |
+      DATA_SOURCE_NAME="postgresql://postgres:{{ patroni_superuser_password }}@localhost:5432/postgres?sslmode=disable"
+      DATA_SOURCE_NAME="postgresql://postgres:{{ patroni_superuser_password }}@localhost:5432/{{ db_name }}?sslmode=disable"
+    owner: postgres_exporter
+    group: postgres_exporter
+    mode: '0644'
+
+- name: Create systemd service file for postgres_exporter
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/postgres_exporter.service
+    content: |
+      [Unit]
+      Description=Postgres Exporter
+
+      [Service]
+      User=postgres_exporter
+      EnvironmentFile=/etc/systemd/postgres_exporter.env
+      ExecStart=/usr/local/bin/postgres_exporter --web.listen-address=:9194
+      Restart=always
+
+      [Install]
+      WantedBy=multi-user.target
+    mode: '0644'
+
+- name: Reload systemd to recognize the new service
+  ansible.builtin.systemd:
+    daemon_reload: yes
+
+- name: Enable postgres_exporter service
+  ansible.builtin.systemd:
+    name: postgres_exporter
+    enabled: yes
+    state: started
+

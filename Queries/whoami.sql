@@ -1,0 +1,1 @@
+select current_role, current_database(), inet_server_addr(), inet_client_addr();

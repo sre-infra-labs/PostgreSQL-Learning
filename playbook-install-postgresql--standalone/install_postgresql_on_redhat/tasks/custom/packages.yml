@@ -1,0 +1,50 @@
+---
+- name: "Begin {{ role_name }}/custom/pre_tasks.yml"
+  debug:
+    msg: "Begin {{ role_name }}/custom/pre_tasks.yml"
+
+- name: Update package cache (RedHat)
+  ansible.builtin.dnf:
+    update_cache: yes
+
+- name: Install PostgreSQL YUM repository for RHEL
+  ansible.builtin.dnf:
+    name: "https://download.postgresql.org/pub/repos/yum/reporpms/EL-{{ ansible_distribution_major_version }}-x86_64/pgdg-redhat-repo-latest.noarch.rpm"
+    state: present
+
+- name: Import EPEL GPG key
+  ansible.builtin.rpm_key:
+    key: "https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-{{ ansible_distribution_major_version }}"
+    state: present
+
+- name: Install EPEL release RPM from URL
+  ansible.builtin.dnf:
+    name: "https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm"
+    state: present
+
+- name: Ensure epel-release package is installed
+  ansible.builtin.dnf:
+    name: epel-release
+    state: present
+
+- name: Ensure pgBackRest is installed (via EPEL)
+  ansible.builtin.dnf:
+    name: pgbackrest
+    state: present
+
+- name: Install related packages
+  ansible.builtin.dnf:
+    name:
+      - python3-psycopg2
+      - curl
+      - gnupg2
+      - wget
+      - ca-certificates
+      - pgloader
+      - redhat-rpm-config
+    state: present
+  # when: ansible_os_family == "Debian"
+
+- name: "End {{ role_name }}/custom/pre_tasks.yml"
+  debug:
+    msg: "End {{ role_name }}/custom/pre_tasks.yml"

@@ -1,0 +1,29 @@
+---
+- name: Begin tasks/custom/get_db_cluster_role.yml
+  debug:
+    msg: "Begin tasks/custom/get_db_cluster_role.yml"
+
+- name: Get db cluster role {primary or replica}
+  become: true
+  become_user: postgres
+  shell: |
+    psql -tAc "SELECT CASE WHEN pg_is_in_recovery()
+      THEN 'replica'
+      ELSE 'primary' END;"
+  register: pg_role
+  changed_when: false
+  ignore_errors: true
+
+- name: Set cluster role fact
+  set_fact:
+    db_cluster_role: "{{ pg_role.stdout }}"
+
+- name: Show db cluster role fact
+  debug:
+    msg: "This node is {{ db_cluster_role }}"
+
+- name: End tasks/custom/get_db_cluster_role.yml
+  debug:
+    msg: "End tasks/custom/get_db_cluster_role.yml"
+
+

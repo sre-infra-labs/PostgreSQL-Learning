@@ -1,0 +1,8 @@
+SHELL=/bin/bash
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+#MAILTO=root
+
+*/15 * * * * root /usr/sbin/logrotate /etc/logrotate.d/postgresql
+
+# sudo chown root:root /etc/cron.d/logrotate_postgresql
+# sudo chmod 0644 /etc/cron.d/logrotate_postgresql

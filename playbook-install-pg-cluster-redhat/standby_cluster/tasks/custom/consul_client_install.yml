@@ -1,0 +1,79 @@
+---
+- name: Begin tasks/custom/consul_client_install.yml
+  ansible.builtin.debug:
+    msg: Begin tasks/custom/consul_client_install.yml
+
+- name: Install consul client on host
+  ansible.builtin.package:
+    name: "consul-{{ consul_version }}"
+    state: present
+  when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: Print consul token
+  ansible.builtin.debug:
+    msg: "Consul token: {{ consul_token }}"
+  when: debug is defined and debug is true
+
+- name: Create consul group
+  ansible.builtin.group:
+    name: consul
+    state: present
+
+- name: Create consul user
+  ansible.builtin.user:
+    name: consul
+    group: consul
+    system: true
+    shell: /sbin/nologin
+    create_home: false
+
+- name: Ensure Consul directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: consul
+    group: consul
+    mode: '0755'
+  loop:
+    - /opt/consul
+    - /etc/consul.d/certs
+    - /var/lib/consul
+    - /var/log/consul
+
+- name: Copy the Consul CA certificate to the host
+  ansible.builtin.copy:
+    src: "{{ role_path }}/files/consul-agent-ca.pem"
+    dest: /etc/consul.d/certs/consul-agent-ca.pem
+    owner: consul
+    group: consul
+    mode: '0644'
+
+- name: Configure Consul client
+  ansible.builtin.template:
+    src: consul.hcl.j2
+    dest: /etc/consul.d/consul.hcl
+    owner: consul
+    group: consul
+    mode: '0640'
+  notify: restart consul
+
+
+- name: restart consul
+  ansible.builtin.service:
+    name: consul
+    state: restarted
+  # listen: 'restart consul'
+
+- name: Configure Consul Client using custom/consul_client_config.yml
+  include_tasks: custom/consul_client_config.yml
+  when: inventory_hostname == (groups['leader'] | default([]) | first | default(groups['leader'] | default([]) | first, ''))
+
+- name: Ensure Consul service is enabled and running
+  ansible.builtin.service:
+    name: consul
+    state: started
+    enabled: yes
+
+- name: End tasks/custom/consul_client_install.yml
+  ansible.builtin.debug:
+    msg: End tasks/custom/consul_client_install.yml

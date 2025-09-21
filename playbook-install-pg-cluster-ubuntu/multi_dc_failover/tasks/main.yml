@@ -1,0 +1,289 @@
+---
+- name: Begin Role tasks/main.yml
+  debug:
+    msg: "Begin Role tasks/main.yml"
+
+- name: Include defaults/creds.yml file
+  include_vars:
+    file: ../defaults/creds.yml
+
+- name: Include defaults/dba_vars.yml file
+  include_vars:
+    file: ../defaults/dba_vars.yml
+
+- name: Fail if datacenter variables not in valid set
+  ansible.builtin.assert:
+    that:
+      - dc1_cluster_target_role in ['primary', 'standby']
+      - dc2_cluster_target_role in ['primary', 'standby']
+    fail_msg: "'dc1_cluster_target_role' and 'dc2_cluster_target_role' must be primary or standby."
+  run_once: true
+
+- name: Fail if datacenter values are same
+  ansible.builtin.assert:
+    that:
+      - dc1_cluster_target_role != dc2_cluster_target_role
+    fail_msg: "Desired role for 'dc1_cluster_target_role' and 'dc2_cluster_target_role' cannot be same."
+  run_once: true
+
+- name: Include custom/get_postgresql_version.yml
+  include_tasks: custom/get_postgresql_version.yml
+
+- name: Include custom/get_db_cluster_role.yml
+  include_tasks: custom/get_db_cluster_role.yml
+  ignore_errors: true
+
+- name: Include custom/get_patroni_cluster_role.yml
+  include_tasks: custom/get_patroni_cluster_role.yml
+  ignore_errors: true
+
+- name: Set fact are_cluster_nodes_healthy to false if not defined
+  ansible.builtin.set_fact:
+    are_cluster_nodes_healthy: "{{ false | bool }}"
+  when: are_cluster_nodes_healthy is not defined
+
+- name: Set fact is_cluster_online to false if not defined
+  ansible.builtin.set_fact:
+    is_cluster_online: "{{ false | bool }}"
+  when: is_cluster_online is not defined
+
+- name: Extract cluster meta info from inventory
+  vars:
+    dc1_leader: "{{ hostvars[groups['dc1_leader'][0]] }}"
+    dc2_leader: "{{ hostvars[groups['dc2_leader'][0]] }}"
+  ansible.builtin.set_fact:
+    dc1_leader: "{{ dc1_leader }}"
+    dc2_leader: "{{ dc2_leader }}"
+    dc1_leader_name: "{{ dc1_leader['inventory_hostname'] }}"
+    dc2_leader_name: "{{ dc2_leader['inventory_hostname'] }}"
+    dc1_cluster_name: "{{ dc1_leader['cluster_name'] }}"
+    dc2_cluster_name: "{{ dc2_leader['cluster_name'] }}"
+  run_once: true
+
+# - name: Debug leader variables
+#   vars:
+#     leaders:
+#       dc1_leader: "{{ dc1_leader }}"
+#       dc2_leader: "{{ dc2_leader }}"
+#   ansible.builtin.debug:
+#     var: leaders
+#   when: debug
+#   run_once: true
+
+- name: Detect leader nodes and current health for clusters
+  ansible.builtin.set_fact:
+
+    dc1_present_leader_host: "{{ dc1_leader['patroni_cluster_leader_host'] | default(dc1_leader['inventory_hostname']) }}"
+    dc2_present_leader_host: "{{ dc2_leader['patroni_cluster_leader_host'] | default(dc2_leader['inventory_hostname']) }}"
+
+    is_dc1_cluster_healthy: "{{ (dc1_leader['are_cluster_nodes_healthy'] if dc1_leader['are_cluster_nodes_healthy'] is defined else false) | bool }}"
+    is_dc2_cluster_healthy: "{{ (dc2_leader['are_cluster_nodes_healthy'] if dc2_leader['are_cluster_nodes_healthy'] is defined else false) | bool }}"
+
+    is_dc1_cluster_online: "{{ (dc1_leader['is_cluster_online'] if dc1_leader['is_cluster_online'] is defined else false) | bool }}"
+    is_dc2_cluster_online: "{{ (dc2_leader['is_cluster_online'] if dc2_leader['is_cluster_online'] is defined else false) | bool }}"
+  run_once: true
+
+- name: Debug Cluster health and availability variables
+  vars:
+    my_vars:
+      is_dc1_cluster_online: "{{ is_dc1_cluster_online }}"
+      is_dc1_cluster_healthy: "{{ is_dc1_cluster_healthy }}"
+      is_dc2_cluster_online: "{{ is_dc2_cluster_online }}"
+      is_dc2_cluster_healthy: "{{ is_dc2_cluster_healthy }}"
+  ansible.builtin.debug:
+    var: my_vars
+  run_once: true
+  when: debug
+
+- name: Compute other dependent facts
+  vars:
+    dc_to_promote: "{{ 'dc1' if dc1_cluster_target_role == 'primary' else 'dc2' }}"
+    dc_to_demote: "{{ 'dc1' if dc1_cluster_target_role == 'standby' else 'dc2' }}"
+    dc1_present_leader_name: "{{ dc1_present_leader_host.split('.')[0] }}"
+    dc2_present_leader_name: "{{ dc2_present_leader_host.split('.')[0] }}"
+  ansible.builtin.set_fact:
+    dc_to_promote: "{{ dc_to_promote }}"
+    dc_to_demote: "{{ dc_to_demote }}"
+    cluster_to_promote: "{{ dc1_cluster_name if dc_to_promote == 'dc1' else dc2_cluster_name }}"
+    cluster_to_demote: "{{ dc1_cluster_name if dc_to_demote == 'dc1' else dc2_cluster_name }}"
+    dc1_present_leader_name: "{{ dc1_present_leader_name }}"
+    dc2_present_leader_name: "{{ dc2_present_leader_name }}"
+  run_once: true
+
+- name: Set facts dc1_cluster_current_role
+  ansible.builtin.set_fact:
+    dc1_cluster_current_role: >-
+      {{
+        (dc1_leader.patroni_cluster_role
+          if (dc1_leader is defined and 'patroni_cluster_role' in dc1_leader)
+          else ('primary' if dc1_cluster_target_role == 'standby' else 'standby'))
+      }}
+  run_once: true
+
+# - name: Set facts dc2_cluster_current_role
+#   ansible.builtin.set_fact:
+#     dc2_cluster_current_role: "{{ dc2_leader['patroni_cluster_role'] | default({{ 'primary' if dc2_cluster_target_role == 'standby' else 'standby' }}) }}"
+#   when: dc2_leader['patroni_cluster_role'] is defined
+#   run_once: true
+
+- name: Set facts dc2_cluster_current_role
+  ansible.builtin.set_fact:
+    dc2_cluster_current_role: >-
+      {{
+        (dc2_leader.patroni_cluster_role
+          if (dc2_leader is defined and 'patroni_cluster_role' in dc2_leader)
+          else ('primary' if dc2_cluster_target_role == 'standby' else 'standby'))
+      }}
+  run_once: true
+
+- name: Throw error if dc1_cluster_current_role is not defined
+  ansible.builtin.assert:
+    that:
+      - dc1_cluster_current_role is defined
+    fail_msg: dc1_cluster_current_role is undefined. If Patroni is down, then enable the variables in role/defaults/dba_vars.yml"
+  run_once: true
+
+- name: Throw error if dc2_cluster_current_role is not defined
+  ansible.builtin.assert:
+    that:
+      - dc2_cluster_current_role is defined
+    fail_msg: dc2_cluster_current_role is undefined. If Patroni is down, then enable the variables in role/defaults/dba_vars.yml"
+  run_once: true
+
+- name: Set facts run_promote_logic, run_demote_logic, leader_of_new_primary & leader_of_new_standby
+  vars:
+    current_role_of_new_primary: "{{ vars[dc_to_promote ~ '_cluster_current_role'] }}"
+    current_role_of_new_standby: "{{ vars[dc_to_demote ~ '_cluster_current_role'] }}"
+    leader_of_new_primary: "{{ vars[dc_to_promote ~ '_leader_name'] }}"
+    leader_of_new_standby: "{{ vars[dc_to_demote ~ '_leader_name'] }}"
+    is_new_primary_cluster_healthy: "{{ vars['is_' ~ dc_to_promote ~ '_cluster_healthy'] }}"
+    is_new_standby_cluster_healthy: "{{ vars['is_' ~ dc_to_demote ~ '_cluster_healthy'] }}"
+    cluster_to_promote_is_online: "{{ is_dc1_cluster_online if dc_to_promote == 'dc1' else is_dc2_cluster_online }}"
+    cluster_to_demote_is_online: "{{ is_dc1_cluster_online if dc_to_demote == 'dc1' else is_dc2_cluster_online }}"
+    cluster_to_promote_is_healthy: "{{ is_dc1_cluster_healthy if dc_to_promote == 'dc1' else is_dc2_cluster_healthy }}"
+    cluster_to_demote_is_healthy: "{{ is_dc1_cluster_healthy if dc_to_demote == 'dc1' else is_dc2_cluster_healthy }}"
+    cluster_to_promote_current_role: "{{ vars[dc_to_promote ~ '_cluster_current_role'] }}"
+    cluster_to_demote_current_role: "{{ vars[dc_to_demote ~ '_cluster_current_role'] }}"
+    cluster_to_promote_leader_name: "{{ vars[dc_to_promote ~ '_leader_name'] }}"
+    cluster_to_demote_leader_name: "{{ vars[dc_to_demote ~ '_leader_name'] }}"
+    cluster_to_promote_present_leader_name: "{{ vars[dc_to_promote ~ '_present_leader_name'] }}"
+    cluster_to_demote_present_leader_name: "{{ vars[dc_to_demote ~ '_present_leader_name'] }}"
+    cluster_to_promote_present_leader_host: "{{ vars[dc_to_promote ~ '_present_leader_host'] }}"
+    cluster_to_demote_present_leader_host: "{{ vars[dc_to_demote ~ '_present_leader_host'] }}"
+  ansible.builtin.set_fact:
+    run_promote_logic: "{{ true if (cluster_to_promote_current_role != 'primary' or cluster_to_promote_is_healthy is false) else false}}"
+    run_demote_logic: "{{ true if (cluster_to_demote_current_role != 'standby' or (cluster_to_demote_is_online and not cluster_to_demote_is_healthy)) else false}}"
+    leader_of_new_primary: "{{ leader_of_new_primary }}"
+    leader_of_new_standby: "{{ leader_of_new_standby }}"
+    is_new_primary_cluster_healthy: "{{ is_new_primary_cluster_healthy }}"
+    is_new_standby_cluster_healthy: "{{ is_new_standby_cluster_healthy }}"
+    cluster_to_promote_is_online: "{{ cluster_to_promote_is_online }}"
+    cluster_to_demote_is_online: "{{ cluster_to_demote_is_online }}"
+    cluster_to_promote_is_healthy: "{{ cluster_to_promote_is_healthy }}"
+    cluster_to_demote_is_healthy: "{{ cluster_to_demote_is_healthy }}"
+    cluster_to_promote_current_role: "{{ cluster_to_promote_current_role }}"
+    cluster_to_demote_current_role: "{{ cluster_to_demote_current_role }}"
+    cluster_to_promote_leader_name: "{{ cluster_to_promote_leader_name }}"
+    cluster_to_demote_leader_name: "{{ cluster_to_demote_leader_name }}"
+    cluster_to_promote_present_leader_name: "{{ cluster_to_promote_present_leader_name }}"
+    cluster_to_demote_present_leader_name: "{{ cluster_to_demote_present_leader_name }}"
+    cluster_to_promote_present_leader_host: "{{ cluster_to_promote_present_leader_host }}"
+    cluster_to_demote_present_leader_host: "{{ cluster_to_demote_present_leader_host }}"
+
+- name: Debug cluster roles
+  debug:
+    var: cluster_roles_info
+  vars:
+    cluster_roles_info:
+      " postgresql_version": "{{ postgresql_version }}"
+      " dc1_cluster_name": "{{ dc1_cluster_name }}"
+      " dc1_cluster_target_role": "{{ dc1_cluster_target_role }}"
+      " dc2_cluster_name": "{{ dc2_cluster_name }}"
+      " dc2_cluster_target_role": "{{ dc2_cluster_target_role }}"
+      # "-------------------": "----------------------------------"
+
+      "dc__info": "------------------------------------"
+      dc_to_promote: "{{ dc_to_promote }}"
+      dc_to_demote: "{{ dc_to_demote }}"
+
+      "cluster_to_promotE": "------------------------------------"
+      cluster_to_promote: "{{ cluster_to_promote }}"
+      cluster_to_promote_is_online: "{{ cluster_to_promote_is_online }}"
+      cluster_to_promote_current_role: "{{ cluster_to_promote_current_role }}"
+      cluster_to_promote_is_healthy: "{{ cluster_to_promote_is_healthy }}"
+      cluster_to_promote_leader_name: "{{ cluster_to_promote_leader_name }}"
+      cluster_to_promote_present_leader_name: "{{ cluster_to_promote_present_leader_name }}"
+      cluster_to_promote_present_leader_host: "{{ cluster_to_promote_present_leader_host }}"
+
+      "cluster_to_demotE": "------------------------------------"
+      cluster_to_demote: "{{ cluster_to_demote }}"
+      cluster_to_demote_is_online: "{{ cluster_to_demote_is_online }}"
+      cluster_to_demote_current_role: "{{ cluster_to_demote_current_role }}"
+      cluster_to_demote_is_healthy: "{{ cluster_to_demote_is_healthy }}"
+      cluster_to_demote_leader_name: "{{ cluster_to_demote_leader_name }}"
+      cluster_to_demote_present_leader_name: "{{ cluster_to_demote_present_leader_name }}"
+      cluster_to_demote_present_leader_host: "{{ cluster_to_demote_present_leader_host }}"
+
+      "run__logic": "------------------------------------"
+      run_promote_logic: "{{ run_promote_logic }}"
+      run_demote_logic: "{{ run_demote_logic }}"
+
+  run_once: true
+
+- name: Exit playbook if roles are already as desired
+  meta: end_play
+  when:
+    - not run_promote_logic
+    - not run_demote_logic
+  run_once: true
+
+- name: Pause for confirmation
+  pause:
+    prompt: |
+      WARNING: You are about to perform a cluster promotion/demotion:
+      - {{ dc1_cluster_name }} (currently {{ dc1_cluster_current_role }}) will become {{ dc1_cluster_target_role | upper }}
+      - {{ dc2_cluster_name }} (currently {{ dc2_cluster_current_role }}) will become {{ dc2_cluster_target_role | upper }}
+
+      This operation will:
+      1. Stop writes on production cluster
+      2. Promote DR cluster to primary
+      3. Reconfigure production cluster as standby
+
+      Are you sure you want to continue? (yes/no)
+  register: confirmation
+  run_once: true
+
+- name: Fail if not confirmed
+  fail:
+    msg: "Operation cancelled by user"
+  when: confirmation.user_input | lower != 'yes'
+  run_once: true
+
+- name: Block - tasks/custom/cluster_promote_demote.yml
+  when: run_promote_logic or run_demote_logic
+  block:
+    - name: Begin block - tasks/custom/cluster_promote_demote.yml
+      ansible.builtin.debug:
+        msg: Begin block - tasks/custom/cluster_promote_demote.yml
+
+    - name: Include tasks/custom/cluster_promote_demote.yml
+      include_tasks: custom/cluster_promote_demote.yml
+
+    - name: End block - tasks/custom/cluster_promote_demote.yml
+      ansible.builtin.debug:
+        msg: End block - tasks/custom/cluster_promote_demote.yml
+
+# - name: Block - tasks/custom/demote_cluster.yml
+#   when: run_demote_logic is true
+#   block:
+#     - name: Begin block - tasks/custom/demote_cluster.yml
+#       ansible.builtin.debug:
+#         msg: Begin block - tasks/custom/demote_cluster.yml
+
+#     - name: End block - tasks/custom/demote_cluster.yml
+#       ansible.builtin.debug:
+#         msg: End block - tasks/custom/demote_cluster.yml
+
+- name: End Role tasks/main.yml
+  debug:
+    msg: "End Role tasks/main.yml"

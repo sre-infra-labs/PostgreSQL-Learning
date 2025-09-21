@@ -1,0 +1,17 @@
+
+---
+- name: restart postgresql
+  systemd:
+    name: "postgresql-{{ postgresql_version }}"
+    state: restarted
+  become: true
+
+- name: reload ufw
+  command: ufw reload
+  changed_when: false
+  become: true
+
+- name: reload systemd
+  become: true
+  systemd:
+    daemon_reload: yes

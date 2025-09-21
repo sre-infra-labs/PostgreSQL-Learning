@@ -1,0 +1,116 @@
+---
+- name: Install pgBackRest package
+  ansible.builtin.package:
+    name: pgbackrest
+    state: present
+  register: package_status
+  until: package_status is success
+  delay: 5
+  retries: 3
+  environment: "{{ proxy_env | default({}) }}"
+  when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: Check if pgBackRest is properly installed
+  command: pgbackrest
+  register: pgbackrest
+  become_user: postgres
+  changed_when: false
+
+- name: Create /var/log/pgbackrest directory
+  file:
+    path: /var/log/pgbackrest
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0770'
+
+- name: Create /etc/pgbackrest directory
+  file:
+    path: /etc/pgbackrest
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0740'
+
+- name: Create /var/spool/pgbackrest directory
+  file:
+    path: /var/spool/pgbackrest
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0740'
+
+- name: Create /etc/pgbackrest/conf.d directory
+  file:
+    path: /etc/pgbackrest/conf.d
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0740'
+
+- name: Generate pgBackRest configuration file
+  template:
+    src: templates/pgbackrest.conf.j2
+    dest: /etc/pgbackrest/pgbackrest.conf
+    owner: postgres
+    group: postgres
+    mode: '0640'
+
+- name: Check if pgBackRest config exists
+  ansible.builtin.stat:
+    path: /etc/pgbackrest/pgbackrest.conf
+  register: pgbackrest_config
+  when: "'leader' in group_names"
+
+- name: Wait for Patroni leader to be up
+  ansible.builtin.wait_for:
+    port: "{{ postgresql_port }}"
+    # host: "{{ inventory_hostname }}"
+    host: "localhost"
+    delay: 10
+    timeout: 120
+  when: "'leader' in group_names"
+
+- name: Create pgBackRest stanza
+  ansible.builtin.command: pgbackrest --stanza={{ pgbackrest_stanza_name }} --log-level-console=info stanza-create
+  become: true
+  become_user: postgres
+  register: stanza_creation_result
+  retries: 3
+  delay: 10
+  when: "'leader' in group_names"
+  failed_when: false
+  # failed_when:
+  #   - stanza_creation_result.rc != 0
+  #   - "'ERROR' in stanza_creation_result.stdout"
+
+- name: Fail if stanza-create had real errors
+  ansible.builtin.fail:
+    msg: "{{ stanza_creation_result.stdout | default('Unknown error') }}"
+  when:
+    - "'leader' in group_names"
+    - stanza_creation_result is defined
+    - stanza_creation_result.rc != 0
+    - "'ERROR' in stanza_creation_result.stdout"
+    - "'did an error occur during stanza-upgrade' not in stanza_creation_result.stdout"
+    - not (reinit_cluster is defined and reinit_cluster)
+
+- name: Upgrade pgBackRest stanza
+  ansible.builtin.command: >
+    pgbackrest --stanza={{ pgbackrest_stanza_name }}
+    --log-level-console=info
+    stanza-upgrade
+  become: true
+  become_user: postgres
+  when:
+    - "'leader' in group_names"
+    - stanza_creation_result is defined
+    - stanza_creation_result.rc != 0
+    - "'did an error occur during stanza-upgrade' in stanza_creation_result.stdout"
+  register: stanza_upgrade_result
+  retries: 3
+  delay: 10
+  failed_when:
+    - stanza_upgrade_result.rc != 0
+    - "'ERROR' in stanza_upgrade_result.stdout"
+

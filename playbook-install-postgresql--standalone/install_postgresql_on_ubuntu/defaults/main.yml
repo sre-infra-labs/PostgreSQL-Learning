@@ -1,0 +1,30 @@
+---
+pg_data_dir: "/var/lib/postgresql/{{ postgresql_version }}/main"
+pg_conf_path: "/etc/postgresql/{{ postgresql_version }}/main"
+pg_port: 5432
+
+# pg_superuser_pwd: "{{ lookup('env', 'PG_SUPERUSER_PWD') }}"
+pg_superuser_pwd: "{{ PG_SUPERUSER_PWD}}"
+
+# Pg Pass File Entries
+pgpass_entries:
+  - linux_user: ansible
+    pg_role: postgres
+    pg_role_pwd: "{{ pg_superuser_pwd}}"
+    database: "*"
+    hostname: "*"
+    port: "*"
+  - linux_user: postgres
+    pg_role: postgres
+    pg_role_pwd: "{{ pg_superuser_pwd}}"
+    database: "*"
+    hostname: "*"
+    port: "*"
+
+# Networks Allowed inside pg_hba.conf
+allowed_hosts:
+      - "192.168.100.0/24"
+      - "192.168.200.0/24"
+      - "192.168.1.0/24"
+      - "0.0.0.0/0"
+      - "::/0"

@@ -1,0 +1,11 @@
+---
+- name: "Get Patroni Cluster State for {{ inventory_hostname }}"
+  ansible.builtin.shell: |
+    patronictl -c /etc/patroni/patroni.yml list
+  register: patronictl_list_output
+  changed_when: "'Cluster' in patronictl_list_output.stdout"
+
+- name: Display Patroni Cluster Command Output
+  ansible.builtin.debug:
+    var: patronictl_list_output.stdout_lines
+  when: patronictl_list_output is defined

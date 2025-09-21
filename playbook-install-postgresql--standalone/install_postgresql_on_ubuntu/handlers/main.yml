@@ -1,0 +1,14 @@
+
+---
+- name: restart postgresql
+  systemd:
+    name: postgresql
+    state: restarted
+
+- name: reload ufw
+  command: ufw reload
+  changed_when: false
+
+- name: reload systemd
+  systemd:
+    daemon_reload: yes

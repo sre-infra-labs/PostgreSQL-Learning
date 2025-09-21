@@ -1,0 +1,93 @@
+---
+- name: Begin tasks/custom/consul_client_config.yml
+  ansible.builtin.debug:
+    msg: Begin tasks/custom/consul_client_config.yml
+
+- name: Write Consul Token Command to file for Validation
+  ansible.builtin.copy:
+    content: |
+      export CONSUL_HTTP_TOKEN="{{ consul_master_token }}"
+      export CONSUL_DATACENTER="{{ consul_server.datacenter }}"
+      export PATRONI_CLUSTER_NAME="{{ patroni_cluster_name }}"
+
+      consul acl token list | grep -B 2 -A 5 "Token for ${PATRONI_CLUSTER_NAME}"
+      #/usr/local/bin/consul acl token list | grep -B 2 -A 5 "Token for ${PATRONI_CLUSTER_NAME}"
+    dest: "/tmp/consul_command.sh"
+    mode: '0744'
+  when: debug is defined and debug is true
+
+- name: Retrieve Consul ACL Token if already registered
+  ansible.builtin.shell: |
+    consul acl token list | grep -B 2 -A 5 "Token for ${PATRONI_CLUSTER_NAME}"
+    #/usr/local/bin/consul acl token list | grep -B 2 -A 5 "Token for ${PATRONI_CLUSTER_NAME}"
+  register: consul_token_list_result
+  changed_when: "'SecretID' in consul_token_list_result.stdout"
+  failed_when: false
+  environment:
+    CONSUL_HTTP_TOKEN: "{{ consul_master_token }}"
+    PATRONI_CLUSTER_NAME: "{{ patroni_cluster_name }}"
+    CONSUL_DATACENTER: "{{ consul_server.datacenter }}"
+
+- name: Check if Consul ACL Token is retrieved successfully
+  ansible.builtin.debug:
+    msg: "Consul Token Secret Retrieved Successfully."
+  when: consul_token_list_result is defined and 'SecretID' in consul_token_list_result.stdout
+
+- name: Print Consul Token List Result
+  ansible.builtin.debug:
+    var: consul_token_list_result.stdout
+  when: debug and consul_token_list_result is defined and 'SecretID' in consul_token_list_result.stdout
+
+- name: Extract SecretID from Retrieved Consul ACL Token List
+  ansible.builtin.set_fact:
+    consul_secret_id: "{{ consul_token_list_result.stdout | regex_findall('SecretID:\\s+([a-f0-9-]+)') | first }}"
+    consul_secret_id_2: "{{ consul_token_list_result.stdout_lines | select('search', '^SecretID:') | map('split', ':') | map('last') | map('trim') | first }}"
+  when: consul_token_list_result is defined and 'SecretID' in consul_token_list_result.stdout
+
+- name: Register Consul ACL Token if SecretID not found in Token List
+  ansible.builtin.shell: |
+    consul acl token create \
+      -description "Token for ${PATRONI_CLUSTER_NAME}" \
+      -service-identity "${PATRONI_CLUSTER_NAME}:${CONSUL_DATACENTER}" \
+      -policy-name "Patroni-policy"
+  register: consul_token_create_result
+  changed_when: "'SecretID' in consul_token_create_result.stdout"
+  when: consul_secret_id is not defined or consul_secret_id|length == 0
+  environment:
+    CONSUL_HTTP_TOKEN: "{{ consul_master_token }}"
+    PATRONI_CLUSTER_NAME: "{{ patroni_cluster_name }}"
+    CONSUL_DATACENTER: "{{ consul_server.datacenter }}"
+
+
+- name: Print Consul Token Create Result
+  ansible.builtin.debug:
+    var: consul_token_create_result.stdout_lines
+  when: debug and consul_token_create_result is defined and consul_token_create_result.stdout_lines is defined
+
+- name: Extract SecretID from output
+  ansible.builtin.set_fact:
+    consul_secret_id: "{{ consul_token_create_result.stdout | regex_findall('SecretID:\\s+([a-f0-9-]+)') | first }}"
+    consul_secret_id_2: "{{ consul_token_create_result.stdout_lines | select('search', '^SecretID:') | map('split', ':') | map('last') | map('trim') | first }}"
+  when: consul_secret_id is not defined and consul_token_create_result is defined
+
+- name: Display extracted SecretID
+  ansible.builtin.debug:
+    msg: "Extracted Consul SecretID: {{ consul_secret_id }} || {{ consul_secret_id_2 }}"
+  when: debug and consul_secret_id is not defined
+
+- name: Save SecretID to a variable file on control node
+  ansible.builtin.copy:
+    content: |
+      ---
+      consul_secret_id: "{{ consul_secret_id }}"
+    dest: "{{ role_path }}/defaults/consul_secret.yml"
+    mode: '0644'
+  delegate_to: localhost
+  run_once: true
+  become: false
+  when: consul_secret_id is defined
+
+- name: End tasks/custom/consul_client_config.yml
+  ansible.builtin.debug:
+    msg: End tasks/custom/consul_client_config.yml
+

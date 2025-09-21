@@ -1,0 +1,26 @@
+/var/log/postgresql/*.log {
+    size 500M
+    rotate 5
+    copytruncate
+    notifempty
+    missingok
+    create 0640 postgres postgres
+    su postgres postgres
+    prerotate
+        for logfile in /var/log/postgresql/*.log; do
+            if [ -f "$logfile" ] && [ "$(stat -c %s "$logfile")" -gt $((500 * 1024 * 1024)) ]; then
+                base=$(basename "$logfile")
+                resized_file="/tmp/${base}.resized"
+                echo "Resizing $logfile to 500MB..."
+                tail -c 500M "$logfile" > "$resized_file"
+                mv "$resized_file" "$logfile"
+                chown postgres:postgres "$logfile"
+                chmod 0640 "$logfile"
+                echo "Resized $logfile."
+            fi
+        done
+    endscript
+}
+
+# sudo logrotate -f /etc/logrotate.d/postgresql
+# Create a cron job /etc/cron.d/logrotate_postgresql

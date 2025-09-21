@@ -1,0 +1,59 @@
+---
+- name: "Begin {{ role_name }}/tasks/custom/postgres_installation.yml"
+  debug:
+    msg: "Begin {{ role_name }}/tasks/custom/postgres_installation.yml"
+
+- name: Install the PostgreSQL repository RPM
+  ansible.builtin.dnf:
+    name: https://download.postgresql.org/pub/repos/yum/reporpms/EL-{{ ansible_distribution_major_version }}-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+    state: present
+    disable_gpg_check: yes
+
+- name: Disable the built-in PostgreSQL module
+  ansible.builtin.dnf:
+    name: postgresql
+    state: absent
+
+- name: "Install PostgreSQL {{ postgresql_version }}"
+  ansible.builtin.dnf:
+    name:
+      - postgresql{{ postgresql_version }}-server
+      - postgresql{{ postgresql_version }}-contrib
+      - postgresql{{ postgresql_version }}-devel
+    state: present
+
+- name: Check PGDATA directory
+  stat:
+    path: "{{ pg_data_dir }}"
+  register: pg_data_dir_stat
+  changed_when: false
+
+- name: Set PostgreSQL path system-wide for all users
+  copy:
+    dest: "/etc/profile.d/postgresql.sh"
+    content: |
+      # Added by Ansible - PostgreSQL {{ postgresql_version }}
+      export PATH=/usr/pgsql-{{ postgresql_version }}/bin:$PATH
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Initialize PostgreSQL database
+  command: /usr/pgsql-{{ postgresql_version }}/bin/postgresql-{{ postgresql_version }}-setup initdb
+  register: pg_init
+  when: pg_data_dir_stat.stat.exists is false
+
+- name: Debug variable pg_init
+  debug:
+    var: pg_init
+  when: pg_init is defined
+
+- name: Ensure PostgreSQL service is started and enabled
+  service:
+    name: postgresql-{{ postgresql_version }}
+    state: started
+    enabled: yes
+
+- name: "End {{ role_name }}/tasks/custom/postgres_installation.yml"
+  debug:
+    msg: "End {{ role_name }}/tasks/custom/postgres_installation.yml"

@@ -1,0 +1,49 @@
+# This file is supposed to have only variables that need DBA input
+
+debug: true
+
+# Cluster name. Should be unique across all clusters.
+patroni_cluster_name: "pg-cls1-prod"
+# pgbackrest_stanza_name: "{{ patroni_cluster_name }}"
+pgbackrest_stanza_name: "pg-cls1"
+
+# ReInit Standby. Only enable when rebuilding standby due to some failure. This skips package installation
+# reinit_cluster: true
+# cleanup_pgbackrest_backups: true
+
+# Nodes for other data center. Needed to add pb_hba.conf entries
+other_datacenter_nodes:
+  - name: pg-cls1-dr0
+    ip: 192.168.200.42
+    role: replica
+  - name: pg-cls1-dr1
+    ip: 192.168.200.43
+    role: leader
+  - name: pg-cls1-dr2
+    ip: 192.168.200.44
+    role: replica
+
+# Users to be created for Application Team
+db_name: "dba"
+db_user_rw: dba_rw
+db_user_ro: dba_ro
+
+# PostgreSQL port and version
+postgresql_version: "17"
+postgresql_port: "5432"
+
+# Hardware information
+server_hardware:
+  cpu_count: 4
+  ram_gb: 8
+  disk_gb: 70
+
+# postgresql.conf params
+pg_params:
+  work_mem: "8MB"
+  maintenance_work_mem: "512MB"
+  # max_worker_processes: "8"
+  # max_parallel_workers: "8"
+  # max_parallel_workers_per_gather: "4"
+  # max_parallel_maintenance_workers: "4"
+

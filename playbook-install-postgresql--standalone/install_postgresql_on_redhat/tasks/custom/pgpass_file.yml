@@ -1,0 +1,69 @@
+---
+- name: "Begin {{ role_name }}/tasks/custom/pgpass_file.yml"
+  debug:
+    msg: "Begin {{ role_name }}/tasks/custom/pgpass_file.yml"
+
+- name: Gather user facts to find home directories
+  ansible.builtin.user:
+    name: "{{ item.linux_user }}"
+    state: present # Ensures user exists and gathers facts about them
+  loop: "{{ pgpass_entries }}"
+  register: user_facts_result # Stores the results of each user lookup
+  loop_control:
+    label: "Gathering facts for user: {{ item.linux_user }}"
+
+# - name: Debug required pgpass related variables
+#   ansible.builtin.debug:
+#     var: user_facts_result.results
+
+# - name: Debug user_facts_result.results
+#   ansible.builtin.debug:
+#     msg: >
+#       user: {{ item.name }}
+#       home: {{ item.home }}
+#       pg_role: {{ item.item.pg_role }}
+#   loop: "{{ user_facts_result.results }}"
+#   loop_control:
+#     label: "Debugging user: {{ item.name }}"
+
+- name: Create .pgpass file in each user's home directory
+  ansible.builtin.template:
+    src: pgpass.j2
+    dest: "{{ item.home }}/.pgpass"
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+    mode: '0600'
+  loop: "{{ user_facts_result.results }}"
+  when: item.home is defined
+  loop_control:
+    label: "Creating .pgpass for user: {{ item.name }}"
+
+# - name: Ensure .pgpass directory exists for each user
+#   file:
+#     path: "/home/{{ item.linux_user }}/.postgresql"
+#     state: directory
+#     owner: "{{ item.linux_user }}"
+#     group: "{{ item.linux_user }}"
+#     mode: "0700"
+#   loop: "{{ pgpass_entries }}"
+
+# - name: Create or update .pgpass file for each user
+#   template:
+#     src: pgpass.j2
+#     dest: "/home/{{ item.linux_user }}/.postgresql/.pgpass"
+#     owner: "{{ item.linux_user }}"
+#     group: "{{ item.linux_user }}"
+#     mode: "0600"
+#   loop: "{{ pgpass_entries }}"
+#   no_log: yes # Sensitive information
+
+# - name: Set SELinux context for .pgpass (if SELinux is enforcing)
+#   command: chcon -t postgresql_auth_t /home/{{ item.linux_user }}/.postgresql/.pgpass
+#   become: yes
+#   become_user: root
+#   loop: "{{ pgpass_entries }}"
+#   when: ansible_selinux.enforcing | bool
+
+- name: "End {{ role_name }}/tasks/custom/pgpass_file.yml"
+  debug:
+    msg: "End {{ role_name }}/tasks/custom/pgpass_file.yml"

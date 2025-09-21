@@ -1,0 +1,80 @@
+---
+pg_data_dir: "/var/lib/pgsql/{{ postgresql_version }}/data"
+pg_conf_path: "/var/lib/pgsql/{{ postgresql_version }}/data"
+pg_bin_path: "/usr/pgsql-{{ postgresql_version }}/bin"
+pg_ext_src_dir: /tmp/pg_extensions
+pg_port: 5432
+
+# pg_superuser_pwd: "{{ lookup('env', 'PG_SUPERUSER_PWD') }}"
+pg_superuser_pwd: "{{ PG_SUPERUSER_PWD }}"
+
+# Pg Pass File Entries
+pgpass_entries:
+  - linux_user: ansible
+    pg_role: postgres
+    pg_role_pwd: "{{ pg_superuser_pwd }}"
+    database: "*"
+    hostname: "*"
+    port: "*"
+  - linux_user: postgres
+    pg_role: postgres
+    pg_role_pwd: "{{ pg_superuser_pwd }}"
+    database: "*"
+    hostname: "*"
+    port: "*"
+
+# Networks Allowed inside pg_hba.conf
+allowed_hosts:
+      - "192.168.100.0/24"
+      - "192.168.200.0/24"
+      - "192.168.1.0/24"
+      - "0.0.0.0/0"
+      - "::/0"
+
+# Postgres Extensions to install that are external
+pg_extension_packages:
+  - "unixODBC-devel"
+  - "pg_cron_{{ postgresql_version }}"
+  - "pg_partman_{{ postgresql_version }}"
+  - "pglogical_{{ postgresql_version }}"
+  - "odbc_fdw_{{ postgresql_version }}"
+  - "pgaudit_{{ postgresql_version }}"
+  - "pgnodemx_{{ postgresql_version }}" # for pg_proctab
+
+# Postgres Extension Repos
+pg_extensions_from_repos:
+  - common_name: Percona
+    repo_url: https://repo.percona.com/yum/percona-release-latest.noarch.rpm
+    command_to_enable: percona-release enable ppg-{{ postgresql_version }} release
+    package_name: percona-pg_stat_monitor{{ postgresql_version }}
+
+# Postgres Extensions from Github
+pg_extensions_from_github:
+  # - common_name: pg_proctab
+  #   github_url: https://github.com/markwkm/pg_proctab/archive/refs/heads/main.zip
+
+# Postgres Extensions to be configured in postgresql.conf
+extensions_for_postgresql_conf:
+  - pg_stat_statements
+  - auto_explain
+  - pg_cron
+  - pg_stat_monitor
+  - pglogical
+  - pgaudit
+
+# Postgres Extensions for on-demand loading in SQL
+extensions_for_databases:
+  - pg_stat_statements
+  # - auto_explain
+  - pg_cron
+  - pg_stat_monitor
+  - pglogical
+  - pgaudit
+  - pg_partman
+  - postgres_fdw
+  - odbc_fdw
+  - file_fdw
+  - pg_trgm
+  # - pg_proctab
+
+

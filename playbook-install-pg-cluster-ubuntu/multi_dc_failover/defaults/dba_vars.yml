@@ -1,0 +1,14 @@
+# This file is supposed to have only variables that need DBA input
+
+debug: true
+
+# primary, standby
+dc1_cluster_target_role: primary
+dc2_cluster_target_role: standby
+
+# boolean parameter
+set_demoted_cluster_up: true
+
+
+
+

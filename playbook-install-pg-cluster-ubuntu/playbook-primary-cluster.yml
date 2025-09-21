@@ -1,0 +1,37 @@
+---
+- name: Deploy Primary Cluster on Ubuntu hosts
+  hosts: all
+  become: true
+  become_user: root
+  remote_user: ansible
+  gather_facts: true
+  vars:
+    # ansible_become_flags: "-H -S"
+  vars_files:
+    - sensitive-values
+    - vars/dba_vars.yml
+  collections:
+    - community.postgresql
+
+  pre_tasks:
+    - name: Starting Playbook Execution
+      debug:
+        msg: "🚀 Starting PostgreSQL Cluster installation and configuration!"
+
+  roles:
+    - role: primary_cluster
+      # when: ansible_host in groups['redhat']
+
+  post_tasks:
+    - name: Playbook Execution Completed
+      debug:
+        msg: "✅ PostgreSQL Cluster installation and configuration completed successfully!"
+
+# ansible-playbook -i hosts__primary_cluster.yml playbook-primary-cluster.yml --vault-password-file=vault-pass
+
+# ansible dc1 -i hosts__multi_datacenter.yml -u ansible -b -m service -a "name=postgresql@17-main state=stopped"
+# ansible dc1 -i hosts__multi_datacenter.yml -u ansible -b -m service -a "name=patroni state=stopped"
+# ansible dc1 -i hosts__multi_datacenter.yml -u ansible -b -m shell -a "rm -rf /var/lib/postgresql/17/main"
+
+# ansible dc2_leader -i hosts__multi_datacenter.yml -u ansible -b -m shell -a "patronictl -c /etc/patroni/patroni.yml list"
+

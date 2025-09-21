@@ -1,0 +1,89 @@
+---
+- name: "Begin {{ role_name }}/tasks/custom/postgres_configuration.yml"
+  debug:
+    msg: "Begin {{ role_name }}/tasks/custom/postgres_configuration.yml"
+
+- name: Update PostgreSQL configuration to listen on all interfaces
+  lineinfile:
+    path: "{{ pg_conf_path }}/postgresql.conf"
+    regexp: "^#?listen_addresses *=.*$"
+    line: "listen_addresses = '*'"
+    state: present
+  notify: restart postgresql
+
+- name: Update pg_hba.conf to allow password authentication from any host
+  become: yes
+  blockinfile:
+    path: "{{ pg_conf_path }}/pg_hba.conf"
+    block: |
+      # Allow access from any IP with password authentication
+      host    all             all             0.0.0.0/0               scram-sha-256
+      host    all             all             ::/0                    scram-sha-256
+    marker: "# {mark} ANSIBLE MANAGED BLOCK FOR REMOTE ACCESS"
+  notify: restart postgresql
+
+# Set log_filename parameter for PostgreSQL logs
+- name: Configure PostgreSQL log filename
+  lineinfile:
+    path: "{{ pg_conf_path }}/postgresql.conf"
+    regexp: "^#?log_filename *=.*$"
+    line: "log_filename = 'postgresql-%a.log'"
+    state: present
+  notify: restart postgresql
+
+- name: Set postgres user password
+  ansible.builtin.shell: |
+    PASSWORD='{{ pg_superuser_pwd }}'
+    sudo -u postgres psql -c "alter role postgres with login password '$PASSWORD';"
+  args:
+    executable: /bin/bash
+  register: result_set_password
+
+- name: Debug result_set_password
+  debug:
+    var: result_set_password
+
+# Create .pgpass file for the postgres user
+- name: Ensure home directory exists for postgres user
+  file:
+    path: "/home/postgres"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0700'
+  ignore_errors: yes
+
+- name: Create .pgpass file for postgres user
+  copy:
+    dest: "/home/postgres/.pgpass"
+    content: "*:*:*:postgres:{{ pg_superuser_pwd }}"
+    owner: postgres
+    group: postgres
+    mode: '0600'
+  become: yes
+  become_user: root
+
+- name: Configure UFW to allow PostgreSQL connections
+  ufw:
+    rule: allow
+    port: "{{ pg_port }}"
+    proto: tcp
+
+- name: Ensure PostgreSQL is restarted
+  service:
+    name: postgresql
+    state: restarted
+
+- name: Check PostgreSQL status
+  command: systemctl status postgresql
+  register: pg_status
+  changed_when: false
+  ignore_errors: yes
+
+- name: Show PostgreSQL status
+  debug:
+    var: pg_status.stdout_lines
+
+- name: "End {{ role_name }}/tasks/custom/postgres_configuration.yml"
+  debug:
+    msg: "End {{ role_name }}/tasks/custom/postgres_configuration.yml"

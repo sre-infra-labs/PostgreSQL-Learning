@@ -1,0 +1,31 @@
+---
+- name: Deploy Standby Cluster on Redhat hosts
+  hosts: all
+  become: true
+  become_user: root
+  remote_user: ansible
+  gather_facts: true
+  vars:
+    # ansible_become_flags: "-H -S"
+  vars_files:
+    - sensitive-values
+    - vars/dba_vars.yml
+  collections:
+    - community.postgresql
+
+  pre_tasks:
+    - name: Starting Playbook Execution
+      debug:
+        msg: "🚀 Starting PostgreSQL Cluster installation and configuration!"
+
+  roles:
+    - role: standby_cluster
+      # when: ansible_host in groups['redhat']
+
+  post_tasks:
+    - name: Playbook Execution Completed
+      debug:
+        msg: "✅ PostgreSQL Cluster installation and configuration completed successfully!"
+
+# ansible-playbook -i hosts__standby_cluster.yml playbook-standby-cluster.yml --vault-password-file=vault-pass
+

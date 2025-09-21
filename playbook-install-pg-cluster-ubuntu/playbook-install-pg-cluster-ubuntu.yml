@@ -1,0 +1,31 @@
+---
+- name: Deploy PostgreSQL Cluster on Ubuntu hosts
+  hosts: all
+  become: true
+  become_user: root
+  remote_user: ansible
+  gather_facts: true
+  vars:
+    # ansible_become_flags: "-H -S"
+  vars_files:
+    - sensitive-values
+    - vars/dba_vars.yml
+  collections:
+    - community.postgresql
+
+  pre_tasks:
+    - name: Starting Playbook Execution
+      debug:
+        msg: "🚀 Starting PostgreSQL Cluster installation and configuration!"
+
+  roles:
+    - role: install_pg_cluster_on_ubuntu
+      when: ansible_host in groups['debian']
+
+  post_tasks:
+    - name: Playbook Execution Completed
+      debug:
+        msg: "✅ PostgreSQL Cluster installation and configuration completed successfully!"
+
+# ansible-playbook -i hosts.yml playbook-install-postgresql.yml --vault-password-file=vault-pass
+

@@ -1,0 +1,757 @@
+---
+- name: Begin tasks/custom/cluster_promote_demote.yml
+  debug:
+    msg: "Begin tasks/custom/cluster_promote_demote.yml"
+  run_once: true
+
+- name: Debug leader variables
+  ansible.builtin.debug:
+    msg: |
+      cluster_to_promote_present_leader_host: "{{ cluster_to_promote_present_leader_host }}"
+      cluster_to_demote_present_leader_host: "{{ cluster_to_demote_present_leader_host }}"
+  when: debug
+
+# - name: Include custom/set_patroni_cluster_leader.yml
+#   include_tasks: custom/set_patroni_cluster_leader.yml
+#   when: inventory_hostname in groups['dc1_leader'] or inventory_hostname in groups['dc2_leader']
+
+- name: Check current Primary Cluster maintenance status
+  uri:
+    url: "http://{{ cluster_to_demote_leader_name }}:8008/cluster"
+    method: GET
+    return_content: yes
+  delegate_to: "{{ cluster_to_demote_leader_name }}"
+  run_once: true
+  register: patroni_cluster_status
+  ignore_errors: true
+  when: cluster_to_demote_is_online
+
+- name: Is Patroni API down?
+  ansible.builtin.debug:
+    msg: "Seems patroni api is down on host {{ cluster_to_demote_leader_name }}"
+  run_once: true
+  when:
+    - patroni_cluster_status is defined
+    - patroni_cluster_status.failed | default(false)
+    - patroni_cluster_status.msg is search("urlopen error")
+
+- name: Set cluster maintenance status fact to true if API is down
+  set_fact:
+    cluster_is_in_maintenance: "{{ true }}"
+  run_once: true
+  delegate_to: "{{ cluster_to_demote_leader_name }}"
+  when:
+    - patroni_cluster_status is defined
+    - patroni_cluster_status.failed | default(false)
+    - patroni_cluster_status.msg is search("urlopen error")
+
+- name: Extract cluster maintenance status fact if API is up
+  set_fact:
+    cluster_is_in_maintenance: "{{ patroni_cluster_status.json.pause | default(false) | bool }}"
+  run_once: true
+  delegate_to: "{{ cluster_to_demote_leader_name }}"
+  when: cluster_is_in_maintenance is not defined
+
+- name: Enable maintenance mode on current primary cluster
+  ansible.builtin.shell: |
+    patronictl -c /etc/patroni/patroni.yml pause --wait
+  become: true
+  delegate_to: "{{ cluster_to_demote_leader_name }}"
+  run_once: true
+  when:
+    - cluster_to_demote_is_online
+    - not cluster_is_in_maintenance
+    - run_promote_logic # Maintenance is need on previous primary only when new primary is NOT yet up
+  ignore_errors: true
+
+# - name: Wait for maintenance mode to apply
+#   pause:
+#     seconds: 5
+#   run_once: true
+
+- name: Recheck current Primary Cluster maintenance status
+  uri:
+    url: "http://{{ cluster_to_demote_leader_name }}:8008/cluster"
+    method: GET
+    return_content: yes
+  delegate_to: "{{ cluster_to_demote_leader_name }}"
+  run_once: true
+  register: patroni_cluster_status
+  when:
+    - cluster_to_demote_is_online
+    - cluster_is_in_maintenance is false
+
+- name: Set cluster maintenance status fact
+  set_fact:
+    cluster_is_in_maintenance: "{{ patroni_cluster_status.json.pause | default(false) | bool }}"
+  run_once: true
+  delegate_to: "{{ cluster_to_demote_leader_name }}"
+
+- name: Display maintenance mode status
+  debug:
+    msg: |
+      "{{ dc_to_demote }} cluster {{ cluster_to_demote }} is now in MAINTENANCE MODE - no writes accepted"
+  run_once: true
+
+- name: "Query Patroni API on new primary cluster to get config"
+  uri:
+    url: "http://{{ cluster_to_promote_leader_name }}:8008/config"
+    method: GET
+    return_content: yes
+  register: patroni_api_config_on_new
+  run_once: true
+  delegate_to: "{{ cluster_to_promote_leader_name }}"
+
+- name: Set fact patroni_cluster_role_on_new_primary if patroni api is up
+  set_fact:
+    patroni_cluster_role_on_new_primary: >-
+      {{ 'standby' if (patroni_api_config.json.standby_cluster is defined) else 'primary' }}
+  when:
+    - patroni_api_config_on_new.json is defined
+    - not (patroni_api_config_on_new.failed | default(false))
+
+- name: Wait for current Standby cluster to catch up completely
+  uri:
+    url: "http://{{ cluster_to_promote_leader_name }}:8008/cluster"
+    method: GET
+  register: current_standby_catchup_check
+  until: >
+    (current_standby_catchup_check.json.members |
+     selectattr('role', 'equalto', 'standby_leader') |
+     map(attribute='lag') |
+     map('default', 0) |
+     first | int) == 0
+  retries: 60
+  delay: 5
+  delegate_to: "{{ cluster_to_promote_leader_name }}"
+  run_once: true
+  when: patroni_cluster_role_on_new_primary == 'standby' and run_promote_logic
+  failed_when: false
+
+- name: Display replication lag status
+  debug:
+    msg: |
+      Current Standby Cluster Leader lag: {{ 
+        current_standby_catchup_check.json.members | 
+        selectattr('role', 'equalto', 'standby_leader') | 
+        map(attribute='lag') | 
+        first | default('unknown') 
+      }} MB
+  run_once: true
+  when: patroni_cluster_role_on_new_primary == 'standby' and run_promote_logic
+
+# Step 3: Gracefully shutdown PostgreSQL on current primary cluster
+- name: Stop Patroni service on the current primary cluster leader
+  ansible.builtin.service:
+    name: patroni
+    state: stopped
+  delegate_to: "{{ cluster_to_demote_leader_name }}"
+  become: yes
+  run_once: true
+  when:
+    - cluster_to_demote_is_online
+    - run_promote_logic   # Stop service on old primary cluster only when new primary cluster is still to come up as primary
+
+- name: Stop PostgreSQL on the current primary cluster leader using pg_ctl
+  ansible.builtin.command: >
+    /usr/pgsql-{{ postgresql_version }}/bin/pg_ctl -D /var/lib/pgsql/{{ postgresql_version }}/data stop -m fast --wait
+  become: yes
+  become_user: postgres
+  delegate_to: "{{ cluster_to_demote_leader_name }}"
+  run_once: true
+  register: stop_pg_result
+  failed_when: >
+    stop_pg_result.rc != 0
+    and ('Is server running?' not in stop_pg_result.stderr)
+  when:
+    - cluster_to_demote_is_online
+    - run_promote_logic   # Stop service on old primary cluster only when new primary cluster is still to come up as primary
+
+- name: Wait for PostgreSQL to be down on current primary cluster leader
+  ansible.builtin.wait_for:
+    host: "localhost"
+    port: 5432
+    state: stopped
+    timeout: 60
+    delay: 5
+  delegate_to: "{{ cluster_to_demote_leader_name }}"
+  run_once: true
+  when:
+    - cluster_to_demote_is_online
+    - run_promote_logic   # Stop service on old primary cluster only when new primary cluster is still to come up as primary
+
+- name: Notify of PostgreSQL shutdown status on current primary cluster leader
+  debug:
+    msg: "PostgreSQL successfully stopped on current primary cluster leader {{ cluster_to_demote_leader_name }}"
+  run_once: true
+  when:
+    - cluster_to_demote_is_online
+    - run_promote_logic   # Stop service on old primary cluster only when new primary cluster is still to come up as primary
+
+# Step 4: Wait a moment to ensure clean shutdown
+- name: Wait for clean shutdown propagation
+  pause:
+    seconds: 10
+  run_once: true
+  when:
+    - cluster_to_demote_is_online
+    - run_promote_logic   # Stop service on old primary cluster only when new primary cluster is still to come up as primary
+
+# Step 5: Promote current standby cluster to primary (now safe - no split brain risk)
+- name: Get Patroni config from target cluster leader
+  uri:
+    url: "http://{{ cluster_to_promote_leader_name }}:8008/config"
+    method: GET
+    return_content: yes
+  delegate_to: "{{ cluster_to_promote_leader_name }}"
+  run_once: true
+  register: patroni_config_check
+  ignore_errors: true
+
+
+- name: Set fact new_primary_cluster_current_role if patroni api is up
+  set_fact:
+    new_primary_cluster_current_role: >-
+      {{ 'standby' if (patroni_config_check.json.standby_cluster is defined) else 'primary' }}
+  when:
+    - patroni_config_check.json is defined
+    - not (patroni_config_check.failed | default(false))
+  delegate_to: "{{ cluster_to_promote_leader_name }}"
+  run_once: true
+
+- name: Set fact target_cluster_is_standby (true when standby_cluster config exists)
+  set_fact:
+    new_primary_cluster_is_standby: >-
+      {{ true if new_primary_cluster_current_role == 'standby' else false }}
+  run_once: true
+  delegate_to: "{{ cluster_to_promote_leader_name }}"
+  when:
+    - new_primary_cluster_current_role is defined
+    - patroni_config_check is defined
+    - not (patroni_config_check.failed | default(false))
+
+- name: Debug - new_primary_cluster_is_standby
+  debug:
+    msg: "cluster_to_promote_leader_name={{ cluster_to_promote_leader_name }} is standby? {{ new_primary_cluster_is_standby | default(false) }}"
+  run_once: true
+  delegate_to: localhost
+
+# - name: Ajay - Stop execution by design
+#   fail:
+#     msg: "Stop execution by design!"
+
+- name: "Remove standby_cluster config via Patroni API (Promote {{ cluster_to_promote }})"
+  uri:
+    url: "http://{{ cluster_to_promote_leader_name }}:8008/config"
+    method: PATCH
+    body_format: json
+    body:
+      standby_cluster: null
+    status_code: 200
+  delegate_to: "{{ cluster_to_promote_leader_name }}"
+  run_once: true
+  register: result_standby_to_primary
+  when: new_primary_cluster_is_standby | default(false)
+
+- name: "Wait for Standby cluster promotion to complete [{{ dc_to_promote }} ~~ {{ cluster_to_promote }}]"
+  uri:
+    url: "http://{{ cluster_to_promote_leader_name }}:8008/cluster"
+    method: GET
+  register: standby_to_primary_check
+  until: >
+    standby_to_primary_check.json.standby_cluster is not defined and
+    (standby_to_primary_check.json.members | selectattr('role', 'equalto', 'leader') | list | length) > 0
+  retries: 60 # 5 minutes
+  delay: 5
+  delegate_to: "{{ cluster_to_promote_leader_name }}"
+  run_once: true
+  when: new_primary_cluster_is_standby | default(false)
+
+- name: Include custom/patronictl_list.yml
+  include_tasks: custom/patronictl_list.yml
+  when: inventory_hostname == cluster_to_promote_present_leader_host
+  ignore_errors: true
+
+- name: "Wait for all promoted cluster members to be in 'streaming' or 'running' state [{{ dc_to_promote }} ~~ {{ cluster_to_promote }}]"
+  uri:
+    url: "http://{{ cluster_to_promote_leader_name }}:8008/cluster"
+    method: GET
+  register: cluster_members_status
+  until: >
+    (
+      cluster_members_status.json.members
+      | map(attribute='state')
+      | map('lower')
+      | difference(['streaming','running'])
+      | length == 0
+    )
+  retries: 180 # 15 minutes
+  delay: 5
+  delegate_to: "{{ cluster_to_promote_leader_name }}"
+  run_once: true
+  when:
+    - new_primary_cluster_is_standby | default(false)
+    - run_promote_logic
+
+- name: Include custom/patronictl_list.yml
+  include_tasks: custom/patronictl_list.yml
+  when:
+    - inventory_hostname == cluster_to_promote_leader_name
+    - run_promote_logic
+  ignore_errors: true
+
+- name: "Wait for all cluster members to have the same timeline [{{ dc_to_promote }} ~~ {{ cluster_to_promote }}]"
+  uri:
+    url: "http://{{ cluster_to_promote_leader_name }}:8008/cluster"
+    method: GET
+  register: cluster_timelines_status
+  until: >-
+    cluster_timelines_status.json.members is defined and
+    (
+      cluster_timelines_status.json.members
+      | map(attribute='timeline')
+      | list
+      | unique
+      | length == 1
+    )
+  retries: 180 # 15 minutes
+  delay: 5
+  delegate_to: "{{ cluster_to_promote_leader_name }}"
+  run_once: true
+  when:
+    - new_primary_cluster_is_standby | default(false)
+    - run_promote_logic
+
+- name: Include custom/patronictl_list.yml
+  include_tasks: custom/patronictl_list.yml
+  when:
+    - inventory_hostname == cluster_to_promote_leader_name
+    - run_promote_logic
+  ignore_errors: true
+
+# Set Primary Cluster leader node so that same node can be used in standbycluster config on Standby Cluster
+- name: Include custom/set_patroni_cluster_leader.yml
+  include_tasks: custom/set_patroni_cluster_leader.yml
+  when:
+    - inventory_hostname == cluster_to_promote_leader_name
+    - run_demote_logic # At time of Standby Cluster setup, leader on Primary should be designated node
+
+# If Primary Cluster leader has been changed, then wait for healthy state
+- name: "Wait for all promoted cluster members to be in 'streaming' or 'running' state [{{ dc_to_promote }} ~~ {{ cluster_to_promote }}]"
+  uri:
+    url: "http://{{ cluster_to_promote_leader_name }}:8008/cluster"
+    method: GET
+  register: cluster_members_status
+  until: >
+    (
+      cluster_members_status.json.members
+      | map(attribute='state')
+      | map('lower')
+      | difference(['streaming','running'])
+      | length == 0
+    )
+  retries: 180 # 15 minutes
+  delay: 5
+  delegate_to: "{{ cluster_to_promote_leader_name }}"
+  run_once: true
+  when: run_demote_logic
+
+# If Primary Cluster leader has been changed, then wait for synchonized timeline
+- name: "Wait for all cluster members to have the same timeline [{{ dc_to_promote }} ~~ {{ cluster_to_promote }}]"
+  uri:
+    url: "http://{{ cluster_to_promote_leader_name }}:8008/cluster"
+    method: GET
+  register: cluster_timelines_status
+  until: >-
+    cluster_timelines_status.json.members is defined and
+    (
+      cluster_timelines_status.json.members
+      | map(attribute='timeline')
+      | list
+      | unique
+      | length == 1
+    )
+  retries: 180 # 15 minutes
+  delay: 5
+  delegate_to: "{{ cluster_to_promote_leader_name }}"
+  run_once: true
+  when: run_demote_logic
+
+- name: Include custom/patronictl_list.yml
+  include_tasks: custom/patronictl_list.yml
+  when:
+    - inventory_hostname == cluster_to_promote_leader_name
+    - run_demote_logic
+  ignore_errors: true
+
+- name: Verify standby cluster promotion to primary
+  debug:
+    msg: "Standby cluster successfully promoted to PRIMARY!"
+  run_once: true
+
+- name: "Abort playbook if [{{ dc_to_demote }} ~~ {{ cluster_to_demote }}] is offline"
+  ansible.builtin.assert:
+    that:
+      - cluster_to_demote_is_online
+    fail_msg: "[{{ dc_to_demote }} ~~ {{ cluster_to_demote }}] Cluster seems to be offline. Rerun playbook when {{ dc_to_demote }} nodes are online again."
+  run_once: true
+
+# Step 6: Optional - Reconfigure old primary as standby
+- name: Confirm if we have to configure old primary as standby
+  pause:
+    prompt: |
+      Old standby cluster is now the PRIMARY.
+
+      Do you want to proceed to configure old primary cluster {{ cluster_to_demote }} as standby to the new primary?
+      This will:
+      1. Start Patroni on old primary cluster nodes
+      2. Configure them to replicate from new primary cluster
+
+      Continue? (yes/no)
+  register: standby_confirmation
+  when: set_demoted_cluster_up is defined and set_demoted_cluster_up is true
+  run_once: true
+
+- name: Debug check if host is in the group defined by dc_to_demote
+  debug:
+    msg: >
+      Host {{ inventory_hostname }}
+      is {{ 'in' if (inventory_hostname in groups[dc_to_demote]) else 'NOT in' }}
+      the {{ dc_to_promote }} group
+  when: debug
+
+- name: Start Patroni service on old primary cluster nodes
+  service:
+    name: patroni
+    state: started
+  when:
+    - inventory_hostname in groups[dc_to_demote]
+    - standby_confirmation is defined and (standby_confirmation.user_input | lower == 'yes')
+
+- name: "Configure old primary cluster as standby via patronictl -- [{{ dc_to_demote }} ~~ {{ cluster_to_demote }}]"
+  become: true
+  ansible.builtin.shell: |
+    patronictl -c /etc/patroni/patroni.yml edit-config --set standby_cluster='{host: {{ cluster_to_promote_leader_name }}, port: 5432}' --force
+  run_once: true
+  delegate_to: "{{ cluster_to_demote_leader_name }}"
+  when:
+    - cluster_to_demote_is_online
+    - standby_confirmation is defined
+    - standby_confirmation.user_input | lower == 'yes'
+  register: result_set_standby_on_old_primary
+
+- name: "Remove maintenance mode on new standby cluster -- [{{ dc_to_demote }} ~~ {{ cluster_to_demote }}]"
+  ansible.builtin.shell: |
+    patronictl -c /etc/patroni/patroni.yml resume --wait
+  become: true
+  delegate_to: "{{ cluster_to_demote_leader_name }}"
+  run_once: true
+  when: cluster_to_demote_is_online
+  ignore_errors: true
+
+# - name: "Reload Patroni config on new standby cluster -- [{{ dc_to_demote }} ~~ {{ cluster_to_demote }}]"
+#   become: true
+#   shell: >
+#     patronictl -c /etc/patroni/patroni.yml reload {{ cluster_to_demote }} --force
+#   run_once: true
+#   delegate_to: "{{ cluster_to_demote_leader_name }}"
+#   when:
+#     - cluster_to_demote_is_online
+#     - standby_confirmation is defined
+#     - (standby_confirmation.user_input | lower == 'yes')
+#   ignore_errors: true
+
+- name: Include custom/patronictl_list.yml
+  include_tasks: custom/patronictl_list.yml
+  when: inventory_hostname == cluster_to_demote_leader_name
+  ignore_errors: true
+
+- name: "Wait for old primary cluster to become standby -- [{{ dc_to_demote }} ~~ {{ cluster_to_demote }}]"
+  uri:
+    url: "http://{{ cluster_to_demote_leader_name }}:8008/config"
+    method: GET
+  register: new_standby_config_result
+  until: new_standby_config_result.json.standby_cluster is defined
+  retries: 180 # 15 minutes
+  delay: 5
+  delegate_to: "{{ cluster_to_demote_leader_name }}"
+  run_once: true
+  when:
+    - cluster_to_demote_is_online
+    - standby_confirmation is defined
+    - standby_confirmation.user_input | lower == 'yes'
+
+- name: Include custom/patronictl_list.yml
+  include_tasks: custom/patronictl_list.yml
+  when: inventory_hostname == cluster_to_demote_leader_name
+  ignore_errors: true
+
+- name: "Wait 100 seconds for one member of new Standby Cluster to become standby_leader and in streaming state -- [{{ dc_to_demote }} ~~ {{ cluster_to_demote }}]"
+  uri:
+    url: "http://{{ cluster_to_demote_leader_name }}:8008/cluster"
+    method: GET
+  register: result_standby_election
+  until: >-
+    result_standby_election.json.members is defined and
+    (
+      result_standby_election.json.members
+      | selectattr('role', 'equalto', 'standby_leader')
+      | selectattr('state', 'equalto', 'streaming')
+      | list
+      | length
+    ) > 0
+  retries: 5 # 100 seconds
+  delay: 5
+  delegate_to: "{{ cluster_to_demote_leader_name }}"
+  run_once: true
+  when:
+    - cluster_to_demote_is_online
+    # - run_demote_logic
+    - standby_confirmation is defined
+    - standby_confirmation.user_input | lower == 'yes'
+  ignore_errors: true
+
+- name: Include custom/patronictl_list.yml
+  include_tasks: custom/patronictl_list.yml
+  when:
+    - inventory_hostname == cluster_to_demote_leader_name
+    - result_standby_election is defined and (result_standby_election.failed | default(false))
+  ignore_errors: true
+
+# - name: "Show condition evaluations before failover [{{ dc_to_promote }} ~~ {{ cluster_to_promote }}]"
+#   debug:
+#     msg:
+#       - "inventory_hostname in groups[dc_to_promote]: {{ inventory_hostname in groups[dc_to_promote] }}"
+#       - "inventory_hostname != cluster_to_promote_leader_name: {{ inventory_hostname != cluster_to_promote_leader_name }}"
+#       - "run_demote_logic: {{ run_demote_logic | default('undefined') }}"
+#       - "result_standby_election is defined: {{ result_standby_election is defined }}"
+#       - "result_standby_election.failed (if defined): {{ (result_standby_election.failed | default(false)) if result_standby_election is defined else 'N/A' }}"
+#       - "First host in {{ dc_to_promote }}_replica group: {{ (groups[dc_to_promote ~ '_replica'] | first) }}"
+
+# If no leader could be elected on standby, then probably its issue of timeline. So increase timeline on new Primary by failover/failback among nodes
+- name: "Failover [{{ dc_to_promote }} ~~ {{ cluster_to_promote }}] cluster to a non-preferred node to increment timeline"
+  include_tasks: custom/set_patroni_cluster_leader.yml
+  # delegate_to: "{{ groups[dc_to_promote] | difference([cluster_to_promote_leader_name]) | first }}"
+  when:
+    - inventory_hostname in groups[dc_to_promote]
+    - inventory_hostname != cluster_to_promote_leader_name
+    - inventory_hostname in (groups[dc_to_promote + '_replica'] | first)
+    - run_demote_logic # At time of Standby Cluster setup, leader on Primary should be designated node
+    - result_standby_election is defined and (result_standby_election.failed | default(false))
+  # run_once: true
+
+- name: Include custom/patronictl_list.yml
+  include_tasks: custom/patronictl_list.yml
+  when: inventory_hostname == cluster_to_promote_leader_name
+  ignore_errors: true
+
+# If no leader could be elected on standby, then probably its issue of timeline. So increase timeline on new Primary by failover/failback among nodes
+- name: "Failback [{{ dc_to_promote }} ~~ {{ cluster_to_promote }}] cluster to a preferred node to increment timeline"
+  include_tasks: custom/set_patroni_cluster_leader.yml
+  when:
+    - inventory_hostname == cluster_to_promote_leader_name
+    - run_demote_logic # At time of Standby Cluster setup, leader on Primary should be designated node
+    - result_standby_election is defined and (result_standby_election.failed | default(false))
+
+- name: Include custom/patronictl_list.yml
+  include_tasks: custom/patronictl_list.yml
+  when: inventory_hostname == cluster_to_promote_leader_name
+  ignore_errors: true
+
+# If failover/failback ws done on Primary Cluster, then wait for all replicas to come in health state
+- name: "Wait 100 seconds for all cluster members to have healthy state on [{{ dc_to_promote }} ~~ {{ cluster_to_promote }}]"
+  uri:
+    url: "http://{{ cluster_to_promote_leader_name }}:8008/cluster"
+    method: GET
+  register: cluster_timelines_status
+  until: >-
+    cluster_timelines_status.json.members is defined and
+    (
+      cluster_timelines_status.json.members
+      | map(attribute='timeline')
+      | list
+      | unique
+      | length == 1
+    )
+    and
+    (
+      cluster_timelines_status.json.members
+      | map(attribute='state')
+      | map('lower')
+      | list
+      | difference(['streaming','running'])
+      | length == 0
+    )
+  retries: 20 # 100 seconds
+  delay: 5
+  delegate_to: "{{ cluster_to_promote_leader_name }}"
+  run_once: true
+  when:
+    - run_demote_logic
+    - result_standby_election is defined and (result_standby_election.failed | default(false))
+
+- name: Include custom/patronictl_list.yml
+  include_tasks: custom/patronictl_list.yml
+  when: inventory_hostname == cluster_to_promote_leader_name
+  ignore_errors: true
+
+- name: Include custom/patronictl_list.yml
+  include_tasks: custom/patronictl_list.yml
+  when:
+    - inventory_hostname == cluster_to_demote_leader_name
+    - run_demote_logic
+  ignore_errors: true
+
+- name: "Wait 100 seconds for all members of new Standby Cluster to have streaming state -- [{{ dc_to_demote }} ~~ {{ cluster_to_demote }}]"
+  uri:
+    url: "http://{{ cluster_to_demote_leader_name }}:8008/cluster"
+    method: GET
+  until: >-
+    result_wait_for_streaming_members.json.members is defined and
+    (
+      result_wait_for_streaming_members.json.members
+      | map(attribute='state')
+      | map('lower')
+      | list
+      | difference(['streaming'])
+      | length == 0
+    )
+  retries: 20 # 100 seconds
+  delay: 5
+  delegate_to: "{{ cluster_to_demote_leader_name }}"
+  run_once: true
+  when:
+    - cluster_to_demote_is_online
+    - standby_confirmation is defined
+    - standby_confirmation.user_input | lower == 'yes'
+  ignore_errors: true
+  register: result_wait_for_streaming_members
+
+- name: Include custom/patronictl_list.yml
+  include_tasks: custom/patronictl_list.yml
+  when:
+    - inventory_hostname == cluster_to_demote_leader_name
+    - cluster_to_demote_is_online
+    - standby_confirmation.user_input | lower == 'yes'
+  ignore_errors: true
+
+- name: "Get Patroni cluster state JSON for [{{ dc_to_demote }} ~~ {{ cluster_to_demote }}"
+  uri:
+    url: "http://{{ cluster_to_demote_leader_name }}:8008/cluster"
+    method: GET
+    return_content: yes
+  register: patroni_cluster_state_on_dc_to_demote
+  delegate_to: "{{ cluster_to_demote_leader_name }}"
+  run_once: true
+  when:
+    - cluster_to_demote_is_online
+    - run_demote_logic
+    - standby_confirmation is defined
+    - standby_confirmation.user_input | lower == 'yes'
+    # - result_wait_for_streaming_members is defined and result_wait_for_streaming_members is failed
+
+- name: "Build list of 'replica' members with 'in archive recovery' state for [{{ dc_to_demote }} ~~ {{ cluster_to_demote }}]"
+  set_fact:
+    replicas_in_recovery_on_dc_to_demote: >-
+      {{
+        patroni_cluster_state_on_dc_to_demote.json.members
+        | selectattr('role', 'equalto', 'replica')
+        | selectattr('state', 'ne', 'streaming')
+        | map(attribute='name')
+        | list
+      }}
+  when:
+    - patroni_cluster_state_on_dc_to_demote is defined
+    - patroni_cluster_state_on_dc_to_demote.json.members is defined
+
+
+# - name: Debug replicas selected for reinit
+#   debug:
+#     var: replicas_in_recovery_on_dc_to_demote
+#   when:
+#     - debug
+#     - replicas_in_recovery_on_dc_to_demote is defined
+
+- name: "Run patronictl reinit on each replica having 'in archive recovery' state for [{{ dc_to_demote }} ~~ {{ cluster_to_demote }}"
+  command: >
+    patronictl -c /etc/patroni/patroni.yml reinit {{ cluster_to_demote }} {{ item }} --force
+  loop: "{{ replicas_in_recovery_on_dc_to_demote }}"
+  delegate_to: "{{ cluster_to_demote_leader_name }}"
+  run_once: true
+  when:
+    - replicas_in_recovery_on_dc_to_demote is defined
+    - replicas_in_recovery_on_dc_to_demote | length > 0
+    - run_demote_logic
+    - cluster_to_demote_is_online
+
+- name: Include custom/patronictl_list.yml
+  include_tasks: custom/patronictl_list.yml
+  when:
+    - inventory_hostname == cluster_to_demote_leader_name
+    - cluster_to_demote_is_online
+    - standby_confirmation.user_input | lower == 'yes'
+    - run_demote_logic
+  ignore_errors: true
+
+- name: "Wait for all members of new Standby Cluster to have streaming state -- [{{ dc_to_demote }} ~~ {{ cluster_to_demote }}]"
+  uri:
+    url: "http://{{ cluster_to_demote_leader_name }}:8008/cluster"
+    method: GET
+  until: >-
+    cluster_status_result.json.members is defined and
+    (
+      cluster_status_result.json.members
+      | map(attribute='state')
+      | map('lower')
+      | list
+      | difference(['streaming'])
+      | length == 0
+    )
+  retries: 180 # 15 minutes
+  delay: 5
+  delegate_to: "{{ cluster_to_demote_leader_name }}"
+  run_once: true
+  register: cluster_status_result
+  when:
+    - cluster_to_demote_is_online
+    - standby_confirmation is defined
+    - standby_confirmation.user_input | lower == 'yes'
+    - result_wait_for_streaming_members is failed
+  ignore_errors: true
+
+- name: Include custom/patronictl_list.yml
+  include_tasks: custom/patronictl_list.yml
+  when: inventory_hostname == cluster_to_demote_leader_name
+  ignore_errors: true
+
+- name: "Wait for all members of new Standby Cluster to have the same timeline [{{ dc_to_demote }} ~~ {{ cluster_to_demote }}]"
+  uri:
+    url: "http://{{ cluster_to_demote_leader_name }}:8008/cluster"
+    method: GET
+  register: cluster_timelines_status
+  until: >-
+    cluster_timelines_status.json.members is defined and
+    (
+      cluster_timelines_status.json.members
+      | map(attribute='timeline')
+      | list
+      | unique
+      | length == 1
+    )
+  retries: 180 # 15 minutes
+  delay: 5
+  delegate_to: "{{ cluster_to_demote_leader_name }}"
+  run_once: true
+  when:
+    - run_demote_logic
+    - cluster_to_demote_is_online
+
+- name: Include custom/patronictl_list.yml
+  include_tasks: custom/patronictl_list.yml
+  when: inventory_hostname in groups['dc1_leader'] or inventory_hostname in groups['dc2_leader']
+  ignore_errors: true
+
+- name: End tasks/custom/cluster_promote_demote.yml
+  debug:
+    msg: "End tasks/custom/cluster_promote_demote.yml"
+  run_once: true

@@ -1,0 +1,122 @@
+---
+# Install packages from repository
+# RedHat
+- name: Install system packages
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ system_packages }}"
+  register: package_status
+  until: package_status is success
+  delay: 5
+  retries: 3
+  environment: "{{ proxy_env | default({}) }}"
+  when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: Install PostgreSQL packages and extensions
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    # Base PostgreSQL packages
+    - postgresql{{ postgresql_version }}-server
+    - postgresql{{ postgresql_version }}-contrib
+    - pg_cron_{{ postgresql_version }}
+    # PostgreSQL extensions
+    - pg_fact_loader_{{ postgresql_version }}
+    - pg_ivm_{{ postgresql_version }}
+    - pg_partman_{{ postgresql_version }}
+    - pg_permissions_{{ postgresql_version }}
+    - pg_profile_{{ postgresql_version }}
+    # - pg_prioritize_{{ postgresql_version }}
+    - pg_qualstats_{{ postgresql_version }}
+    - pg_repack_{{ postgresql_version }}
+    - pg_show_plans_{{ postgresql_version }}
+    - pg_stat_monitor_{{ postgresql_version }}
+    - pg_statement_rollback_{{ postgresql_version }}
+    - pg_statviz_extension_{{ postgresql_version }}
+    - pgauditlogtofile_{{ postgresql_version }}
+    # - pgcopydb_{{ postgresql_version }}
+    - pgexporter_ext_{{ postgresql_version }}
+    - pgmeminfo_{{ postgresql_version }}
+    - pgtap_{{ postgresql_version }}
+    - pgtt_{{ postgresql_version }}
+    - plpgsql_check_{{ postgresql_version }}
+    - plprofiler_{{ postgresql_version }}
+    - table_version_{{ postgresql_version }}
+  register: package_status
+  until: package_status is success
+  delay: 5
+  retries: 3
+  environment: "{{ proxy_env | default({}) }}"
+  when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: Check user "{{ postgres_user }}" exists
+  ansible.builtin.user:
+    name: "{{ postgres_user }}"
+    shell: /bin/bash
+    state: present
+
+- name: Install pgBackRest package
+  ansible.builtin.package:
+    name: pgbackrest
+    state: present
+  register: package_status
+  until: package_status is success
+  delay: 5
+  retries: 3
+  environment: "{{ proxy_env | default({}) }}"
+  when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: Check if pgBackRest is properly installed
+  command: pgbackrest
+  register: pgbackrest
+  become_user: postgres
+  changed_when: false
+
+- name: Install watchdog package
+  ansible.builtin.package:
+    name: watchdog
+    state: present
+  when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: Create /var/log/pgbackrest directory
+  file:
+    path: /var/log/pgbackrest
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0770'
+
+- name: Create /etc/pgbackrest directory
+  file:
+    path: /etc/pgbackrest
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0740'
+
+- name: Create /var/spool/pgbackrest directory
+  file:
+    path: /var/spool/pgbackrest
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0740'
+
+- name: Create /etc/pgbackrest/conf.d directory
+  file:
+    path: /etc/pgbackrest/conf.d
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0740'
+
+- name: Generate pgBackRest configuration file
+  template:
+    src: templates/pgbackrest.conf.j2
+    dest: /etc/pgbackrest/pgbackrest.conf
+    owner: postgres
+    group: postgres
+    mode: '0640'
+

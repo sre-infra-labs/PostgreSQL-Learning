@@ -1,0 +1,112 @@
+---
+- name: "Begin {{ role_name }}/tasks/custom/postgres_configuration.yml"
+  debug:
+    msg: "Begin {{ role_name }}/tasks/custom/postgres_configuration.yml"
+
+- name: Include custom/configure_pgsql_bin_path.yml
+  include_tasks: custom/configure_pgsql_bin_path.yml
+
+- name: Update PostgreSQL configuration to listen on all interfaces
+  lineinfile:
+    path: "{{ pg_conf_path }}/postgresql.conf"
+    regexp: "^#?listen_addresses *=.*$"
+    line: "listen_addresses = '*'"
+    state: present
+  notify: restart postgresql
+
+- name: Update pg_hba.conf to allow password authentication from any host
+  become: yes
+  blockinfile:
+    path: "{{ pg_conf_path }}/pg_hba.conf"
+    block: |
+      # Allow access from any IP with password authentication
+      host    replication     all             0.0.0.0/0               scram-sha-256
+      host    all             all             0.0.0.0/0               scram-sha-256
+      host    all             all             ::/0                    scram-sha-256
+    marker: "# {mark} ANSIBLE MANAGED BLOCK FOR REMOTE ACCESS"
+  notify: restart postgresql
+
+# Set log_filename parameter for PostgreSQL logs
+- name: Configure PostgreSQL log filename
+  lineinfile:
+    path: "{{ pg_conf_path }}/postgresql.conf"
+    regexp: "^#?log_filename *=.*$"
+    line: "log_filename = 'postgresql-%a.log'"
+    state: present
+  notify: restart postgresql
+
+- name: Set postgres user password using postgresql_user module
+  community.postgresql.postgresql_user:
+    name: postgres
+    password: "{{ pg_superuser_pwd }}"
+    login_user: postgres
+    login_unix_socket: "{{ postgresql_unix_socket_dir | default('/var/run/postgresql') }}"
+  become: true
+  become_user: postgres
+
+# - name: Find PostgreSQL bin directory
+#   ansible.builtin.find:
+#     paths: /usr
+#     patterns: "pgsql-*"
+#     file_type: directory
+#   register: pg_dirs
+
+# - name: Set postgres user password using psql
+#   ansible.builtin.shell: |
+#     PASSWORD='{{ pg_superuser_pwd }}'
+#     sudo -u postgres {{ pg_dirs.files[0].path }}/bin/psql -c "alter role postgres with login password '$PASSWORD';"
+#   args:
+#     executable: /bin/bash
+#   register: result_set_password
+#   when: pg_dirs.files | length > 0
+
+- name: Set postgres user password using psql
+  ansible.builtin.shell: |
+    PASSWORD='{{ pg_superuser_pwd }}'
+    sudo -u postgres {{ pg_bin_path }}/psql -c "alter role postgres with login password '$PASSWORD';"
+  args:
+    executable: /bin/bash
+  register: result_set_password
+
+- name: Debug result_set_password
+  debug:
+    var: result_set_password
+
+- name: Include custom/pgpass_file.yml to setup .pgpass file
+  include_tasks: custom/pgpass_file.yml
+
+# - name: Create .pgpass file for postgres user
+#   copy:
+#     dest: "/home/postgres/.pgpass"
+#     content: "*:*:*:postgres:{{ pg_superuser_pwd }}"
+#     owner: postgres
+#     group: postgres
+#     mode: '0600'
+#   become: yes
+#   become_user: root
+
+- name: Configure UFW to allow PostgreSQL connections
+  ansible.posix.firewalld:
+    port: "{{ pg_port }}/tcp"
+    immediate: yes
+    permanent: yes
+    state: enabled
+
+- name: Ensure PostgreSQL is restarted
+  service:
+    name: postgresql-{{ postgresql_version }}
+    state: restarted
+
+- name: Check PostgreSQL status
+  command: systemctl status postgresql-{{ postgresql_version }}
+  register: pg_status
+  changed_when: false
+  ignore_errors: yes
+
+- name: Show PostgreSQL status
+  debug:
+    var: pg_status.stdout_lines
+
+- name: "End {{ role_name }}/tasks/custom/postgres_configuration.yml"
+  debug:
+    msg: "End {{ role_name }}/tasks/custom/postgres_configuration.yml"

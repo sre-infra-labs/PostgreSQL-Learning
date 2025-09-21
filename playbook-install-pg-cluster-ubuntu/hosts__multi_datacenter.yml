@@ -1,0 +1,36 @@
+all:
+  children:
+    dc1:
+      vars:
+        cluster_name: pg-cls1-prod
+      children:
+        dc1_leader:
+          hosts:
+            pg-cls1-prod1:
+              ip: 192.168.100.43
+        dc1_replica:
+          hosts:
+            pg-cls1-prod0:
+              ip: 192.168.100.42
+            pg-cls1-prod2:
+              ip: 192.168.100.44
+    dc2:
+      vars:
+        cluster_name: pg-cls1-dr
+      children:
+        dc2_leader:
+          hosts:
+            pg-cls1-dr1:
+              ip: 192.168.200.43
+        dc2_replica:
+          hosts:
+            pg-cls1-dr0:
+              ip: 192.168.200.42
+            pg-cls1-dr2:
+              ip: 192.168.200.44
+
+  vars:
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+    stanza_name: pg-cls1
+
+

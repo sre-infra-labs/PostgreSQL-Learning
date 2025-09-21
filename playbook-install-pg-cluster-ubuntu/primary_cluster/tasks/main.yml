@@ -1,0 +1,90 @@
+---
+- name: Inside Role tasks/main.yml
+  debug:
+    msg: "Inside Role tasks/main.yml"
+
+- name: Include defaults/creds.yml file
+  include_vars:
+    file: ../defaults/creds.yml
+
+- name: Include defaults/dba_vars.yml file
+  include_vars:
+    file: ../defaults/dba_vars.yml
+
+- name: Confirm before reinitializing cluster
+  pause:
+    prompt: "⚠️ WARNING: You are about to reinitialize the cluster. Type 'yes' to continue:"
+  register: reinit_confirmation
+  when: reinit_cluster is defined and reinit_cluster | bool
+  delegate_to: localhost
+  run_once: true
+
+- name: Fail if user did not confirm reinit
+  fail:
+    msg: "Cluster reinitialization aborted by user."
+  when: reinit_cluster is defined and reinit_cluster | bool and reinit_confirmation.user_input != "yes"
+
+
+# - name: Use the defaults/creds.yml file variables for testing
+#   ansible.builtin.debug:
+#     var: creds
+
+# - name: Debug Consul SecretID obtained from vars file
+#   ansible.builtin.debug:
+#     msg: "Consul SecretID: {{ consul_secret_id }}"
+
+- name: Include custom/prechecks.yml
+  include_tasks: custom/prechecks.yml
+
+- name: Include custom/etc_hosts.yml
+  include_tasks: custom/etc_hosts.yml
+  when:
+    - add_host_entries | default(false) | bool
+    - not (reinit_cluster is defined and reinit_cluster)
+
+- name: Include custom/repository.yml
+  include_tasks: custom/repository.yml
+  when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: Generate consul Secret
+  include_tasks: custom/consul_client_install.yml
+  # when: inventory_hostname == (groups['leader'] | default([]) | first | default(groups['standby_leader'] | default([]) | first, ''))
+
+- name: Read Consul Secret from vars file
+  include_vars:
+    file: ../defaults/consul_secret.yml
+
+- name: Include custom/packages.yml
+  include_tasks: custom/packages.yml
+
+- name: Include custom/firewall.yml
+  include_tasks: custom/firewall.yml
+  # when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: Include custom/pgpass.yml
+  include_tasks: custom/pgpass.yml
+  # when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: Include install patroni
+  include_tasks: custom/patroni.yml
+
+- name: Include custom/pgbackrest.yml
+  include_tasks: custom/pgbackrest.yml
+
+- name: Include custom/user.yml
+  include_tasks: custom/user.yml
+
+# - name: Include custom/filebeat.yml
+#   include_tasks: custom/filebeat.yml
+
+- name: Include custom/pg_exporter.yml
+  include_tasks: custom/pg_exporter.yml
+
+- name: Include custom/backup.yml
+  include_tasks: custom/backup.yml
+
+- name: Include custom/patronictl_list.yml
+  include_tasks: custom/patronictl_list.yml
+  when: inventory_hostname in groups['leader']
+
+

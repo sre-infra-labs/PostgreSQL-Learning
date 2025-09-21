@@ -1,0 +1,10 @@
+---
+postgresql_version: "16"
+
+# Application settings
+app_db_name: dba
+app_role_rw: dba_rw
+app_role_ro: dba_ro
+
+
+

@@ -1,0 +1,55 @@
+---
+- name: "Begin {{ role_name }}/custom/repository.yml"
+  debug:
+    msg: "Begin {{ role_name }}/custom/repository.yml"
+
+- name: Get Ubuntu codename
+  ansible.builtin.command: bash -c ". /etc/os-release && echo $VERSION_CODENAME"
+  register: ubuntu_codename
+  changed_when: false
+
+- name: Set system architecture
+  ansible.builtin.set_fact:
+    system_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else ('arm64' if ansible_architecture == 'aarch64' else ansible_architecture) }}"
+
+- name: Create keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Download PostgreSQL GPG key
+  ansible.builtin.get_url:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    dest: /etc/apt/keyrings/postgresql.asc
+    mode: '0644'
+  become: true
+
+- name: Download HashiCorp GPG key
+  ansible.builtin.get_url:
+    url: https://apt.releases.hashicorp.com/gpg
+    dest: /etc/apt/keyrings/hashicorp.asc
+    mode: '0644'
+  become: true
+
+- name: Add PostgreSQL repository with signed-by
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/postgresql.asc] https://apt.postgresql.org/pub/repos/apt {{ ansible_distribution_release }}-pgdg main"
+    filename: pgdg
+    state: present
+    update_cache: no
+  become: true
+
+- name: Add HashiCorp repository with signed-by
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/hashicorp.asc] https://apt.releases.hashicorp.com {{ ansible_distribution_release }} main"
+    filename: hashicorp
+    state: present
+    update_cache: no
+  become: true
+
+- name: "End {{ role_name }}/custom/repository.yml"
+  debug:
+    msg: "End {{ role_name }}/custom/repository.yml"
+

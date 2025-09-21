@@ -1,0 +1,70 @@
+---
+- name: Create database
+  postgresql_db:
+    name: "{{ db_name }}"
+    state: present
+    login_user: "postgres"
+  when: "'leader' in group_names"
+
+- name: user creation
+  postgresql_user:
+    name: "{{ db_user_rw }}"
+    password: "{{ db_user_rw_password }}"
+    role_attr_flags: LOGIN
+    state: present
+    login_user: "postgres"
+  when: "'leader' in group_names"
+
+- name: Grant read write privileges
+  community.postgresql.postgresql_query:
+    db: "{{ db_name }}"
+    login_user: postgres
+    query: |
+      GRANT ALL ON ALL TABLES IN SCHEMA public TO "{{ db_user_rw }}";
+      GRANT ALL PRIVILEGES ON DATABASE "{{ db_name }}" TO "{{ db_user_rw }}";
+      GRANT pg_read_all_data, pg_write_all_data TO "{{ db_user_rw }}";
+      GRANT pg_read_all_stats TO {{ db_user_rw }};
+  register: grant_result
+  when: "'leader' in group_names"
+
+- name: user creation
+  postgresql_user:
+    name: "{{ db_user_ro }}"
+    password: "{{ db_user_ro_password }}"
+    role_attr_flags: LOGIN
+    state: present
+    login_user: "postgres"
+  when: "'leader' in group_names"
+
+- name: Grant read privileges
+  community.postgresql.postgresql_query:
+    db: "{{ db_name }}"
+    login_user: postgres
+    query: |
+      GRANT ALL ON ALL TABLES IN SCHEMA public TO "{{ db_user_ro }}";
+      GRANT pg_read_all_data TO "{{ db_user_ro }}";
+  register: grant_result
+  when: "'leader' in group_names"
+
+
+- name: Create pg_stat_statements extension
+  postgresql_ext:
+    db: "{{ db_name }}"
+    name: pg_stat_statements
+    state: present
+  when: "'leader' in group_names"
+
+- name: Create dblink extension
+  postgresql_ext:
+    db: "{{ db_name }}"
+    name: dblink
+    state: present
+  when: "'leader' in group_names"
+
+# - name: Create pg_profile extension
+#   postgresql_ext:
+#     db: "{{ db_name }}"
+#     name: pg_profile
+#     state: present
+#   when: "'leader' in group_names"
+

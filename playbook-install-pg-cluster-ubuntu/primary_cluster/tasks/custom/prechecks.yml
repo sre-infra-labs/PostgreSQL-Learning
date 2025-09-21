@@ -1,0 +1,156 @@
+---
+- name: Begin custom/prechecks.yml
+  ansible.builtin.debug:
+    msg: "Begin custom/prechecks.yml"
+
+- name: Ensure patroni service is down in case of reinit_cluster flag is enabled
+  ansible.builtin.service:
+    name: patroni
+    state: stopped
+  when: reinit_cluster is defined and reinit_cluster
+
+- name: Remove postgresql_data_dir directory if reinit_cluster flag is set
+  become: true
+  ansible.builtin.file:
+    path: "{{ postgresql_data_dir }}"
+    state: absent
+  when: reinit_cluster is defined and reinit_cluster is true
+
+# - name: Remove log directories
+#   ansible.builtin.file:
+#     name: "{{ item }}"
+#     state: absent
+#   loop:
+#     - "{{ postgresql_log_dir }}"
+#     - "{{ patroni_log_dir }}"
+#     - "/var/spool/pgbackrest"
+#   when: reinit_cluster is defined and reinit_cluster is true
+
+- name: Remove files under directories
+  become: true
+  ansible.builtin.shell: |
+    rm -rf "{{ item }}/*"
+  loop:
+    - "{{ postgresql_log_dir }}"
+    - "{{ patroni_log_dir }}"
+    - "/var/log/pgbackrest"
+    - "/var/spool/pgbackrest"
+    - "{{ postgresql_home_dir }}/{{ postgresql_version}}/backups"
+  when: reinit_cluster is defined and reinit_cluster is true
+
+- name: Stop pgBackRest stanza and delete all backups
+  become_user: postgres
+  ansible.builtin.shell: |
+    # stop postgresql using pgbackrest
+    # pgbackrest --stanza={{ pgbackrest_stanza_name }} stop
+
+    # remove WALs older than latest backup
+    pgbackrest --stanza={{ pgbackrest_stanza_name }} expire
+
+    # remove all backups
+    # pgbackrest --stanza={{ pgbackrest_stanza_name }} expire --repo1-retention-full=0
+
+    # clear only archive WALs
+    pgbackrest --stanza={{ pgbackrest_stanza_name }} expire --repo1-retention-archive=1
+
+    # remove stanza
+    # pgbackrest --stanza={{ pgbackrest_stanza_name }} stanza-delete --force
+
+
+    # cleanup older backup/archive for pgbackrest-stanza
+    # aws s3 rm s3://{{ pgbackrest_repo1_s3_bucket }}{{ pgbackrest_repo1_s3_path }}/backup/{{ pgbackrest_stanza_name }}/ --recursive
+    # aws s3 rm s3://{{ pgbackrest_repo1_s3_bucket }}{{ pgbackrest_repo1_s3_path }}/archive/{{ pgbackrest_stanza_name }}/ --recursive
+
+  # args:
+  #   chdir: /path/to/pgbackrest/config
+  run_once: true
+  delegate_to: "{{ groups['leader'] | first }}"
+  when:
+    - reinit_cluster is defined and reinit_cluster is true
+    - cleanup_pgbackrest_backups is defined and cleanup_pgbackrest_backups is true
+
+- name: Remove existing Consul KV entries for cluster
+  community.general.consul_kv:
+    key: "service/{{ patroni_cluster_name }}"
+    host: "{{ consul_server.name }}"
+    port: 8500
+    token: "{{ consul_master_token | default(omit) }}"
+    state: absent
+  failed_when: false
+  run_once: true
+  when: reinit_cluster is defined and reinit_cluster is true
+
+- name: Check if patroni service exists in Consul
+  uri:
+    url: "http://{{ consul_server.name }}:8500/v1/kv/service/{{ patroni_cluster_name }}?recurse=true&token={{ consul_master_token }}"
+    method: GET
+    return_content: yes
+    status_code: [200, 404]
+  register: consul_service_check
+  run_once: true
+
+- name: Set fact cluster_service_kv_exists
+  set_fact:
+    cluster_service_kv_exists: >-
+      {{
+        (consul_service_check.status == 200) and
+        (consul_service_check.json is defined) and
+        (consul_service_check.json | length > 0)
+      }}
+  run_once: true
+
+- name: Fail if cluster service KV exists in Consul
+  ansible.builtin.fail:
+    msg: |
+      Whoops! Consul kv for cluster {{ patroni_cluster_name }} already exists
+      Verify using =>        curl http://{{ consul_server.name }}:8500/v1/kv/service/{{ patroni_cluster_name }}?recurse=true
+  when: cluster_service_kv_exists
+
+- name: Check if data directory "{{ postgresql_data_dir }}" is not initialized
+  ansible.builtin.stat:
+    path: "{{ postgresql_data_dir }}/PG_VERSION"
+  register: pgdata_initialized
+
+- name: Debug | Print pgdata_initialized variable
+  ansible.builtin.debug:
+    msg: "{{ pgdata_initialized }}"
+
+- name: Fail if data directory is already initialized
+  ansible.builtin.fail:
+    msg: "Whoops! Data directory {{ postgresql_data_dir }} is already initialized"
+  when:
+    - pgdata_initialized.stat.exists is defined
+    - pgdata_initialized.stat.exists
+
+- name: Check Ansible version
+  ansible.builtin.fail:
+    msg: "Ansible version must be {{ minimal_ansible_version }} or higher"
+  delegate_to: localhost
+  when:
+    - ansible_version.full is version(minimal_ansible_version, '<')
+
+# Ensure PostgreSQL is not initialized (repeated block)
+- block:
+    - name: Check if data directory "{{ postgresql_data_dir }}" is not initialized
+      ansible.builtin.stat:
+          path: "{{ postgresql_data_dir }}/PG_VERSION"
+      register: pgdata_initialized
+
+    - name: Fail if data directory is already initialized
+      ansible.builtin.fail:
+        msg: "Whoops! Data directory {{ postgresql_data_dir }} is already initialized"
+      when:
+        - pgdata_initialized.stat.exists is defined
+        - pgdata_initialized.stat.exists
+
+- name: Remove role/defaults/consul_secret.yml file if exists
+  ansible.builtin.file:
+    path: "{{ role_path }}/defaults/consul_secret.yml"
+    state: absent
+  delegate_to: localhost
+  run_once: true
+  become: false
+
+- name: End custom/prechecks.yml
+  ansible.builtin.debug:
+    msg: "End custom/prechecks.yml"

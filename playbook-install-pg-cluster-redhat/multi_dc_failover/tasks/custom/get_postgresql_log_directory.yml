@@ -1,0 +1,67 @@
+---
+- name: Check if pg_superuser_password is defined
+  ansible.builtin.debug:
+    msg: "pg_superuser_password is defined."
+  when: pg_superuser_password is defined
+
+- name: Find log_directory by querying using psql with superuser password
+  ansible.builtin.shell: |
+    export PGPASSWORD="{{ pg_superuser_password }}"
+    psql -h localhost -U postgres -d postgres -t -A -c "SHOW log_directory;"
+  register: log_directory_result
+  changed_when: false
+  ignore_errors: true
+  when: postgresql_log_directory is not defined
+
+- name: Set fact for PostgreSQL log directory
+  ansible.builtin.set_fact:
+    postgresql_log_directory: "{{ log_directory_result.stdout }}"
+  when:
+    - postgresql_log_directory is not defined
+    - log_directory_result is defined
+    - log_directory_result.stdout is defined and (log_directory_result.stdout | trim) != ""
+
+- name: Find PostgreSQL log directory by querying using psql without superuser password
+  ansible.builtin.shell: |
+    cd /tmp && sudo -u postgres psql -t -A -c "SHOW log_directory;"
+  register: log_directory_result
+  changed_when: false
+  ignore_errors: true
+  when: postgresql_log_directory is not defined
+
+- name: Set fact for PostgreSQL log directory
+  ansible.builtin.set_fact:
+    postgresql_log_directory: "{{ log_directory_result.stdout }}"
+  when:
+    - postgresql_log_directory is not defined
+    - log_directory_result is defined
+    - log_directory_result.stdout is defined and (log_directory_result.stdout | trim) != ""
+
+- name: "Check if /var/lib/pgsql/{postgresql_version}/data/postgresql.conf exists"
+  ansible.builtin.stat:
+    path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+  register: postgresql_conf_stat
+  when: postgresql_log_directory is not defined
+
+- name: Extract log_directory from postgresql.conf
+  ansible.builtin.set_fact:
+    postgresql_log_directory: "{{ log_directory_line.split('=')[1] | trim(\" '\") }}"
+  vars:
+    postgresql_conf_path: /var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf
+    log_directory_line: >-
+      {{ lookup('ansible.builtin.lines', "grep -vE '^\\s*#' " + postgresql_conf_path + " | grep log_directory")
+         | regex_search('log_directory\\s*=\\s*\\S+', multiline=False) }}
+  when:
+    - postgresql_log_directory is not defined
+    - postgresql_conf_stat.stat.exists
+
+- name: Normalize postgresql_log_directory to absolute path if it's relative
+  ansible.builtin.set_fact:
+    postgresql_log_directory: "/var/lib/pgsql/{{ postgresql_version }}/data/{{ postgresql_log_directory }}"
+  when: not postgresql_log_directory.startswith('/')
+
+- name: Debug log_directory
+  ansible.builtin.debug:
+    msg: "PostgreSQL Log Directory: '{{ postgresql_log_directory }}'"
+
+

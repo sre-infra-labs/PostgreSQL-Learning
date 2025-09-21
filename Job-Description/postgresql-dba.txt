@@ -1,0 +1,27 @@
+About the job
+Skills:
+Database Management, SQL Query Optimization, Backup and Recovery, Performance Tuning, Monitoring Tools, Troubleshooting, Postgre SQL, Database Administration,
+
+The Senior Postgre SQL DBA would need to have at least 4 years of experience with development and customer support, providing technical and operational support activities of Database Servers, including logical and physical database design support, troubleshooting, performance monitoring, tuning, and optimizing.
+PostgreSQL database cloning by using Pg_dump and Pg_Restore.
+Review all PostgreSQL logs and problems.
+Experience with Postgres Connection Pooling (PgBouncer).
+Hands-on operational DBA expertise in the areas of Replication, High Availability and Backup/Recovery.
+Advanced performance-tuning skills to review performance data and prepare reports.
+SQL and Linux scripting skills are required skills.
+Strong communication skills are a requirement for this position.
+Ability to manage customer or in-house escalation calls is required
+Experience working on an Application/Development team or experience as an Application DBA.
+Responsible for managing Development, QA, Staging and Production databases and applications and implementing future enhancements to meet the business needs of the end users.
+Monitor database health - availability, reliability, performance, capacity planning.
+Upgrading PostgreSQL Databases.
+Responsible for the monitoring and uptime of all production databases.
+Estimate PostgreSQL database capacities; develop methods for monitoring database capacity and usage.
+Lead efforts to develop and improve procedures for automated monitoring and proactive intervention, reducing any need downtime.
+Responsible for developer SQL code review to ensure queries are optimized and tuned to perform efficiently prior to production release.
+Responsible for regular maintenance on databases (e.g., Vacuum, Reindexing, Archiving).
+Responsible for pro-active remediation of database operational problems.
+Participate in a 247 support rotation.
+Support complex web-based applications.
+Automatic Switchover & Failover.
+

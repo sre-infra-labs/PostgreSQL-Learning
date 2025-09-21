@@ -1,0 +1,29 @@
+- name: Create postgres.yml with Filebeat configuration
+  ansible.builtin.copy:
+    dest: /etc/filebeat/inputs.d/postgres.yml
+    content: |
+      - type: log
+        encoding: plain
+        enabled: true
+        paths:
+          - /var/log/postgresql/postgresql-*.log
+          - /var/log/patroni/patroni*.log
+
+        ignore_older: 36h
+        close_inactive: 5m
+        close_removed: true
+        clean_removed: true
+        fields:
+          topic: gpx-prod-patroni-cluster
+          application_name: {{ patroni_cluster_name }}
+
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Restart Filebeat service
+  ansible.builtin.systemd:
+    name: filebeat
+    state: restarted
+    enabled: yes
+

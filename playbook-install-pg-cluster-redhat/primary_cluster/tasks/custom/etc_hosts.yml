@@ -1,0 +1,30 @@
+---
+- name: Begin tasks/custom/etc_hosts.yml
+  ansible.builtin.debug:
+    msg: Begin tasks/custom/etc_hosts.yml
+
+- name: Ensure /etc/hosts has PostgreSQL cluster and Consul entries
+  ansible.builtin.blockinfile:
+    path: /etc/hosts
+    marker: "# {mark} ANSIBLE MANAGED CLUSTER HOSTS"
+    block: |
+      # PostgreSQL cluster nodes
+      {% for host in groups['leader'] + groups['replica'] if host != inventory_hostname %}
+      {{ hostvars[host]['ip'] }}   {{ host }}
+      {% endfor %}
+
+      {% if other_datacenter_nodes is defined %}
+        {% for node in other_datacenter_nodes %}
+      {{ node.ip }}   {{ node.name }}
+        {% endfor %}
+      {% endif %}
+
+      # Consul server
+      {% if consul_server.name != inventory_hostname %}
+      {{ consul_server.ip }}   {{ consul_server.name }}
+      {% endif %}
+  become: true
+
+- name: End tasks/custom/etc_hosts.yml
+  ansible.builtin.debug:
+    msg: End tasks/custom/etc_hosts.yml

@@ -1,0 +1,26 @@
+---
+- name: Ensure .pgpass directory exists for each user
+  file:
+    path: "/home/{{ item.linux_user }}/.postgresql"
+    state: directory
+    owner: "{{ item.linux_user }}"
+    group: "{{ item.linux_user }}"
+    mode: "0700"
+  loop: "{{ pgpass_entries }}"
+
+- name: Create or update .pgpass file for each user
+  template:
+    src: pgpass.j2
+    dest: "/home/{{ item.linux_user }}/.postgresql/.pgpass"
+    owner: "{{ item.linux_user }}"
+    group: "{{ item.linux_user }}"
+    mode: "0600"
+  loop: "{{ pgpass_entries }}"
+  no_log: yes # Sensitive information
+
+- name: Set SELinux context for .pgpass (if SELinux is enforcing)
+  command: chcon -t postgresql_auth_t /home/{{ item.linux_user }}/.postgresql/.pgpass
+  become: yes
+  become_user: root
+  loop: "{{ pgpass_entries }}"
+  when: ansible_selinux.enforcing | bool

@@ -1,0 +1,101 @@
+---
+- name: Check PostgreSQL connectivity among all hosts
+  hosts: all
+  gather_facts: false
+  # become: true
+  become_user: root
+  remote_user: ansible
+
+  vars:
+    pg_password: "{{ PGPWD_CLUSTER | default(lookup('env','PGPWD_CLUSTER'), true) }}"
+    consul_server:
+      name: pg-consul-rhel
+      ip: 192.168.100.41
+
+  tasks:
+    - name: Build list of other hosts with ip and name
+      set_fact:
+        other_hosts: >-
+          {{ groups['all']
+             | difference([inventory_hostname])
+             | map('extract', hostvars, ['ip'])
+             | zip(groups['all'] | difference([inventory_hostname]))
+             | list }}
+
+    # - name: Build list of other hosts for each host
+    #   set_fact:
+    #     other_hosts: "{{ groups['all'] | difference([inventory_hostname]) }}"
+
+    # - name: Debug check what will be added
+    #   debug:
+    #     msg: "{{ item.0 }} {{ item.1 }}"
+    #   loop: "{{ other_hosts }}"
+
+    - name: Run some commands on host
+      become: true
+      ansible.builtin.shell: |
+        sudo ls /etc/apt/sources.list.d/ | grep hashicorp
+        sudo rm -f /etc/apt/sources.list.d/hashicorp.list
+
+
+    - name: Ensure /etc/hosts entries for other hosts
+      become: true
+      lineinfile:
+        path: /etc/hosts
+        line: "{{ item.0 }} {{ item.1 }}"
+        state: present
+      loop: "{{ other_hosts }}"
+
+    - name: Ensure /etc/hosts entries for consul server
+      become: true
+      lineinfile:
+        path: /etc/hosts
+        line: "{{ consul_server.ip }} {{ consul_server.name }}"
+        state: present
+
+    - name: Ping other servers in inventory
+      vars:
+        other_host_names: "{{ other_hosts.1 }}"
+      shell: |
+        for host in {{ other_host_names | join(' ') }}; do
+          echo "===== {{ inventory_hostname }} -> $host ====="
+          ping -c 2 -W 2 $host >/dev/null 2>&1
+          if [ $? -eq 0 ]; then
+            echo "Ping to $host successful"
+          else
+            echo "Ping to $host FAILED"
+          fi
+        done
+      register: ping_results
+      args:
+        executable: /bin/bash
+
+    - name: Show ping connectivity results
+      debug:
+        var: ping_results.stdout_lines
+
+    # - name: Connect psql for other servers on inventory
+    #   shell: |
+    #     for host in {{ other_hosts | join(' ') }}; do
+    #       echo "===== {{ inventory_hostname }} -> $host ====="
+    #       PGPASSWORD={{ pg_password }} psql -h $host -U postgres -d postgres -c '\conninfo'
+    #       if [ $? -eq 0 ]; then
+    #         echo "Connection to $host successful"
+    #       else
+    #         echo "Connection to $host FAILED"
+    #       fi
+    #     done
+    #   register: result_all_servers
+    #   args:
+    #     executable: /bin/bash
+
+    # - name: Show connectivity results
+    #   debug:
+    #     var: result_all_servers.stdout_lines
+
+# export PGPWD_CLUSTER="your_password_here"
+# ansible-playbook -i hosts__multi_datacenter.yml check_psql_connectivity.yml
+# or
+# ansible-playbook -i hosts__multi_datacenter.yml check_psql_connectivity.yml -e "PGPWD_CLUSTER=your_password_here"
+
+

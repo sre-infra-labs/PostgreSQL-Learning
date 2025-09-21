@@ -1,0 +1,8 @@
+
+- name: restart consul handler
+  ansible.builtin.import_tasks:
+    file: restart_consul.yml
+
+- name: reload systemd daemon
+  ansible.builtin.import_tasks:
+    file: systemd_daemon_reload.yml
