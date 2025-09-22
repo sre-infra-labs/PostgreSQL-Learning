@@ -5,7 +5,7 @@ Log in to AWS Management Console → Go to S3.
 
 Click Create Bucket:
 
-Bucket name: imajaydwivedi-pg-backups
+Bucket name: mys3bucketname
 
 Region: Closest to DB servers (e.g., ap-south-1 for Mumbai).
 
@@ -17,7 +17,7 @@ Encryption: ✅ Enable SSE-S3.
 
 Your S3 path will be:
 
-s3://imajaydwivedi-pg-backups/pg-backups/
+s3://mys3bucketname/pg-backups/
 
 2️⃣ Create IAM Policy
 
@@ -31,7 +31,7 @@ Go to IAM → Policies → Create Policy and use this JSON:
             "Action": [
                 "s3:ListBucket"
             ],
-            "Resource": "arn:aws:s3:::imajaydwivedi-pg-backups"
+            "Resource": "arn:aws:s3:::mys3bucketname"
         },
         {
             "Effect": "Allow",
@@ -40,7 +40,7 @@ Go to IAM → Policies → Create Policy and use this JSON:
                 "s3:GetObject",
                 "s3:DeleteObject"
             ],
-            "Resource": "arn:aws:s3:::imajaydwivedi-pg-backups/*"
+            "Resource": "arn:aws:s3:::mys3bucketname/*"
         }
     ]
 }
@@ -70,7 +70,7 @@ Debian/Ubuntu: /etc/pgbackrest.conf
 
 [global]
 repo1-type=s3
-repo1-s3-bucket=imajaydwivedi-pg-backups
+repo1-s3-bucket=mys3bucketname
 repo1-s3-endpoint=s3.ap-south-1.amazonaws.com
 repo1-s3-region=ap-south-1
 repo1-s3-uri-style=path
@@ -92,7 +92,7 @@ pgbackrest --stanza=mydb --type=full backup
 
 Verify in S3:
 
-aws s3 ls s3://imajaydwivedi-pg-backups/pg-backups/
+aws s3 ls s3://mys3bucketname/pg-backups/
 
 6️⃣ Security Best Practices
 
@@ -109,4 +109,4 @@ export AWS_SECRET_ACCESS_KEY=xxxx
 If running on EC2 → use IAM Role (no keys needed).
 
 ✅ With this setup, pgBackRest will push backups to:
-s3://imajaydwivedi-pg-backups/pg-backups/
+s3://mys3bucketname/pg-backups/
