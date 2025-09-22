@@ -409,7 +409,9 @@
 
       Continue? (yes/no)
   register: standby_confirmation
-  when: set_demoted_cluster_up is defined and set_demoted_cluster_up is true
+  when:
+    - set_demoted_cluster_up is defined and set_demoted_cluster_up is true
+    - get_user_confirmation
   run_once: true
 
 - name: Debug check if host is in the group defined by dc_to_demote
@@ -426,7 +428,7 @@
     state: started
   when:
     - inventory_hostname in groups[dc_to_demote]
-    - standby_confirmation is defined and (standby_confirmation.user_input | lower == 'yes')
+    - (not get_user_confirmation) or (standby_confirmation is defined and (standby_confirmation.user_input | lower == 'yes'))
 
 - name: "Configure old primary cluster as standby via patronictl -- [{{ dc_to_demote }} ~~ {{ cluster_to_demote }}]"
   become: true
@@ -436,8 +438,7 @@
   delegate_to: "{{ cluster_to_demote_leader_name }}"
   when:
     - cluster_to_demote_is_online
-    - standby_confirmation is defined
-    - standby_confirmation.user_input | lower == 'yes'
+    - (not get_user_confirmation) or (standby_confirmation is defined and standby_confirmation.user_input | lower == 'yes')
   register: result_set_standby_on_old_primary
 
 - name: "Remove maintenance mode on new standby cluster -- [{{ dc_to_demote }} ~~ {{ cluster_to_demote }}]"
@@ -448,18 +449,6 @@
   run_once: true
   when: cluster_to_demote_is_online
   ignore_errors: true
-
-# - name: "Reload Patroni config on new standby cluster -- [{{ dc_to_demote }} ~~ {{ cluster_to_demote }}]"
-#   become: true
-#   shell: >
-#     patronictl -c /etc/patroni/patroni.yml reload {{ cluster_to_demote }} --force
-#   run_once: true
-#   delegate_to: "{{ cluster_to_demote_leader_name }}"
-#   when:
-#     - cluster_to_demote_is_online
-#     - standby_confirmation is defined
-#     - (standby_confirmation.user_input | lower == 'yes')
-#   ignore_errors: true
 
 - name: Include custom/patronictl_list.yml
   include_tasks: custom/patronictl_list.yml
@@ -478,8 +467,7 @@
   run_once: true
   when:
     - cluster_to_demote_is_online
-    - standby_confirmation is defined
-    - standby_confirmation.user_input | lower == 'yes'
+    - (not get_user_confirmation) or (standby_confirmation is defined and standby_confirmation.user_input | lower == 'yes')
 
 - name: Include custom/patronictl_list.yml
   include_tasks: custom/patronictl_list.yml
@@ -507,8 +495,7 @@
   when:
     - cluster_to_demote_is_online
     # - run_demote_logic
-    - standby_confirmation is defined
-    - standby_confirmation.user_input | lower == 'yes'
+    - (not get_user_confirmation) or (standby_confirmation is defined and standby_confirmation.user_input | lower == 'yes')
   ignore_errors: true
 
 - name: Include custom/patronictl_list.yml
@@ -622,8 +609,7 @@
   run_once: true
   when:
     - cluster_to_demote_is_online
-    - standby_confirmation is defined
-    - standby_confirmation.user_input | lower == 'yes'
+    - (not get_user_confirmation) or (standby_confirmation is defined and standby_confirmation.user_input | lower == 'yes')
   ignore_errors: true
   register: result_wait_for_streaming_members
 
@@ -632,7 +618,7 @@
   when:
     - inventory_hostname == cluster_to_demote_leader_name
     - cluster_to_demote_is_online
-    - standby_confirmation.user_input | lower == 'yes'
+    - (not get_user_confirmation) or (standby_confirmation is defined and standby_confirmation.user_input | lower == 'yes')
   ignore_errors: true
 
 - name: "Get Patroni cluster state JSON for [{{ dc_to_demote }} ~~ {{ cluster_to_demote }}"
@@ -646,8 +632,7 @@
   when:
     - cluster_to_demote_is_online
     - run_demote_logic
-    - standby_confirmation is defined
-    - standby_confirmation.user_input | lower == 'yes'
+    - (not get_user_confirmation) or (standby_confirmation is defined and standby_confirmation.user_input | lower == 'yes')
     # - result_wait_for_streaming_members is defined and result_wait_for_streaming_members is failed
 
 - name: "Build list of 'replica' members with 'in archive recovery' state for [{{ dc_to_demote }} ~~ {{ cluster_to_demote }}]"
@@ -689,7 +674,7 @@
   when:
     - inventory_hostname == cluster_to_demote_leader_name
     - cluster_to_demote_is_online
-    - standby_confirmation.user_input | lower == 'yes'
+    - (not get_user_confirmation) or (standby_confirmation is defined and standby_confirmation.user_input | lower == 'yes')
     - run_demote_logic
   ignore_errors: true
 
@@ -714,8 +699,7 @@
   register: cluster_status_result
   when:
     - cluster_to_demote_is_online
-    - standby_confirmation is defined
-    - standby_confirmation.user_input | lower == 'yes'
+    - (not get_user_confirmation) or (standby_confirmation is defined and standby_confirmation.user_input | lower == 'yes')
     - result_wait_for_streaming_members is failed
   ignore_errors: true
 

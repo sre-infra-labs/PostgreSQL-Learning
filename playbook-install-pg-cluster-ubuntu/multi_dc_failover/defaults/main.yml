@@ -5,3 +5,6 @@ postgresql_bin_dir: "/usr/lib/postgresql/{{ postgresql_version }}/bin"
 postgresql_home_dir: "/var/lib/postgresql"
 postgresql_data_dir: "{{ postgresql_home_dir }}/{{ postgresql_version }}/main"
 
+# Set false where prompt to user is NOT possible like Github Workflow
+get_user_confirmation: false
+

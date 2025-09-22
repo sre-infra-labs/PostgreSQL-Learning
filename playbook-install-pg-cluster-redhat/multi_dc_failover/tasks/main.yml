@@ -252,11 +252,12 @@
       Are you sure you want to continue? (yes/no)
   register: confirmation
   run_once: true
+  when: get_user_confirmation
 
 - name: Fail if not confirmed
   fail:
     msg: "Operation cancelled by user"
-  when: confirmation.user_input | lower != 'yes'
+  when: get_user_confirmation and confirmation.user_input | lower != 'yes'
   run_once: true
 
 - name: Block - tasks/custom/cluster_promote_demote.yml
