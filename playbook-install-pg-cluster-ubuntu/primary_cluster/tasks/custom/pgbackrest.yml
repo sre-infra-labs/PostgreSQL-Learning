@@ -16,37 +16,18 @@
   become_user: postgres
   changed_when: false
 
-- name: Create /var/log/pgbackrest directory
-  file:
-    path: /var/log/pgbackrest
+- name: Create pgBackRest directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
     state: directory
     owner: postgres
     group: postgres
-    mode: '0770'
-
-- name: Create /etc/pgbackrest directory
-  file:
-    path: /etc/pgbackrest
-    state: directory
-    owner: postgres
-    group: postgres
-    mode: '0740'
-
-- name: Create /var/spool/pgbackrest directory
-  file:
-    path: /var/spool/pgbackrest
-    state: directory
-    owner: postgres
-    group: postgres
-    mode: '0740'
-
-- name: Create /etc/pgbackrest/conf.d directory
-  file:
-    path: /etc/pgbackrest/conf.d
-    state: directory
-    owner: postgres
-    group: postgres
-    mode: '0740'
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /var/log/pgbackrest, mode: '0770' }
+    - { path: /etc/pgbackrest, mode: '0740' }
+    - { path: /var/spool/pgbackrest, mode: '0740' }
+    - { path: /etc/pgbackrest/conf.d, mode: '0740' }
 
 - name: Generate pgBackRest configuration file
   template:

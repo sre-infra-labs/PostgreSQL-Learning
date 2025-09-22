@@ -33,6 +33,20 @@
   environment: "{{ proxy_env | default({}) }}"
   when: not (reinit_cluster is defined and reinit_cluster)
 
+- name: "Drop default PostgreSQL cluster ({{ postgresql_version }}/main) if present"
+  ansible.builtin.command: >
+    pg_dropcluster --stop {{ postgresql_version }} main
+  args:
+    removes: "/etc/postgresql/{{ postgresql_version }}/main"
+  become: yes
+
+- name: Disable and stop default PostgreSQL systemd service
+  ansible.builtin.systemd:
+    name: postgresql@{{ postgresql_version }}-main
+    state: stopped
+    enabled: no
+  become: yes
+
 - name: Install Patroni packages
   ansible.builtin.package:
     name: "{{ item }}"

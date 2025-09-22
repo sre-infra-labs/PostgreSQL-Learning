@@ -24,55 +24,43 @@
     msg: "Cluster reinitialization aborted by user."
   when: reinit_cluster is defined and reinit_cluster | bool and reinit_confirmation.user_input != "yes"
 
+# - name: Include custom/prechecks.yml
+#   include_tasks: custom/prechecks.yml
 
-# - name: Use the defaults/creds.yml file variables for testing
-#   ansible.builtin.debug:
-#     var: creds
+# - name: Include custom/etc_hosts.yml
+#   include_tasks: custom/etc_hosts.yml
+#   when:
+#     - add_host_entries | default(false) | bool
+#     - not (reinit_cluster is defined and reinit_cluster)
 
-# - name: Debug Consul SecretID obtained from vars file
-#   ansible.builtin.debug:
-#     msg: "Consul SecretID: {{ consul_secret_id }}"
+# - name: Include custom/repository.yml
+#   include_tasks: custom/repository.yml
+#   when: not (reinit_cluster is defined and reinit_cluster)
 
-- name: Include custom/prechecks.yml
-  include_tasks: custom/prechecks.yml
+# - name: Generate consul Secret
+#   include_tasks: custom/consul_client_install.yml
 
-- name: Include custom/etc_hosts.yml
-  include_tasks: custom/etc_hosts.yml
-  when:
-    - add_host_entries | default(false) | bool
-    - not (reinit_cluster is defined and reinit_cluster)
+# - name: Read Consul Secret from vars file
+#   include_vars:
+#     file: ../defaults/consul_secret.yml
 
-- name: Include custom/repository.yml
-  include_tasks: custom/repository.yml
-  when: not (reinit_cluster is defined and reinit_cluster)
+# - name: Include custom/packages.yml
+#   include_tasks: custom/packages.yml
 
-- name: Generate consul Secret
-  include_tasks: custom/consul_client_install.yml
-  # when: inventory_hostname == (groups['leader'] | default([]) | first | default(groups['standby_leader'] | default([]) | first, ''))
+# - name: Include custom/firewall.yml
+#   include_tasks: custom/firewall.yml
 
-- name: Read Consul Secret from vars file
-  include_vars:
-    file: ../defaults/consul_secret.yml
+# - name: Include custom/pgpass.yml
+#   include_tasks: custom/pgpass.yml
 
-- name: Include custom/packages.yml
-  include_tasks: custom/packages.yml
+# - name: Include install patroni
+#   include_tasks: custom/patroni.yml
 
-- name: Include custom/firewall.yml
-  include_tasks: custom/firewall.yml
-  # when: not (reinit_cluster is defined and reinit_cluster)
+# - name: Include custom/pgbackrest.yml
+#   include_tasks: custom/pgbackrest.yml
 
-- name: Include custom/pgpass.yml
-  include_tasks: custom/pgpass.yml
-  # when: not (reinit_cluster is defined and reinit_cluster)
-
-- name: Include install patroni
-  include_tasks: custom/patroni.yml
-
-- name: Include custom/pgbackrest.yml
-  include_tasks: custom/pgbackrest.yml
-
-- name: Include custom/user.yml
-  include_tasks: custom/user.yml
+# - name: Include custom/user.yml
+#   include_tasks: custom/user.yml
 
 # - name: Include custom/filebeat.yml
 #   include_tasks: custom/filebeat.yml
