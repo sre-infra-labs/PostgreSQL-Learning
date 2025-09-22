@@ -1,93 +1,55 @@
 ---
-- name: Get postgres rpm package
+- name: "Begin {{ role_name }}/custom/repository.yml"
+  debug:
+    msg: "Begin {{ role_name }}/custom/repository.yml"
+
+- name: Get Ubuntu codename
+  ansible.builtin.command: bash -c ". /etc/os-release && echo $VERSION_CODENAME"
+  register: ubuntu_codename
+  changed_when: false
+
+- name: Set system architecture
+  ansible.builtin.set_fact:
+    system_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else ('arm64' if ansible_architecture == 'aarch64' else ansible_architecture) }}"
+
+- name: Create keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Download PostgreSQL GPG key
   ansible.builtin.get_url:
-    url: "https://download.postgresql.org/pub/repos/yum/reporpms/EL-{{ ansible_distribution_major_version }}-x86_64/pgdg-redhat-repo-latest.noarch.rpm"
-    dest: /tmp/
-    timeout: 30
-    validate_certs: false
-
-- name: Install Postgres repository
-  ansible.builtin.package:
-    name: "/tmp/pgdg-redhat-repo-latest.noarch.rpm"
-    state: present
-    disable_gpg_check: true
-  register: package_status
-  until: package_status is success
-  delay: 5
-  retries: 3
-
-#disable rhel built-in postgres repo
-- block:
-    - name: disable rhel built in postgresql module
-      ansible.builtin.command: 'dnf -qy module disable postgresql'
-      changed_when: false
-  ignore_errors: true
-
-- name: Get EPEL rpm package
-  ansible.builtin.get_url:
-    url: "https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm"
-    dest: /tmp/
-    timeout: 30
-    validate_certs: false
-
-- name: Install EPEL repository
-  ansible.builtin.package:
-    name: "/tmp/epel-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm"
-    state: present
-    disable_gpg_check: true
-  register: package_status
-  until: package_status is success
-  delay: 5
-  retries: 3
-
-# - name: Get EPEL-8 rpm package
-#   ansible.builtin.get_url:
-#     url: "https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm"
-#     dest: /tmp/
-#     timeout: 30
-#     validate_certs: false
-
-# - name: Install EPEL-8 repository
-#   ansible.builtin.package:
-#     name: "/tmp/epel-release-latest-8.noarch.rpm"
-#     state: present
-#     disable_gpg_check: true
-#   register: package_status
-#   until: package_status is success
-#   delay: 5
-#   retries: 3
-
-
-- name: Install yum-utils
-  ansible.builtin.yum:
-    name: yum-utils
-    state: present
-
-- name: install consul repo
-  ansible.builtin.command: "yum-config-manager --add-repo {{ consul_repo_url }}"
-  args:
-      creates: /etc/yum.repos.d/hashicorp.repo
-
-- name: Ensure dnf-plugins-core is installed (provides config-manager)
-  ansible.builtin.package:
-    name: dnf-plugins-core
-    state: present
-
-# - name: Enable pgdg-rhel{{ ansible_distribution_major_version }}-extras repo
-#   ansible.builtin.command:
-#     cmd: "dnf config-manager --enable pgdg-rhel{{ ansible_distribution_major_version }}-extras"
-#   register: enable_repo
-#   changed_when: "'enabled' in enable_repo.stdout | default('') or 'enabled' in enable_repo.stderr | default('')"
-#   failed_when: enable_repo.rc not in [0, 1]   # allow non-fatal return codes
-
-- name: Enable pgdg-rhel{{ ansible_distribution_major_version }}-extras repo via ini_file
-  ansible.builtin.ini_file:
-    path: "/etc/yum.repos.d/pgdg-redhat-all.repo"
-    section: "pgdg-rhel{{ ansible_distribution_major_version }}-extras"
-    option: enabled
-    value: '1'
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    dest: /etc/apt/keyrings/postgresql.asc
     mode: '0644'
+  become: true
 
+- name: Download HashiCorp GPG key
+  ansible.builtin.get_url:
+    url: https://apt.releases.hashicorp.com/gpg
+    dest: /etc/apt/keyrings/hashicorp.asc
+    mode: '0644'
+  become: true
 
+- name: Add PostgreSQL repository with signed-by
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/postgresql.asc] https://apt.postgresql.org/pub/repos/apt {{ ansible_distribution_release }}-pgdg main"
+    filename: pgdg
+    state: present
+    update_cache: no
+  become: true
 
+- name: Add HashiCorp repository with signed-by
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/hashicorp.asc] https://apt.releases.hashicorp.com {{ ansible_distribution_release }} main"
+    filename: hashicorp
+    state: present
+    update_cache: no
+  become: true
+
+- name: "End {{ role_name }}/custom/repository.yml"
+  debug:
+    msg: "End {{ role_name }}/custom/repository.yml"
 

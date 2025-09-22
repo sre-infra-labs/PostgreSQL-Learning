@@ -40,6 +40,25 @@
     mode: "0750"
   when: patroni_log_destination == 'logfile'
 
+- name: Update Patroni systemd service to use correct config path
+  ansible.builtin.lineinfile:
+    path: /usr/lib/systemd/system/patroni.service
+    regexp: '^(\s*)ConditionPathExists=.*$'
+    line: '\1ConditionPathExists=/etc/patroni/patroni.yml'
+    backrefs: yes
+    backup: yes
+
+- name: Update Patroni systemd service ExecStart path
+  ansible.builtin.lineinfile:
+    path: /usr/lib/systemd/system/patroni.service
+    regexp: '^(\s*)ExecStart=(.+patroni)\s+.*$'
+    line: '\1ExecStart=\2 /etc/patroni/patroni.yml'
+    backrefs: yes
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: yes
+
 - name: Prepare PostgreSQL | make sure the postgresql log directory "{{ postgresql_log_dir }}" exists
   ansible.builtin.file:
     path: "{{ postgresql_log_dir }}"
@@ -100,7 +119,6 @@
   debug:
     msg: is replica
   when: inventory_hostname in groups["replica"]
-
 
 - block:  # start patroni on master
     - name: start patroni service on the Master server

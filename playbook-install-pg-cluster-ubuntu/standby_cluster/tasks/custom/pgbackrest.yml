@@ -1,4 +1,42 @@
 ---
+- name: Install pgBackRest package
+  ansible.builtin.package:
+    name: pgbackrest
+    state: present
+  register: package_status
+  until: package_status is success
+  delay: 5
+  retries: 3
+  environment: "{{ proxy_env | default({}) }}"
+  when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: Check if pgBackRest is properly installed
+  command: pgbackrest
+  register: pgbackrest
+  become_user: postgres
+  changed_when: false
+
+- name: Create pgBackRest directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /var/log/pgbackrest, mode: '0770' }
+    - { path: /etc/pgbackrest, mode: '0740' }
+    - { path: /var/spool/pgbackrest, mode: '0740' }
+    - { path: /etc/pgbackrest/conf.d, mode: '0740' }
+
+- name: Generate pgBackRest configuration file
+  template:
+    src: templates/pgbackrest.conf.j2
+    dest: /etc/pgbackrest/pgbackrest.conf
+    owner: postgres
+    group: postgres
+    mode: '0640'
+
 - name: Check if pgBackRest config exists
   ansible.builtin.stat:
     path: /etc/pgbackrest/pgbackrest.conf
@@ -7,7 +45,7 @@
 
 - name: Wait for Patroni leader to be up
   ansible.builtin.wait_for:
-    port: 5432
+    port: "{{ postgresql_port }}"
     # host: "{{ inventory_hostname }}"
     host: "localhost"
     delay: 10
@@ -21,7 +59,9 @@
   register: stanza_creation_result
   retries: 3
   delay: 10
-  when: "'leader' in group_names"
+  when:
+    - "'leader' in group_names"
+    - patroni_standby_cluster is not defined
   failed_when: false
   # failed_when:
   #   - stanza_creation_result.rc != 0

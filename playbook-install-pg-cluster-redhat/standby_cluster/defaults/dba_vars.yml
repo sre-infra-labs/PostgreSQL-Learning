@@ -3,7 +3,7 @@
 debug: true
 
 # Cluster name. Should be unique across all clusters.
-patroni_cluster_name: "pg-cls2-prod"
+patroni_cluster_name: "pg-cls2-dr"
 # pgbackrest_stanza_name: "{{ patroni_cluster_name }}"
 pgbackrest_stanza_name: "pg-cls2"
 
@@ -13,32 +13,32 @@ cleanup_pgbackrest_backups: true
 
 # For Load Balancer (LB): below host would reflect to LB ip. In other cases, it reflects cluster leader ip, ie, gpx node1
 patroni_standby_cluster:
-  host: pg-cls2-dr1
+  host: pg-cls2-prod1
   port: 5432
 
 # Nodes for other data center. Needed to add pb_hba.conf entries
-# other_datacenter_nodes:
-#   - name: pg-cls2-prod0
-#     ip: 192.168.100.47
-#     role: replica
-#   - name: pg-cls2-prod1
-#     ip: 192.168.100.48
-#     role: leader
-#   - name: pg-cls2-prod2
-#     ip: 192.168.100.49
-#     role: replica
+other_datacenter_nodes:
+  - name: pg-cls2-prod0
+    ip: 192.168.100.47
+    role: replica
+  - name: pg-cls2-prod1
+    ip: 192.168.100.48
+    role: leader
+  - name: pg-cls2-prod2
+    ip: 192.168.100.49
+    role: replica
 
 # Nodes for other data center. Needed to add pb_hba.conf entries
-other_datacenter_nodes:
-  - name: pg-cls2-dr0
-    ip: 192.168.200.47
-    role: replica
-  - name: pg-cls2-dr1
-    ip: 192.168.200.48
-    role: leader
-  - name: pg-cls2-dr2
-    ip: 192.168.200.49
-    role: replica
+# other_datacenter_nodes:
+#   - name: pg-cls2-dr0
+#     ip: 192.168.200.47
+#     role: replica
+#   - name: pg-cls2-dr1
+#     ip: 192.168.200.48
+#     role: leader
+#   - name: pg-cls2-dr2
+#     ip: 192.168.200.49
+#     role: replica
 
 # Users to be created for Application Team
 db_name: "dba"

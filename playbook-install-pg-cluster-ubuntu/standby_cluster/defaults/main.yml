@@ -1,14 +1,15 @@
 os_valid_distributions:
-  - RedHat
+  - Ubuntu
 
 os_minimum_versions:
-  RedHat: 8
+  RedHat: 22
 
 minimal_ansible_version: 2.18.0
 patroni_install_version: "4.0.6"
 consul_version: "1.21.3"
+postgres_exporter_version: "0.17.1"
 
-add_host_entries: true
+# add_host_entries: true
 
 dba_slack_users:
   - display_name: Ajay Dwivedi
@@ -28,32 +29,67 @@ consul_server:
   domain: "lab.com"
   encrypt: "qDOPBEr+/oUVeOFQOnVypxwDaHzLrD+lvjo5vCEBbZ0="
 
-  # Packages (for yum repo)
-os_specific_packages:
-  RedHat-8:
-    - python2
-    - python3-libselinux
-    - python3-libsemanage
-    - python3-policycoreutils
-  RedHat-9:
-    - python3-libselinux
-    - python3-libsemanage
-    - python3-policycoreutils
 system_packages:
-  # - "{{ os_specific_packages[ansible_os_family ~ '-' ~ ansible_distribution_major_version] }}"
   - python3
-  - python3-devel
   - python3-psycopg2
   - python3-setuptools
   - python3-pip
   - python3-urllib3
+  - python3-dev
   - less
   - gcc
   - jq
   - acl
-  - yum-utils
   - tldr
   - pgcopydb
+  - libpq-dev
+  - curl
+  - ufw
+  - gnupg2
+  - wget
+  - lsb-release
+  - ca-certificates
+
+patroni_packages:
+  # - patroni
+  - "patroni={{ patroni_install_version }}*"
+  # - patroni-consul
+  - python3-consul
+
+postgres_packages:
+  # Base PostgreSQL packages
+  - postgresql-common
+  - postgresql-server-dev-{{ postgresql_version }}
+  - postgresql-client-{{ postgresql_version }}
+  - postgresql-{{ postgresql_version }}
+  - postgresql-contrib-{{ postgresql_version }}
+  - pgbackrest
+  - pgloader
+  # PostgreSQL extensions
+  - postgresql-{{ postgresql_version }}-cron
+  # - pg_ivm_{{ postgresql_version }}
+  # - pg_partman_{{ postgresql_version }}
+  - postgresql-{{ postgresql_version }}-partman
+  # - pg_permissions_{{ postgresql_version }}
+  - postgresql-{{ postgresql_version }}-pg-permissions
+  # - pg_profile_{{ postgresql_version }}
+  - postgresql-{{ postgresql_version }}-pg-qualstats
+  # - pg-repack
+  - postgresql-{{ postgresql_version }}-repack
+  # - pg_show_plans_{{ postgresql_version }}
+  # - pg_stat_monitor_{{ postgresql_version }}
+  # - pg_statement_rollback_{{ postgresql_version }}
+  # - pg_statviz_extension_{{ postgresql_version }}
+  # - pgauditlogtofile_{{ postgresql_version }}
+  # - pgexporter_ext_{{ postgresql_version }}
+  # - pgmeminfo_{{ postgresql_version }}
+  # - pgtap_{{ postgresql_version }}
+  - postgresql-{{ postgresql_version }}-pgtap
+  # - pgtt_{{ postgresql_version }}
+  # - plpgsql_check_{{ postgresql_version }}
+  - postgresql-{{ postgresql_version }}-plpgsql-check
+  # - plprofiler_{{ postgresql_version }}
+  # - table_version_{{ postgresql_version }}
 
 postgres_user: "postgres"
 sudo_users:
@@ -74,18 +110,20 @@ postgresql_locale: "en_US.UTF-8"  # for bootstrap only (initdb)
 postgresql_data_checksums: true  # for bootstrap only (initdb)
 postgresql_password_encryption_algorithm: "scram-sha-256"  # or "md5" if your clients do not work with passwords encrypted with SCRAM-SHA-256
 
-postgresql_data_dir: "/var/lib/pgsql/{{ postgresql_version }}/data"
-postgresql_data_archive: "/var/lib/pgsql/{{ postgresql_version }}/archive"
-postgresql_scripts_dir:  "/var/lib/pgsql/{{ postgresql_version }}/scripts"
+postgresql_home_dir: "/var/lib/postgresql"
+postgresql_data_dir: "{{ postgresql_home_dir }}/{{ postgresql_version }}/main"
+postgresql_data_archive: "{{ postgresql_home_dir }}/{{ postgresql_version }}/archive"
+postgresql_scripts_dir:  "{{ postgresql_home_dir }}/{{ postgresql_version }}/scripts"
 
 # You can specify custom WAL dir path. Example: "/pgwal/{{ postgresql_version }}/pg_wal"
+# postgresql_conf_dir: "/etc/postgresql/{{ postgresql_version }}/main"
 postgresql_conf_dir: "{{ postgresql_data_dir }}"
-postgresql_bin_dir: "/usr/pgsql-{{ postgresql_version }}/bin"
+# postgresql_bin_dir: "/usr/pgsql-{{ postgresql_version }}/bin"
+postgresql_bin_dir: "/usr/lib/postgresql/{{ postgresql_version }}/bin"
 postgresql_log_dir: "/var/log/postgresql"
 postgresql_unix_socket_dir: "/var/run/postgresql"
-postgresql_home_dir: "/var/lib/pgsql"
 
-postgresql_stats_temp_directory_path: "/var/lib/pgsql_stats_tmp"  # or 'none'
+postgresql_stats_temp_directory_path: "{{ postgresql_home_dir }}_stats_tmp"  # or 'none'
 postgresql_stats_temp_directory_size: "1024m"
 
 synchronous_mode: true
@@ -191,7 +229,6 @@ postgresql_parameters:
   #- { option: "tcp_keepalives_idle", value: "300" }
   #- { option: "tcp_keepalives_interval", value: "30" }
 
-consul_repo_url: "https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo"
 dcs_type: "consul"
 _consul_expected_version_string: "Consul v{{ consul_version }}"
 consul_debug: true
@@ -202,11 +239,6 @@ postgresql_pgpass:
   - "*:*:*:{{ patroni_replication_username }}:{{ patroni_replication_password }}"
   - "*:*:*:{{ patroni_superuser_username }}:{{ patroni_superuser_password }}"
 
-patroni_packages:
-  # - patroni
-  - patroni-{{ patroni_install_version }}
-  - patroni-consul
-  - python3-consul
 patroni_superuser_username: "{{ postgres_user }}"
 patroni_replication_username: "replicator"
 patroni_superuser_password: "{{ creds.PG_SUPERUSER_PWD }}"
@@ -257,7 +289,7 @@ pgbackrest_repo1_s3_key: "{{ creds.PG_BACKREST_REPO1_S3_KEY }}"
 pgbackrest_repo1_s3_key_secret: "{{ creds.PG_BACKREST_REPO1_S3_KEY_SECRET }}"
 
 # pgbackrest_stanza_name: "{{ patroni_cluster_name }}"
-pgbackrest_pg1_path: /var/lib/pgsql/{{ postgresql_version }}/data
+pgbackrest_pg1_path: "{{ postgresql_data_dir }}"
 
 pgbackrest_archive_command: pgbackrest --stanza={{ pgbackrest_stanza_name }} archive-push %p
 postgresql_restore_command: pgbackrest --stanza={{ pgbackrest_stanza_name }} archive-get %f %p

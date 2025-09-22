@@ -61,10 +61,10 @@
     state: present
   when: "'leader' in group_names"
 
-- name: Create pg_profile extension
-  postgresql_ext:
-    db: "{{ db_name }}"
-    name: pg_profile
-    state: present
-  when: "'leader' in group_names"
+# - name: Create pg_profile extension
+#   postgresql_ext:
+#     db: "{{ db_name }}"
+#     name: pg_profile
+#     state: present
+#   when: "'leader' in group_names"
 

@@ -1,77 +1,66 @@
 ---
-- name: Check if firewalld is running
-  shell: systemctl is-active firewalld
-  register: firewalld_status
-  ignore_errors: yes
-  changed_when: false
+# - name: Ensure UFW is installed
+#   ansible.builtin.package:
+#     name: ufw
+#     state: present
+#     update_cache: yes
 
-- name: Start firewalld if not running
-  systemd:
-    name: firewalld
-    state: started
-  when: firewalld_status.stdout != "active"
+- name: Enable UFW firewall
+  ansible.builtin.command: ufw --force enable
+  become: yes
 
-- name: Open PostgreSQL port in firewalld
-  firewalld:
-    port: 5432/tcp
-    permanent: yes
-    immediate: yes
-    state: enabled
+- name: Open PostgreSQL port in ufw
+  community.general.ufw:
+    port: '{{ postgresql_port }}'
+    proto: tcp
+    rule: allow
 
-- name: Open Consul port in firewalld
-  firewalld:
-    port: 8301/tcp
-    permanent: yes
-    immediate: yes
-    state: enabled
+- name: Open Consul port in ufw
+  community.general.ufw:
+    port: '8301'
+    proto: tcp
+    rule: allow
 
-- name: Open Patroni REST API port in firewalld
-  firewalld:
-    port: 8008/tcp
-    permanent: yes
-    immediate: yes
-    state: enabled
+- name: Open Patroni REST API port in ufw
+  community.general.ufw:
+    port: '8008'
+    proto: tcp
+    rule: allow
 
-- name: Open port 9194 in firewalld
-  firewalld:
-    port: 9194/tcp
-    permanent: yes
-    immediate: yes
-    state: enabled
+- name: Open port 9194 in ufw
+  community.general.ufw:
+    port: '9194'
+    proto: tcp
+    rule: allow
 
-- name: Open port 8600 in firewalld
-  firewalld:
-    port: 8600/tcp
-    permanent: yes
-    immediate: yes
-    state: enabled
+- name: Open port 8600 in ufw
+  community.general.ufw:
+    port: '8600'
+    proto: tcp
+    rule: allow
 
-- name: Open port 8500 in firewalld
-  firewalld:
-    port: 8500/tcp
-    permanent: yes
-    immediate: yes
-    state: enabled
+- name: Open port 8500 in ufw
+  community.general.ufw:
+    port: '8500'
+    proto: tcp
+    rule: allow
 
-- name: Open port 8501 in firewalld
-  firewalld:
-    port: 8501/tcp
-    permanent: yes
-    immediate: yes
-    state: enabled
+- name: Open port 8501 in ufw
+  community.general.ufw:
+    port: '8501'
+    proto: tcp
+    rule: allow
 
-- name: Open port 8502 in firewalld
-  firewalld:
-    port: 8502/tcp
-    permanent: yes
-    immediate: yes
-    state: enabled
+- name: Open port 8502 in ufw
+  community.general.ufw:
+    port: '8502'
+    proto: tcp
+    rule: allow
 
-- name: Open port 8503 in firewalld
-  firewalld:
-    port: 8503/tcp
-    permanent: yes
-    immediate: yes
-    state: enabled
+- name: Open port 8503 in ufw
+  community.general.ufw:
+    port: '8503'
+    proto: tcp
+    rule: allow
 
 

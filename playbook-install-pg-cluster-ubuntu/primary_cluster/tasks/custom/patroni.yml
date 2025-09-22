@@ -47,9 +47,6 @@
     line: '\1ConditionPathExists=/etc/patroni/patroni.yml'
     backrefs: yes
     backup: yes
-  notify:
-    - reload systemd daemon
-    - restart patroni
 
 - name: Update Patroni systemd service ExecStart path
   ansible.builtin.lineinfile:
@@ -57,9 +54,6 @@
     regexp: '^(\s*)ExecStart=(.+patroni)\s+.*$'
     line: '\1ExecStart=\2 /etc/patroni/patroni.yml'
     backrefs: yes
-  # notify:
-  #   - reload systemd daemon
-  #   - restart patroni
 
 - name: Reload systemd daemon
   ansible.builtin.systemd:

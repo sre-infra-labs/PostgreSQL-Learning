@@ -21,7 +21,9 @@
   register: stanza_creation_result
   retries: 3
   delay: 10
-  when: "'leader' in group_names"
+  when:
+    - "'leader' in group_names"
+    - patroni_standby_cluster is not defined
   failed_when: false
   # failed_when:
   #   - stanza_creation_result.rc != 0
