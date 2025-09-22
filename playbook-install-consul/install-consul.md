@@ -525,3 +525,217 @@ rm -rf data*
 ```
 
 
+# Install & Configure CoreDNS on Consul Server to map DNS consul port 8600 to port 53
+  # Objective -- Make CoreDNS answer *.consul and *.consul.lab.com queries on standard DNS port 53 and forwards them to Consul’s DNS on 127.0.0.1:8600
+
+## 1) Download binary from github
+```
+# on pg-consul-rhel (run as your normal sudo user)
+CORE_DNS_VER="1.12.4"   # change if you want a different version
+
+cd /usr/local/bin
+wget -q "https://github.com/coredns/coredns/releases/download/v${CORE_DNS_VER}/coredns_${CORE_DNS_VER}_linux_amd64.tgz"
+tar xzf "coredns_${CORE_DNS_VER}_linux_amd64.tgz"
+
+sudo chown root:root coredns
+sudo chmod 0755 coredns
+
+rm -f coredns_*
+
+check permissions
+-----------------
+ls -lZ /usr/local/bin/coredns
+    # Ideal
+    -rwxr-xr-x. root root system_u:object_r:bin_t:s0 /usr/local/bin/coredns
+    # Working on pg-consul-rhel
+    -rwxr-xr-x. 1 root root unconfined_u:object_r:bin_t:s0 67911832 Nov 22  2024 /usr/local/bin/coredns
+
+sudo restorecon -v /usr/local/bin/coredns
+
+```
+
+## 2) Create config dir
+```
+sudo mkdir -p /etc/coredns
+sudo chown root:root /etc/coredns
+sudo chmod 0755 /etc/coredns
+```
+
+## 2) Create Corefile
+  `sudo tee /etc/coredns/Corefile > /dev/null <<'EOF'`
+```
+# Default: forward all other queries to upstream AD DNS and public DNS as fallback
+.:53 {
+    forward . 192.168.100.10 8.8.8.8  # primary: your Windows DNS; fallback: Google
+    log
+    errors
+    cache 30
+    health
+}
+
+# Serve consul.lab.com by rewriting queries to Consul's service domain and forwarding to Consul DNS
+consul.lab.com:53 {
+    rewrite name suffix .consul.lab.com .service.consul
+    forward . 127.0.0.1:8600
+    log
+    errors
+    cache 30
+}
+
+# Serve plain "consul" domain directly to Consul DNS (so master.pg-cls2-prod.consul works)
+consul:53 {
+    forward . 127.0.0.1:8600
+    log
+    errors
+    cache 30
+}
+EOF
+
+```
+
+### Notes about the Corefile
+```
+.:53 block handles general DNS (forwards to AD DNS and a public resolver as fallback).
+
+consul.lab.com:53 rewrites queries like master.pg-cls2-prod.consul.lab.com → master.pg-cls2-prod.service.consul and forwards to Consul.
+
+consul:53 handles short names *.consul.
+
+log and errors helpful while testing (you can remove later).
+```
+
+## 3) Create systemd unit for CoreDNS
+`sudo tee /etc/systemd/system/coredns.service > /dev/null <<'EOF'`
+
+### Content
+```
+[Unit]
+Description=CoreDNS DNS Server
+After=network.target
+
+[Service]
+User=root
+ExecStart=/usr/local/bin/coredns -conf /etc/coredns/Corefile
+Restart=on-failure
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+```
+
+## 4) SELinux (if enabled) — allow CoreDNS to bind port 53
+If SELinux is Enforcing, allow port 53 for a custom binary:
+
+```
+# install semanage tool if not present
+sudo yum install -y policycoreutils-python-utils
+
+# add port contexts for CoreDNS (tcp & udp)
+sudo semanage port -a -t dns_port_t -p tcp 53 || true
+sudo semanage port -a -t dns_port_t -p udp 53 || true
+
+```
+
+## 5) Firewall: open DNS port 53 (tcp & udp)
+
+```
+# if firewalld is running
+sudo firewall-cmd --permanent --add-port=53/udp
+sudo firewall-cmd --permanent --add-port=53/tcp
+sudo firewall-cmd --reload
+
+# if using iptables or nft separately, add equivalent rules
+
+```
+
+## 6) Start and enable CoreDNS
+
+```
+sudo systemctl daemon-reload
+sudo systemctl enable --now coredns
+sudo systemctl status coredns --no-pager
+
+
+sudo journalctl -u coredns -f
+
+```
+
+## 7) Test locally on pg-consul-rhel
+```
+# test rewritten domain
+dig @127.0.0.1 master.pg-cls2-prod.consul.lab.com +short
+
+# test short consul name (if you prefer)
+dig @127.0.0.1 master.pg-cls2-prod.consul +short
+
+# ensure forwarding fallback works for other domains
+dig @127.0.0.1 google.com +short
+
+```
+
+## 8) Add Windows DNS conditional forwarder (on 192.168.100.10)
+
+![DNS Fowardered on Windows DC for Consul](../.images/consul-dns-forwarder-on-dc.lab.com.png)
+
+Now configure your Windows DNS server to forward consul.lab.com (or consul) to 192.168.100.41:
+
+Open DNS Manager → Right-click Conditional Forwarders → New Conditional Forwarder.
+
+DNS Domain: consul.lab.com (and optionally consul if your Windows DNS accepts that)
+
+IP address of the master server: 192.168.100.41
+
+Save. (Windows will forward ordinary DNS queries for that zone to CoreDNS on port 53.)
+
+Note: Windows DNS GUI forwards to port 53 only. That’s why CoreDNS must listen on port 53.
+
+## 9) Test from a client machine (or your app host)
+
+From a client machine that uses 192.168.100.10 as resolver:
+
+```
+# test the final desired name:
+dig master.pg-cls2-prod.consul.lab.com
+
+# or the short name (if search domain includes lab.com)
+dig master.pg-cls2-prod.consul
+
+# forcing Windows DNS
+dig @192.168.100.10 master.pg-cls2-prod.consul.lab.com
+
+
+```
+
+
+## 10) Troubleshooting tips
+
+If dig @127.0.0.1 works but dig @192.168.100.10 doesn’t:
+
+Confirm Windows DNS conditional forwarder exists and points to 192.168.100.41.
+
+Confirm CoreDNS is reachable on port 53 from Windows (telnet 192.168.100.41 53 or nc -zv 192.168.100.41 53).
+
+If CoreDNS fails to start: sudo journalctl -u coredns -b and sudo systemctl status coredns -l.
+
+SELinux: if Enforcing, see sudo ausearch -m avc -ts recent for denials. You may need to label the binary, or run CoreDNS as root (we used root) and set port context above.
+
+If port 53 already used by named/bind/systemd-resolved, stop/disable that service or pick another host for CoreDNS.
+
+If you prefer running CoreDNS as non-root, give binary capability to bind low port:
+
+sudo setcap 'cap_net_bind_service=+ep' /usr/local/bin/coredns
+
+
+then change systemd User to a dedicated coredns user (requires SELinux adjustments).
+
+
+## 11) Optional: map service.consul directly to consul.lab.com
+
+If you prefer a different rewrite (e.g. *.consul.lab.com → *.service.consul), you can adapt the rewrite line in the Corefile accordingly:
+
+rewrite name suffix .consul.lab.com .service.consul
+
+
+
