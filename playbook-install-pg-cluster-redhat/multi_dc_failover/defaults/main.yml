@@ -1,3 +1,7 @@
 ---
 
-pg_data_directory: "/var/lib/pgsql/{{ postgresql_version }}/data"
+# Settings for RHEL
+postgresql_bin_dir: "/usr/pgsql-{{ postgresql_version }}/bin"
+postgresql_home_dir: "/var/lib/pgsql"
+postgresql_data_dir: "{{ postgresql_home_dir }}/{{ postgresql_version }}/data"
+

@@ -154,7 +154,7 @@
 
 - name: Stop PostgreSQL on the current primary cluster leader using pg_ctl
   ansible.builtin.command: >
-    /usr/pgsql-{{ postgresql_version }}/bin/pg_ctl -D /var/lib/pgsql/{{ postgresql_version }}/data stop -m fast --wait
+    {{ postgresql_bin_dir }}/pg_ctl -D {{ postgresql_data_dir }} stop -m fast --wait
   become: yes
   become_user: postgres
   delegate_to: "{{ cluster_to_demote_leader_name }}"
