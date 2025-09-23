@@ -4,7 +4,8 @@
   gather_facts: false
 
   vars:
-    pg_password: "{{ PGPWD_CLUSTER | default(lookup('env','PGPWD_CLUSTER'), true) }}"
+    # Retrieve from terminal environment variable
+    pg_password: "{{ lookup('env', 'PGPWD_CLUSTER') }}"
 
   tasks:
     - name: Build list of other hosts for each host
@@ -15,13 +16,19 @@
       shell: |
         for host in {{ other_hosts | join(' ') }}; do
           echo "===== {{ inventory_hostname }} -> $host ====="
-          PGPASSWORD={{ pg_password }} psql -h $host -U postgres -d postgres -c '\conninfo'
+
+          #export PGPASSWORD={{ pg_password }}
+
+          psql -h $host -U postgres -d postgres -c '\conninfo'
           if [ $? -eq 0 ]; then
             echo "Connection to $host successful"
           else
             echo "Connection to $host FAILED"
           fi
         done
+      environment:
+        # Retrieve from terminal environment variable, and pass as environment variable to shell task
+        PGPASSWORD: "{{ lookup('env', 'PGPWD_CLUSTER') }}"
       register: result_all_servers
       args:
         executable: /bin/bash

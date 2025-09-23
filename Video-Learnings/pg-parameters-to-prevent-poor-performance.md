@@ -21,9 +21,15 @@
 ![Parameters](images--pg-parameters-to-prevent-poor-performance/parameters.png)
 
 ## shared_buffers
+- A global memory pool allocated once at PostreSQL startup
+- Used for caching table and index pages shared across all sessions
+
 ![shared_buffers](images--pg-parameters-to-prevent-poor-performance/shared_buffers.png)
 
 ## work_mem
+- A per-operation, per-query memory allocation
+- Used for sorting, hashing, materialization, not from `shared_buffers`.
+
 ![work_mem](images--pg-parameters-to-prevent-poor-performance/work_mem.png)
 
 ## max_connections
