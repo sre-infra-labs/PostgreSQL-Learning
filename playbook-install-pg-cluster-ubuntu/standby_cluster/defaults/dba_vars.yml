@@ -11,7 +11,7 @@ pgbackrest_stanza_name: "pg-cls1"
 # reinit_cluster: true
 # cleanup_pgbackrest_backups: true
 
-# For Load Balancer (LB): below host would reflect to LB ip. In other cases, it reflects cluster leader ip, ie, gpx node1
+# For Load Balancer (LB): below host would reflect to LB ip. In other cases, it reflects cluster leader ip, ie, dc1 node1
 patroni_standby_cluster:
   host: pg-cls1-prod1
   port: 5432
