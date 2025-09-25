@@ -28,13 +28,13 @@ sudo systemctl status postgresql-17
 
 ## On primary, Create role for replication
 ```
---create role replicator with replication encrypted password 'SuperSecret' login;
-create role replication with login replication encrypted password 'LearnPostgreSQL';
+create role replicator with login replication encrypted password 'LearnPostgreSQL';
 ```
 
 ## On primary, add pg_hba.conf entry for replication
 ```
-host    replication     all     0.0.0.0/0     scram-sha-256
+host    replication     all     192.168.0.0/16     scram-sha-256
+host    replication     all     192.168.0.0/16     scram-sha-256
 ```
 
 ## On primary, reload configuration
@@ -44,21 +44,23 @@ or
 select pg_reload_conf();
 ```
 
+## On both primary & secondary, create .pgpass file for postgres user
+```
+sudo su - postgres
+vim ~/.pgpass
+   *:*:*:postgres:'LearnPostgreSQL'
+   *:*:*:replicator:'LearnPostgreSQL'
+```
+
 ## On secondary, remove PGDATA directory, and recreate emptry PGDATA directory with proper permissions
 ```
-cd /var/lib/pgsql/16/
-rm -rf data
-mkdir data
+sudo systemctl stop postgresql*
+
+# make sure $pgdata directory is empty with correct permissions
+rm -rf /var/lib/pgsql/17/data/*
+
 sudo chown postgres:postgres data
 sudo chmod 0700 data
-```
-
-## On seconary, create/modify .pgpass file
-```
-# create pgpass entry
-sudo vim /var/lib/pgsql/.pgpass
-
-*:*:replication:replication:LearnPostgreSQL
 ```
 
 ## On primary, set an appropriate value for `wal_keep_segments` in postgresql.conf
@@ -86,10 +88,15 @@ select pg_drop_replication_slot('master');
 ![replication-slot-and-user.png](replication-slot-and-user.png)
 ```
 sudo su - postgres
-cd /var/lib/pgsql/16/data/
+cd /var/lib/pgsql/17/data/
 
 # perform physical backup
-pg_basebackup -h pg-pub2 -p5432 -U replication -D /var/lib/pgsql/16/data -Fp -Xs -P -R -S master
+pg_basebackup -h pg-pub2 -p5432 -U replicator -D /var/lib/pgsql/17/data -Fp -Xs -P -R -S master -C
+
+or
+
+pg_basebackup -h pg-pub2 -p5432 -U replicator --checkpoint=fast \
+-D /var/lib/pgsql/17/data -R --slot=master -C
 
 ```
 
@@ -113,12 +120,13 @@ primary_slot_name = 'master'
 | `-h pg-pub2`               | Hostname or IP address of the primary server                                                  |
 | `-p 5432`                  | Port on which the primary PostgreSQL server is listening                                      |
 | `-U replication`           | PostgreSQL user with `REPLICATION` privilege used to take the backup                         |
-| `-D /var/lib/pgsql/16/data`| Destination directory for base backup (must be empty or non-existent)                        |
+| `-D /var/lib/pgsql/17/data`| Destination directory for base backup (must be empty or non-existent)                        |
 | `-Fp`                      | Output format: plain (copies full directory structure of the data directory)                 |
 | `-Xs`                      | Include WAL (Write-Ahead Log) files using **streaming** method during backup. This opens a second connection to the primary server and starts the transfer of the WAL segments at the same time as the backup is performed.                 |
 | `-P`                       | Show progress of the backup operation                                                        |
 | `-R`                       | Create `standby.signal` and `primary_conninfo` in postgresql.auto.conf for standby setup     |
 | `-S master`                | Use replication slot named `master` (created if doesn't exist on primary)                    |
+| `-C`                       | Create replication slot if not exists                                                         |
 
 
 ## On secondary, start the PostgreSQL service now
@@ -136,7 +144,7 @@ primary_slot_name = 'master'
      Memory: 293.0M
         CPU: 334ms
      CGroup: /system.slice/postgresql-16.service
-             ├─134474 /usr/pgsql-16/bin/postgres -D /var/lib/pgsql/16/data/
+             ├─134474 /usr/pgsql-16/bin/postgres -D /var/lib/pgsql/17/data/
              ├─134475 "postgres: logger "
              ├─134476 "postgres: checkpointer "
              ├─134477 "postgres: background writer "
@@ -201,13 +209,75 @@ CREATE TABLE
 dba=# 
 ```
 
+### On primary, while in Asynchronous Replication
+```
+select * from pg_stat_replication;
+   -[ RECORD 1 ]----+---------------------------------
+   pid              | 2251
+   usesysid         | 16388
+   usename          | replicator
+   application_name | walreceiver
+   client_addr      | 192.168.200.46
+   client_hostname  | 
+   client_port      | 53380
+   backend_start    | 2025-09-25 17:36:08.376112+05:30
+   backend_xmin     | 
+   state            | streaming
+   sent_lsn         | 0/3000168
+   write_lsn        | 0/3000168
+   flush_lsn        | 0/3000168
+   replay_lsn       | 0/3000168
+   write_lag        | 
+   flush_lag        | 
+   replay_lag       | 
+   sync_priority    | 0
+   sync_state       | async
+   reply_time       | 2025-09-25 17:46:48.594332+05:30
+
+postgres=# SHOW synchronous_standby_names;
+   -[ RECORD 1 ]-------------+-
+   synchronous_standby_names | 
+```
+
+# On replica, while in Asynchronous Replication
+```
+
+postgres=# show primary_slot_name ;
+   -[ RECORD 1 ]-----+-------
+   primary_slot_name | master
+
+
+postgres=# show primary_conninfo ;
+   -[ RECORD 1 ]----+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+   primary_conninfo | user=replicator passfile='/var/lib/pgsql/.pgpass' channel_binding=prefer host='pg-pub2' port=5432 sslmode=prefer sslnegotiation=postgres sslcompression=0 sslcertmode=allow sslsni=1 ssl_min_protocol_version=TLSv1.2 gssencmode=prefer krbsrvname=postgres gssdelegation=0 target_session_attrs=any load_balance_hosts=disable
+
+postgres=# SELECT * FROM pg_stat_wal_receiver;
+   -[ RECORD 1 ]---------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+   pid                   | 2342
+   status                | streaming
+   receive_start_lsn     | 0/3000000
+   receive_start_tli     | 1
+   written_lsn           | 0/3000168
+   flushed_lsn           | 0/3000168
+   received_tli          | 1
+   last_msg_send_time    | 2025-09-25 17:48:38.623807+05:30
+   last_msg_receipt_time | 2025-09-25 17:48:38.624083+05:30
+   latest_end_lsn        | 0/3000168
+   latest_end_time       | 2025-09-25 17:36:08.384265+05:30
+   slot_name             | master
+   sender_host           | pg-pub2
+   sender_port           | 5432
+   conninfo              | user=replicator passfile=/var/lib/pgsql/.pgpass channel_binding=prefer dbname=replication host=pg-pub2 port=5432 fallback_application_name=walreceiver sslmode=prefer sslnegotiation=postgres sslcompression=0 sslcertmode=allow sslsni=1 ssl_min_protocol_version=TLSv1.2 gssencmode=prefer krbsrvname=postgres gssdelegation=0 target_session_attrs=any load_balance_hosts=disable
+
+```
+
 # Synchronous Replication
 
 ## On primary, update `postgresql.conf` settings
 ```
 synchronous_commit = on
 
-synchronous_standby_names = 'pg-sub2'
+synchronous_standby_names = 'pgsub2'
 or
 synchronous_standby_names = '*'
 ```
@@ -220,7 +290,7 @@ sudo systemctl restart postgresql-16.service
 ## On secondary, update `postgresql.auto.conf` file. Append `application_name=<secondary_replica_name>` at the end of `primary_conninfo` setting.
 ```
 # **** Before update
-[saanvi@pg-sub2 16]$ sudo cat /var/lib/pgsql/16/data/postgresql.auto.conf
+[saanvi@pg-sub2 16]$ sudo cat /var/lib/pgsql/17/data/postgresql.auto.conf
 # Do not edit this file manually!
 # It will be overwritten by the ALTER SYSTEM command.
 shared_preload_libraries = 'pg_stat_statements, auto_explain, pg_cron, pg_stat_monitor, pglogical, pgaudit'
@@ -228,11 +298,11 @@ primary_conninfo = 'user=replication passfile=''/var/lib/pgsql/.pgpass'' channel
 primary_slot_name = 'master'
 
 # **** After Update
-[saanvi@pg-sub2 16]$ sudo cat /var/lib/pgsql/16/data/postgresql.auto.conf
+[saanvi@pg-sub2 16]$ sudo cat /var/lib/pgsql/17/data/postgresql.auto.conf
 # Do not edit this file manually!
 # It will be overwritten by the ALTER SYSTEM command.
 shared_preload_libraries = 'pg_stat_statements, auto_explain, pg_cron, pg_stat_monitor, pglogical, pgaudit'
-primary_conninfo = 'user=replication passfile=''/var/lib/pgsql/.pgpass'' channel_binding=prefer host=''pg-pub2'' port=5432 sslmode=prefer sslcompression=0 sslcertmode=allow sslsni=1 ssl_min_protocol_version=TLSv1.2 gssencmode=prefer krbsrvname=postgres gssdelegation=0 target_session_attrs=any load_balance_hosts=disable application_name=pg-sub2'
+primary_conninfo = 'user=replication passfile=''/var/lib/pgsql/.pgpass'' channel_binding=prefer host=''pg-pub2'' port=5432 sslmode=prefer sslcompression=0 sslcertmode=allow sslsni=1 ssl_min_protocol_version=TLSv1.2 gssencmode=prefer krbsrvname=postgres gssdelegation=0 target_session_attrs=any load_balance_hosts=disable application_name=pgsub2'
 primary_slot_name = 'master'
 ```
 
@@ -246,35 +316,49 @@ sudo systemctl restart postgresql-16.service
 select * from pg_stat_replication;
 
 
-dba=# select * from pg_stat_replication;
--[ RECORD 1 ]----+---------------------------------
-pid              | 136516
-usesysid         | 17205
-usename          | replication
-application_name | pg-sub2
-client_addr      | 192.168.200.46
-client_hostname  | 
-client_port      | 33344
-backend_start    | 2025-08-07 15:43:24.014093+05:30
-backend_xmin     | 
-state            | streaming
-sent_lsn         | 0/501A240
-write_lsn        | 0/501A240
-flush_lsn        | 0/501A240
-replay_lsn       | 0/501A240
-write_lag        | 
-flush_lag        | 
-replay_lag       | 
-sync_priority    | 1
-sync_state       | sync
-reply_time       | 2025-08-07 15:50:14.231514+05:30
-
-dba=# 
+postgres=# select * from pg_stat_replication;
+   -[ RECORD 1 ]----+---------------------------------
+   pid              | 3031
+   usesysid         | 16388
+   usename          | replicator
+   application_name | pgsub2
+   client_addr      | 192.168.200.46
+   client_hostname  | 
+   client_port      | 35010
+   backend_start    | 2025-09-25 19:07:47.038421+05:30
+   backend_xmin     | 
+   state            | streaming
+   sent_lsn         | 0/30003D0
+   write_lsn        | 0/30003D0
+   flush_lsn        | 0/30003D0
+   replay_lsn       | 0/30003D0
+   write_lag        | 
+   flush_lag        | 
+   replay_lag       | 
+   sync_priority    | 1
+   sync_state       | sync
+   reply_time       | 2025-09-25 19:08:17.054887+05:30
 ```
 
 ### On secondary, verify 
 ```
-select * from pg_stat_wal_receiver;
+postgres=# select * from pg_stat_wal_receiver ;
+   -[ RECORD 1 ]---------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+   pid                   | 3241
+   status                | streaming
+   receive_start_lsn     | 0/3000000
+   receive_start_tli     | 1
+   written_lsn           | 0/30003D0
+   flushed_lsn           | 0/3000000
+   received_tli          | 1
+   last_msg_send_time    | 2025-09-25 19:08:47.05997+05:30
+   last_msg_receipt_time | 2025-09-25 19:08:47.060153+05:30
+   latest_end_lsn        | 0/30003D0
+   latest_end_time       | 2025-09-25 19:07:47.043996+05:30
+   slot_name             | master
+   sender_host           | pg-pub2
+   sender_port           | 5432
+   conninfo              | user=replicator passfile=/var/lib/pgsql/.pgpass channel_binding=prefer dbname=replication host=pg-pub2 port=5432 application_name=pgsub2 fallback_application_name=walreceiver sslmode=prefer sslnegotiation=postgres sslcompression=0 sslcertmode=allow sslsni=1 ssl_min_protocol_version=TLSv1.2 gssencmode=prefer krbsrvname=postgres gssdelegation=0 target_session_attrs=any load_balance_hosts=disable
 
 ```
 
