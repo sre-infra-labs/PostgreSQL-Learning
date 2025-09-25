@@ -1,0 +1,40 @@
+---
+- name: Perform cluster configuration
+  hosts: all
+  become: true
+  become_user: root
+  remote_user: ansible
+  gather_facts: false
+  vars:
+    # ansible_become_flags: "-H -S"
+  vars_files:
+    - sensitive-values
+    - vars/dba_vars.yml
+  collections:
+    - community.postgresql
+
+  pre_tasks:
+    - name: Starting Playbook Execution
+      debug:
+        msg: "🚀 Starting PostgreSQL Cluster configuration!"
+      run_once: true
+
+  roles:
+    - role: configure_cluster
+      # when: ansible_host in groups['redhat']
+
+  post_tasks:
+    - name: Playbook Execution Completed
+      debug:
+        msg: "✅ PostgreSQL Cluster configuration completed successfully!"
+      run_once: true
+
+# ansible-playbook -i hosts_all.yml playbook-configure-cluster.yml --vault-password-file=vault-pass -e "run_tag=s3keyrotation"
+
+# ansible dc1_leader -i hosts_all.yml -u ansible -b -m shell -a "patronictl -c /etc/patroni/patroni.yml list"
+# ansible dc2_leader -i hosts_all.yml -u ansible -b -m shell -a "patronictl -c /etc/patroni/patroni.yml list"
+
+
+
+
+

@@ -1,0 +1,239 @@
+---
+- name: Begin Role tasks/main.yml
+  debug:
+    msg: "Begin Role tasks/main.yml"
+  run_once: true
+  tags: always
+
+- name: Include defaults/creds.yml file
+  include_vars:
+    file: ../defaults/creds.yml
+  tags: always
+
+- name: Include defaults/dba_vars.yml file
+  include_vars:
+    file: ../defaults/dba_vars.yml
+  tags: always
+
+- name: Print variables
+  vars:
+    my_vars:
+      run_tag: "{{ run_tag }}"
+      slack_token: "{{ slack_token }}"
+      slack_channel_id: "{{ slack_channel_id }}"
+      slack_blocks_webhook_url: "{{ slack_blocks_webhook_url }}"
+      slack_webhook: "{{ slack_webhook }}"
+  ansible.builtin.debug:
+    var: my_vars
+  run_once: true
+  when: debug
+  # tags: always
+
+- name: Fail if run_tag is not in valid_tags
+  ansible.builtin.fail:
+    msg: "Invalid run_tag '{{ run_tag }}'. Must be one of: {{ valid_tags | join(', ') }}"
+  when: run_tag is defined and run_tag not in valid_tags
+  run_once: true
+
+- name: Fail if more than one leader mentioned for tag [db_and_roles]
+  ansible.builtin.fail:
+    msg: "More than one leader specified in hosts.yml. This is not supported for db_and_roles."
+  when:
+    - run_tag is defined and run_tag == 'db_and_roles'
+    - ( groups['leader'] | length ) > 1
+  run_once: true
+
+- name: Build Slack Thread Initial Message dynamically
+  set_fact:
+    slack_blocks: >-
+      {{
+        [
+          {
+            "type": "header",
+            "text": {
+              "type": "plain_text",
+              "text": "Postgres Configuration Workflow is started {{ ('by cron schedule' if is_scheduled_run else 'manually') }} for Tag [{{ run_tag }}]",
+              "emoji": True
+            }
+          }
+        ] +
+        [ { "type": "divider" } ]
+      }}
+  run_once: true
+
+- name: Send Initial Slack Message
+  register: slack_response
+  delegate_to: localhost
+  run_once: true
+  become: false
+  community.general.slack:
+    token: "{{ slack_token }}"
+    channel: "{{ slack_channel }}"
+    blocks: "{{ slack_blocks }}"
+
+- name: Write Slack thread_ts to file
+  delegate_to: localhost
+  become: false
+  run_once: true
+  copy:
+    dest: "{{ slack_message_ts_file_path }}"
+    content: "{{ slack_response.ts }}"
+  # when: slack_response is defined and slack_response.msg is defined and 'ts' in slack_response.msg
+
+- name: Read slack_message_ts from file
+  delegate_to: localhost
+  become: false
+  run_once: true
+  slurp:
+    src: "{{ slack_message_ts_file_path }}"
+  register: slack_ts_file
+
+- name: Set slack_message_ts fact
+  set_fact:
+    slack_message_ts: "{{ slack_ts_file.content | b64decode | trim }}"
+  when: slack_ts_file is defined
+
+- name: Ignore failure if hosts in hosts_to_ignore
+  # when:
+  #   - domains_to_include is not defined or (domains_to_include is defined and (domains_to_include | length > 0) and srv_domain_name in domains_to_include)
+  #   - domains_to_exclude is not defined or (domains_to_exclude is defined and (domains_to_exclude | length > 0) and srv_domain_name not in domains_to_exclude)
+  #   - hosts_to_exclude is not defined or (hosts_to_exclude is defined and (hosts_to_exclude | length > 0) and inventory_hostname not in hosts_to_exclude)
+  block:
+    - name: Fetch postgresql_version using psql
+      include_tasks: custom/get_postgresql_version.yml
+      when: postgresql_version is not defined
+
+    - name: Print postgresql_version
+      ansible.builtin.debug:
+        msg: "postgresql_version: {{ postgresql_version }} "
+      when: debug is true
+
+    - name: Fetch postgresql_log_directory
+      include_tasks: custom/get_postgresql_log_directory.yml
+      when: postgresql_log_directory is not defined
+
+    - name: Print postgresql_log_directory
+      ansible.builtin.debug:
+        msg: "postgresql_log_directory: {{ postgresql_log_directory }} "
+      when: debug is true
+
+    - name: Fetch postgresql_data_directory
+      include_tasks: custom/get_postgresql_data_directory.yml
+      when: postgresql_data_directory is not defined
+
+    - name: Print postgresql_data_directory
+      ansible.builtin.debug:
+        msg: "postgresql_data_directory: {{ postgresql_data_directory }} "
+      when: debug is true
+
+    # For standalone servers, return 'standalone'
+    - name: Fetch replica_role_in_patroni
+      include_tasks: custom/get_replica_role_in_patroni.yml
+      when: replica_role_in_patroni is not defined
+
+    # replica_role_in_patroni in ['master', 'primary', 'leader', 'standby_leader']
+    - name: Print replica_role_in_patroni
+      ansible.builtin.debug:
+        msg: "replica_role_in_patroni: {{ replica_role_in_patroni }} "
+      when: debug is true
+
+    # - name: "******* FATAL: End the play for all hosts ********"
+    #   ansible.builtin.meta: end_play
+
+    - name: Setup SSL Certificates & Key on Cluster Hosts
+      include_tasks: custom/configure_ssl_cluster.yml
+      when:
+        - inventory_hostname in groups['clustered']
+        - run_tag is not defined or run_tag == 'ssl'
+      tags: ssl
+
+    - name: Setup SSL Certificates & Key on Standalone Hosts
+      include_tasks: custom/configure_ssl_standalone.yml
+      when:
+        - inventory_hostname in groups['non_clustered']
+        - run_tag is not defined or run_tag == 'ssl'
+      tags: ssl
+
+    - name: Setup Log Rotation for PostgreSQL
+      include_tasks: custom/configure_postgres_log_rotation.yml
+      when: run_tag is not defined or run_tag == 'logrotate'
+      tags: logrotate
+
+    - name: Setup Disk Alert for PostgreSQL
+      include_tasks: custom/configure_pgsql_disk_alert.yml
+      when: run_tag is not defined or run_tag == 'disk_alert'
+      tags: disk_alert
+
+    - name: Setup backup.sh file
+      include_tasks: custom/configure_backup_script.yml
+      when: run_tag is not defined or run_tag == 'bkp_script'
+      tags: bkp_script
+
+    - name: Setup database and roles on WRITE node
+      include_tasks: custom/db_and_roles.yml
+      when:
+        - (inventory_hostname in groups['leader']) or (inventory_hostname in groups['non_clustered'])
+        - run_tag is defined and run_tag == 'db_and_roles'
+      tags: db_and_roles
+
+    - name: Update aws s3 key and secret in /etc/pgbackrest/pgbackrest.conf
+      include_tasks: custom/s3keyrotation.yml
+      when:
+        # - inventory_hostname in groups['leader']
+        - run_tag is defined and run_tag == 's3keyrotation'
+      tags: s3keyrotation
+
+    - name: Restart patroni service
+      ansible.builtin.systemd:
+        name: patroni
+        state: restarted
+        enabled: yes  # optional: ensures the service starts at boot
+      when:
+        - run_tag is defined and run_tag == 'patroni'
+        - inventory_hostname in groups['clustered']
+      tags: patroni
+
+    - name: Move Patroni Leader Role to Preferred Host
+      include_tasks: custom/set_patroni_leader.yml
+      when:
+        - inventory_hostname in groups['leaders']
+        - run_tag is defined and run_tag in ('set_leader', 'ssl', 'patroni')
+      tags: set_leader
+
+    - name: Update sslmode on dependent services
+      include_tasks: custom/set_sslmode.yml
+      when:
+        # - inventory_hostname in groups['leaders']
+        - run_tag is defined and run_tag in ('set_sslmode','ssl')
+      tags: set_sslmode)
+
+    - name: Get Patroni Cluster State
+      include_tasks: custom/patronictl_list.yml
+      when: inventory_hostname in groups['leaders']
+      tags: always
+
+    # - name: "******* FATAL: End the play for all hosts ********"
+    #   ansible.builtin.meta: end_play
+
+  rescue:
+    - name: Conditionally ignore or re-raise failure
+      block:
+        - name: Print ignore message for allowed hosts
+          ansible.builtin.debug:
+            msg: "Ignoring failure on {{ inventory_hostname }} as it is in hosts_to_ignore"
+          # when: inventory_hostname in hosts_to_ignore
+          when: >
+            inventory_hostname in hosts_to_ignore
+            or inventory_hostname.endswith('.dev.lab.com.in')
+            or inventory_hostname.endswith('.uat.lab.com.in')
+
+        - name: Fail explicitly for disallowed hosts
+          ansible.builtin.fail:
+            msg: "Playbook failed on {{ inventory_hostname }}"
+          when: inventory_hostname not in hosts_to_ignore
+
+- name: End Role tasks/main.yml
+  debug:
+    msg: "End Role tasks/main.yml"
+  run_once: true
+  tags: always

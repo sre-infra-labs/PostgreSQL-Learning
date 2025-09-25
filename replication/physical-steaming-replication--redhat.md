@@ -10,6 +10,18 @@ secondary -> pg-sub2 (192.168.200.46)
 select * from pg_stat_replication;
 ```
 
+# [Setup PostgreSQL Server](https://www.postgresql.org/download/linux/redhat/)
+```
+sudo dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+sudo dnf -qy module disable postgresql
+sudo dnf install -y postgresql17-server
+sudo /usr/pgsql-17/bin/postgresql-17-setup initdb
+sudo systemctl enable postgresql-17
+sudo systemctl start postgresql-17
+
+sudo systemctl status postgresql-17
+```
+
 # Setup Asynchronous replication environment
 
 ## On primary, Set `listen_addresses = '*'` in postgresql.conf
@@ -260,3 +272,17 @@ reply_time       | 2025-08-07 15:50:14.231514+05:30
 dba=# 
 ```
 
+### On secondary, verify 
+```
+select * from pg_stat_wal_receiver;
+
+```
+
+
+# Cleanup
+```
+# remove everything related to postgres
+sudo dnf remove postgres*
+
+
+```

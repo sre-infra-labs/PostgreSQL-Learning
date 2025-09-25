@@ -1,0 +1,65 @@
+---
+
+# Ensure to provide TAG value from one of the below during workflow execution
+valid_tags:
+  - ssl
+    # Add SSL Certificate & Enforce encrypted connections
+  - logrotate
+    # Set crontab entry for keeping /var/log/postgresql/* files within 2 GB size
+  - patroni
+    # Restart Patroni Service
+  - db_and_roles
+    # Create database and roles for application folks
+  - s3keyrotation
+    # Update aws s3 key and secret in /etc/pgbackrest/pgbackrest.conf
+  - bkp_script
+    # Set crontab entry for executing scripts/backup.sh
+  - disk_alert
+    # Generate slack alert if pgsql space is over 50% of disk
+  - set_leader
+    # Set preferred leader as per yml file
+  - set_sslmode
+    # set sslmode appropriately on dependent services
+
+slack_webhook_url: "{{ creds.SLACK_WEBHOOK_URL }}"
+slack_blocks_webhook_url: "{{ creds.SLACK_WEBHOOK_URL }}"
+slack_token: "{{ creds.SLACK_BOT_TOKEN }}"
+slack_webhook: "{{ creds.SLACK_WEBHOOK_URL }}"
+slack_channel_id: "{{ creds.SLACK_CHANNEL_ID }}"
+slack_channel: "{{ creds.SLACK_CHANNEL_NAME }}"
+
+dba_slack_users:
+  - display_name: SQLAgent Service
+    member_id: U02MMQT00JD
+    role: primary_dba
+  - display_name: Ajay Dwivedi
+    member_id: UED14KCLE
+    role: secondary_dba
+
+# PostgreSQL variables
+pg_superuser_username: "postgres"
+pg_superuser_password: "{{ creds.PG_SUPERUSER_PWD }}"
+db_user_rw_password: "{{ creds.DB_USER_RW_PASSWORD }}"
+db_user_ro_password: "{{ creds.DB_USER_RO_PASSWORD }}"
+
+ssl_min_protocol_version: "TLSv1.3"
+
+consul_client_file: "/etc/consul/config.json"
+
+pgbackrest_conf_file_path: "/etc/pgbackrest/pgbackrest.conf"
+pgbackrest_repo1_s3_key: "{{ creds.PG_BACKREST_REPO1_S3_KEY }}"
+pgbackrest_repo1_s3_key_secret: "{{ creds.PG_BACKREST_REPO1_S3_KEY_SECRET }}"
+
+output_file_name: "/tmp/patronictl_list_output.log"
+output_yaml_file_name: "/tmp/patronictl_yaml_output.log"
+github_event_name: "manual-run"
+is_scheduled_run: "{{ github_event_name == 'schedule' }}"
+
+slack_message_ts_file_path: "/tmp/postgres_configure__{{ run_tag }}.yml"
+slack_message_text_file_path: "/tmp/postgres_configure__{{ run_tag }}.txt"
+
+# reset variables that have dependencies on each other
+enforce_encrypted_connections: "{{ false if remove_ssl_enforcement else enforce_encrypted_connections }}"
+
+
+

@@ -1,0 +1,17 @@
+- name: Get Patroni role with curl command
+  ansible.builtin.shell: |
+    hostname=$(hostname)
+    curl -s http://"$hostname":8008/patroni | jq -r .role
+  register: patroni_role_result
+  failed_when: false
+  changed_when: false
+  # when: replica_role_in_patroni is not defined or set_leader or restart_pg_services
+
+- name: Set fact replica_role_in_patroni (fallback to 'standalone' if error)
+  ansible.builtin.set_fact:
+    replica_role_in_patroni: >-
+      {{ (patroni_role_result.stdout | default('')) if patroni_role_result.rc == 0 and patroni_role_result.stdout != '' else 'standalone' }}
+
+# - name: Print the Patroni role
+#   ansible.builtin.debug:
+#     msg: "Patroni role is {{ replica_role_in_patroni }}"
