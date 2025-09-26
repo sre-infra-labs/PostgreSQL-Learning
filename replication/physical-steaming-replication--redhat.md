@@ -20,6 +20,23 @@ sudo systemctl enable postgresql-17
 sudo systemctl start postgresql-17
 
 sudo systemctl status postgresql-17
+
+
+# find install postgres packages
+sudo dnf list --installed | grep postgres
+      postgresql17.x86_64                           17.6-1PGDG.rhel9               @pgdg17
+      postgresql17-libs.x86_64                      17.6-1PGDG.rhel9               @pgdg17
+      postgresql17-server.x86_64                    17.6-1PGDG.rhel9               @pgdg17
+
+# Get location of initdb or pg_ctl
+rpm -ql postgresql17-server | grep -E 'bin/(initdb|pg_ctl)'
+      /usr/pgsql-17/bin/initdb
+      /usr/pgsql-17/bin/pg_ctl
+
+# Get location of client tool psql
+rpm -ql postgresql17 | grep bin/psql
+   /usr/pgsql-17/bin/psql
+
 ```
 
 # Setup Asynchronous replication environment
@@ -311,7 +328,7 @@ primary_slot_name = 'master'
 sudo systemctl restart postgresql-16.service
 ```
 
-### On primary, Verify change by querying
+### On primary, Verify change by querying. Validate "application_name" here should match on replica
 ```
 select * from pg_stat_replication;
 
