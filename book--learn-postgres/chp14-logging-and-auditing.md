@@ -16,7 +16,7 @@ log_destination = 'stderr'
 log_directory = 'log'
 log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
 #log_filename = 'postgresql-%a.log'
-log_rotation_age = '1d'
+log_rotation_age = '1h'
 log_rotation_size = '50MB'
 
 log_min_messages = 'info'
@@ -121,5 +121,23 @@ set pgaudit.role to pgaudit_role;
 
 -- In postgresql.conf
 pgaudit.role = 'pgaudit_role'
+
+```
+
+# Reset all settings
+```
+-- Reset a single setting
+ALTER SYSTEM RESET shared_preload_libraries;
+ALTER SYSTEM RESET max_connections;
+
+-- Or for session-level settings
+RESET work_mem;
+RESET statement_timeout;
+
+-- Reset all settings for entire server;
+ALTER SYSTEM RESET ALL;
+
+-- This resets all settings in postgresql.auto.conf
+SELECT pg_reload_conf();
 
 ```

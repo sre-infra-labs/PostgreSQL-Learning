@@ -41,6 +41,10 @@ sudo apt -y install postgresql-18
 sudo apt -y install postgresql-server-dev-18
 sudo apt -y install postgresql-doc-18
 
+sudo apt -y install postgresql-18-pglogical
+
+-- https://github.com/2ndQuadrant/pglogical?tab=readme-ov-file#installing-pglogical-with-apt
+sudo apt -y install postgresql-18-pglogical
 
 # find install postgres packages
 sudo dpkg -l | grep postgres
@@ -200,121 +204,3 @@ select * from pg_publication;
 select * from pg_stat_replication;
 select * from pg_subscription;
 ```
-
-# DDL for Logical Replication Setup
-
-## DDLs On Publisher
-```
-# create db
-create database db_source;
-
-# connect to db
-\c db_source
-
-# create table
-create table t1 (id integer not null primary key, name varchar(64));
-
-create table table_1(id int primary key, name varchar);
-insert into table_1 values (generate_series(1,10), 'data'||generate_series(1,10));
-
-# grant access to replication role
-grant usage on schema public to replication;
-grant select on public.users to replication;
-
-grant select on all tables in schema public to replication;
-
-# create publication for existing tables
-create publication all_tables_pub for all tables;
-```
-
-## Transfer schema only to subscriber using pg_dump
-```
-postgres@pg-sub:~$ pg_dump -h pg-pub -t table_1 -d pub -s | psql -d sub
-        SET
-        SET
-        SET
-        SET
-        SET
-        SET
-        set_config 
-        ------------
-        
-        (1 row)
-
-        SET
-        SET
-        SET
-        SET
-        SET
-        SET
-        CREATE TABLE
-        ALTER TABLE
-        ALTER TABLE
-```
-
-## DDLs On Subscriber
-
-```
-# create db
-create database db_destination;
-
-# connect to db
-\c db_destination
-
-# re-create table similar to publisher
-create table t1 (id integer not null primary key, name varchar(64));
-
-# create subscription. No password inline. Password to be picket from ~/.pgpass under postgres system user.
-sub=# create subscription sub_all_tables connection 'host=pg-pub dbname=pub user=replicator' publication all_tables_pub;
-        NOTICE:  created replication slot "sub_all_tables" on publisher
-        CREATE SUBSCRIPTION
-
-\d
-select * from table_1;
-
-```
-
-# Testing with Data
-
-## Write data on Publisher
-```
-\c db_source
-
-insert into t1 values (1, 'Linux'), (2, 'FreeBSD');
-
-pub=# insert into table_1 values (generate_series(11,20), 'data'||generate_series(11,20));
-
-update table_1 set name = '1' where id = 1;
-```
-
-## Read data on Subscriber
-```
-\c db_destination
-
-select * from t1;
-```
-
-
-# Cleanup of Logical Replication
-
-## Drop subscription on subscriber
-```
-select * from pg_subscription;
-
-DROP SUBSCRIPTION pg_createsubscriber_16388_fa5bf258;
-
-
-```
-
-## Drop publication on publisher
-
-```
-select * from pg_publication;
-
-DROP PUBLICATION pg_createsubscriber_16388_fa5bf258;
-
-
-```
-
-
-

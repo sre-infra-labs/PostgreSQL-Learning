@@ -27,7 +27,23 @@
   lineinfile:
     path: "{{ pg_conf_path }}/postgresql.conf"
     regexp: "^#?log_filename *=.*$"
-    line: "log_filename = 'postgresql-%a.log'"
+    line: "log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'"
+    state: present
+  notify: restart postgresql
+
+- name: Configure PostgreSQL log rotation size
+  lineinfile:
+    path: "{{ pg_conf_path }}/postgresql.conf"
+    regexp: "^#?log_rotation_size *=.*$"
+    line: "log_rotation_size = '50MB'"
+    state: present
+  notify: restart postgresql
+
+- name: Configure PostgreSQL log rotation age
+  lineinfile:
+    path: "{{ pg_conf_path }}/postgresql.conf"
+    regexp: "^#?log_rotation_age *=.*$"
+    line: "log_rotation_age = '1h'"
     state: present
   notify: restart postgresql
 
