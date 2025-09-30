@@ -16,4 +16,15 @@ dpkg -L pgbouncer | grep pgbouncer.ini
 
 ```
 
+# Edit config file
+```
+sudo vim /etc/pgbouncer.ini
+
+    [databases]
+    stack2013 = host=localhost dbname=stackoverflow2013
+
+
+sudo systemctl restart pgbouncer.service
+```
+
 
