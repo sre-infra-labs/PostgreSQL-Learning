@@ -1,3 +1,15 @@
+# Check where the setting is coming from
+```
+show log_rotation_age;
+
+SELECT name, setting, source, sourcefile, sourceline
+FROM pg_settings
+WHERE name = 'log_rotation_age';
+
+select pg_reload_conf();
+```
+
+
 # Changes for PostgreSQL.conf
 ```
 session_preload_libraries = 'auto_explain'

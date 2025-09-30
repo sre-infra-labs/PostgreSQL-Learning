@@ -37,12 +37,12 @@ log_message() {
 send_slack_notification() {
     local message="$1"
     local color="${2:-danger}"
-    
+
     if [[ -z "$SLACK_WEBHOOK_URL" ]]; then
         log_message "Warning: Slack webhook URL not configured, skipping notification"
         return
     fi
-    
+
     local payload=$(cat <<EOF
 {
     "attachments": [
@@ -83,7 +83,7 @@ send_slack_notification() {
 }
 EOF
 )
-    
+
     curl -X POST -H 'Content-type: application/json' \
         --data "$payload" \
         "$SLACK_WEBHOOK_URL" 2>/dev/null || {
@@ -96,12 +96,12 @@ cleanup_old_script_logs() {
     if [[ -z "$FULL_LOG_DIR" ]] || [[ ! -d "$FULL_LOG_DIR" ]]; then
         return
     fi
-    
+
     log_message "Cleaning up old script log files (older than 24 hours)..."
-    
+
     local old_logs_count=0
     local old_logs_size=0
-    
+
     # Find and delete script log files older than 24 hours
     while IFS= read -r -d '' old_log; do
         local file_size=$(stat -c%s "$old_log" 2>/dev/null || echo 0)
@@ -213,7 +213,7 @@ fi
 log_message "Log directory size exceeds threshold. Starting cleanup..."
 
 # Get current log file (most recently modified) - handle errors
-CURRENT_LOG=$(ls -t "$FULL_LOG_DIR"/postgresql-*.log 2>/dev/null | head -n1) || CURRENT_LOG=""
+CURRENT_LOG=$(ls -t "$FULL_LOG_DIR"/postgresql-*.log* 2>/dev/null | head -n1) || CURRENT_LOG=""
 
 # Create temporary file list
 TEMP_FILE_LIST=$(mktemp)
@@ -221,7 +221,7 @@ trap "rm -f $TEMP_FILE_LIST" EXIT
 
 # Find log files and sort by age (oldest first) - ignore errors
 # Exclude pg_log_cleanup log files from deletion
-find "$FULL_LOG_DIR" -type f -name "postgresql-*.log" -printf "%T@ %p\n" 2>/dev/null | \
+find "$FULL_LOG_DIR" -type f -name "postgresql-*.log*" -printf "%T@ %p\n" 2>/dev/null | \
     sort -n 2>/dev/null | \
     awk '{print $2}' | \
     grep -v "pg_log_cleanup--" > "$TEMP_FILE_LIST" || {
@@ -352,8 +352,8 @@ log_message "=== Script Completed ==="
 
 exit 0
 
-# sudo -u postgres /var/lib/pgsql/16/scripts/pg_log_cleanup.sh 5 "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+# sudo -u postgres /var/lib/pgsql/pg_log_cleanup.sh 5 "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
 
-# */5 * * * * sudo -u postgres /var/lib/pgsql/16/scripts/pg_log_cleanup.sh 5 "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+# 0/5 * * * * sudo -u postgres /var/lib/pgsql/pg_log_cleanup.sh 5 "https://hooks.slack.com/services/YOUR/WEBHOOK/URL" >> /var/lib/pgsql/log_cleanup.log 2>&1
 
 
