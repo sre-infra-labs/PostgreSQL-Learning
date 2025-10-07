@@ -54,6 +54,8 @@ system_packages:
   - yum-utils
   - tldr
   - pgcopydb
+  - htop
+  - ncdu
 
 postgres_user: "postgres"
 sudo_users:
