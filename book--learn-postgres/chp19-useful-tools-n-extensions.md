@@ -12,7 +12,7 @@ pg_stat_plans extends on pg_stat_statements and records query plans for all exec
 pg_activity
 pg_activity is a htop like application for PostgreSQL server activity monitoring, written in Python.
 
-pgmetrics
+[pgmetrics](https://pgmetrics.io/)
 pgmetrics collects a lot of information and statistics from a running PostgreSQL server and displays it in easy-to-read text format or export it as JSON for scripting.
 
 pgexporter
@@ -24,7 +24,167 @@ prometheus/postgres_exporter is Prometheus exporter for PostgreSQL server metric
 pgwatch2
 pgwatch2 is a self-contained, easy to install and highly configurable PostgreSQL monitoring tool. It is dockerized, features a dashboard and can send alerts. No extensions or superuser privileges required!
 
+pg_fact_loader_14-2.0.1-1PGDG.f42.noarch.rpm
+This extension is used for efficiently loading fact data into PostgreSQL, often used in data warehousing or ETL processes. It helps in handling large bulk inserts while maintaining the integrity of the data.
+Ajay => No
 
+pg_ivm_14-1.0-.rhel8.x86_64.rpm
+The pg_ivm extension provides support for Incremental Materialized Views (IVMs). This can be very useful for data warehouses or reporting systems, where materialized views are frequently updated to reflect incremental changes in the underlying data.
+Ajay => No
+
+pg_partman_14-4.5.1-2.rhel8.x86_64.rpm
+pg_partman is a well-known PostgreSQL extension that manages table partitioning. It automates partition creation and maintenance, which is helpful for scaling PostgreSQL for large datasets while keeping query performance high.
+Ajay => Explore
+
+pg_permissions_14-1.3-2PGDG.rhel8.noarch.rpm
+This package helps manage and audit permissions in PostgreSQL. It allows database administrators to see and control object-level access permissions across schemas and tables
+Ajay => Yes
+
+pg_prioritize_14-1.0.4-2.rhel8.x86_64.rpm
+This extension provides a way to prioritize certain queries or workloads in PostgreSQL. It can be used to optimize query performance for critical applications by adjusting the priority of specific queries or transactions.
+Ajay => No
+
+pg_profile_14-4.4-1PGDG.rhel8.noarch.rpm
+pg_profile allows you to analyze query performance in detail, offering insights into how queries interact with the database and where bottlenecks may occur. It's useful for diagnosing performance issues.
+Ajay => Explore
+
+pg_qualstats_14-2.0.3-1.rhel8.x86_64.rpm
+pg_qualstats is an extension that provides detailed statistics about the queries executed on a PostgreSQL database, specifically focusing on the conditions (WHERE clauses) in SQL queries. It helps DBAs and developers optimize queries by giving visibility into commonly used conditions.
+Ajay => Explore
+
+pg_repack_14-1.4.7-1.rhel8.x86_64.rpm
+pg_repack is a tool used to reorganize tables and indexes in PostgreSQL databases. It helps to reclaim storage and optimize performance by removing bloat, which happens over time when data is inserted, updated, or deleted. The repacking process does this without requiring downtime, making it an excellent choice for performance tuning in high-availability environments.
+Ajay => Explore
+
+pg_show_plans_14-llvmjit-2.1.2-1PGDG.rhel8.x86_64.rpm
+pg_show_plans provides detailed visibility into query plans used by PostgreSQL's query planner. By using this extension, developers and DBAs can gain insights into how queries are executed and identify potential inefficiencies. 
+Ajay => Explore
+
+pg_stat_monitor_14-0.9.2-beta1_1.rhel8.x86_64.rpm
+pg_stat_monitor is an advanced monitoring extension for PostgreSQL. It collects detailed statistics about query execution, helping DBAs understand query performance, track slow queries, and identify system bottlenecks. It provides enhanced insights into system health and query execution patterns.
+Ajay => Explore
+
+pg_statement_rollback_14-1.3-1.rhel8.x86_64.rpm
+pg_statement_rollback is a useful extension for monitoring SQL statements that were rolled back, offering insights into which transactions failed and why. This helps in troubleshooting issues, auditing, and tracking errors that occur in the database.
+Ajay => Explore
+
+pg_statviz_extension_14-0.4-1PGDG.rhel8.noarch.rpm
+pg_statviz is a visualization tool for PostgreSQL statistics. It generates graphical representations of database performance and activity, helping DBAs visualize query performance and database load in a more intuitive way.
+Ajay => Explore
+
+pgaudit16_14-1.6.2-1.rhel8.x86_64.rpm
+pgaudit is an auditing extension for PostgreSQL, which logs detailed information about SQL statements executed in the database. This is particularly useful for security, compliance, and troubleshooting purposes, as it helps track changes and access to sensitive data.
+Ajay => Explore
+
+pgauditlogtofile_14-1.3-1.rhel8.x86_64.rpm
+pgauditlogtofile extends the pgaudit functionality by logging audit records to a file. This makes it easier to manage and review audit logs, especially in environments with stringent compliance requirements.
+Ajay => No
+
+pgcopydb_14-0.9-1.rhel8.x86_64.rpm
+pgcopydb is a tool designed for PostgreSQL that provides an efficient and fast way to copy large amounts of data between PostgreSQL databases. It uses parallel processing to speed up the data transfer process, making it suitable for backup and migration scenarios, especially for large databases.
+Ajay => No
+
+pgexporter_ext_14-0.1.0-1.rhel8.x86_64.rpm
+pgexporter_ext is an extension used in conjunction with Prometheus's postgres_exporter to collect and export PostgreSQL metrics
+Ajay => Yes
+
+pgmemcache_14-2.3.0-5.rhel8.x86_64.rpm
+pgmemcache integrates PostgreSQL with Memcached, a popular caching system. This extension allows PostgreSQL to store and retrieve data from Memcached, enhancing query performance by reducing the need for frequent database lookups.
+Ajay => Explore
+
+pgmeminfo_14-1.0.0-1PGDG.rhel8.x86_64.rpm
+pgmeminfo provides memory-related statistics for PostgreSQL, giving insights into how memory is being used by the database. This can be particularly useful for troubleshooting memory issues and optimizing memory usage
+Ajay => Explore
+
+pgtap_14-1.3.3-1PGDG.rhel8.noarch.rpm
+pgtap is a unit testing framework for PostgreSQL. It allows developers to write tests for their PostgreSQL functions and queries, which helps ensure the reliability and correctness of database operations.
+Ajay => No
+
+pgtt_14-2.10-1.rhel8.x86_64.rpm
+pgtt is a PostgreSQL extension for managing time travel tables. It allows users to store and query historic
+Ajay => No
+
+powa-archivist_14-4.2.0-1PGDG.rhel7.x86_64.rpm
+this is part of the POWA (PostgreSQL Workload Analyzer) suite, which helps monitor PostgreSQL performance over time. The archivist collects historical statistics for analysis and troubleshooting
+Ajay => Explore
+
+plpgsql_check_14-2.7.8-1PGDG.rhel8.x86_64.rpm
+this is a static code analysis tool for PL/pgSQL, PostgreSQL''s procedural language. It helps identify issues in PL/pgSQL code such as errors, potential bugs, and inefficiencies before execution.
+Ajay => Explore
+
+plprofiler_14-server-4.2.2-1PGDG.rhel8.x86_64.rpm
+this is an extension for profiling PL/pgSQL functions. It helps in identifying performance bottlenecks in database functions by collecting execution statistics, which can be useful for optimizing complex queries.
+Ajay => Explore
+
+table_version_14-1.11.1-1PGDG.rhel8.noarch.rpm
+helps manage and track changes in table data over time by providing versioning capabilities. It is particularly useful for auditing or maintaining a historical record of data modifications. This extension allows users to version tables efficiently without requiring custom triggers or complex logic.
+Ajay => Explore
+
+✅ General-Purpose Extensions
+Extension	Purpose
+pg_stat_statements	Tracks execution statistics of all SQL statements (used for performance tuning).
+auto_explain	Logs execution plans of slow queries automatically.
+pg_hint_plan	Allows query planner hints to influence execution plan (useful when the planner doesn’t pick the best plan).
+uuid-ossp	Provides functions to generate UUIDs (uuid_generate_v4() etc).
+pgcrypto	Provides cryptographic functions for hashing, encryption, etc.
+
+✅ Performance / Indexing
+Extension	Purpose
+btree_gin	Enables GIN indexing for B-tree-like operators.
+btree_gist	Allows B-tree indexable types to be used with GiST indexes.
+pg_trgm	Enables trigram-based indexing for fast LIKE/ILIKE/fuzzy searches.
+fuzzystrmatch	Functions for approximate string matching.
+hypopg	Simulates hypothetical indexes (used for "what-if" planning).
+
+✅ Partitioning / Table Management
+Extension	Purpose
+pg_partman	Automates time- or ID-based partitioning.
+tablefunc	Provides functions like crosstab() (pivot tables).
+pg_repack	Reorganizes tables/indexes to reduce bloat without locks.
+
+✅ Monitoring / Introspection
+Extension	Purpose
+pg_stat_kcache	Tracks OS-level metrics like CPU time per query (requires Linux perf stats).
+pg_stat_monitor	Enhanced replacement for pg_stat_statements (by Percona).
+pg_buffercache	Shows what data is in PostgreSQL’s shared buffer cache.
+pg_visibility	Shows visibility map and heap tuple visibility.
+pg_freespacemap	Views free space available in each table block.
+
+✅ Logical / Physical Replication
+Extension	Purpose
+pglogical	Logical replication plugin with rich features like conflict resolution, DDL replication.
+wal2json	Output plugin for logical decoding (WAL -> JSON), used with Kafka pipelines etc.
+test_decoding	Simple output plugin for logical replication (mainly for testing).
+
+✅ Foreign Data Wrappers (FDW)
+Extension	Purpose
+postgres_fdw	Connects to another PostgreSQL server.
+mysql_fdw	Connects to MySQL databases.
+oracle_fdw	Connects to Oracle databases.
+odbc_fdw	Generic ODBC-based FDW for various DBs.
+file_fdw	Access CSV or other flat files as foreign tables.
+multicorn	Python-based FDW framework (supports MongoDB, Elasticsearch, etc.).
+
+✅ Time-Series / Advanced Use Cases
+Extension	Purpose
+timescaledb	Adds time-series database features (hypertables, compression, etc.).
+pipelineDB	SQL-based stream processing (now merged into TimescaleDB).
+zombodb	Full-text search integration with Elasticsearch.
+
+✅ Security / Auditing
+Extension	Purpose
+pgaudit	Provides detailed session and/or object audit logging.
+sepgsql	Adds SELinux integration for access control.
+pg_statement_rollback	Adds SAVEPOINT rollback on errors in psql.
+
+🔧 Utility / Admin Tools
+Extension	Purpose
+plpgsql_check	Static analysis and linting for PL/pgSQL functions.
+pg_cron	Run cron jobs directly in PostgreSQL (e.g., periodic VACUUM, ANALYZE, etc.).
+pg_proctab	Returns system process information (top-like view inside Postgres).
+
+Total 25
+---------
 
 ```
 
@@ -356,5 +516,10 @@ bcp dbname.dbo.table out table.csv -c -t',' -S sqlserver -U user -P password
 COPY tablename FROM '/path/to/table.csv' WITH CSV;
 ```
 
+# [Migrate using AWS Schema Conversion Tool (SCT)](https://docs.aws.amazon.com/SchemaConversionTool/latest/userguide/CHAP_Source.SQLServer.ToPostgreSQL.html)
+
+# AWS Database Migration Service
+
+# [Babelfish for Aurora PostgreSQL](https://aws.amazon.com/rds/aurora/babelfish/)
 
 
