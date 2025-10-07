@@ -172,5 +172,15 @@ show max_wal_size; # default 1 gb
   - Change Data Capture (CDC)
   - Consolidation of data from multiple databases
   - Control access to subset of data
-  - 
+
+## Tool
+
+- psql
+  - Terminal based interactive front-end to PostgreSQL
+    - Run Queries
+- pgadmin
+- pgbench
+  - Run a benchmark test on Postgresql
+- pg_ctl
+  - To run, stop, reload postgres process
 
