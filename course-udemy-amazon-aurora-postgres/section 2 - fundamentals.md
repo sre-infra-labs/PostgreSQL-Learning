@@ -106,3 +106,71 @@ show max_wal_size; # default 1 gb
 ![background-writer](../.images/background-writer.png)
 
 
+## PostgreSQL High Availability
+
+- Second DB server acts as a target for recovery
+  - First server receiving WRITE connection is called "Primary" or "Master" server
+  - This 2nd DB server is called "STANDBY" server
+- Standby servers to which clients are not allowed to connect are called "Warm Standby" servers
+- Stanby servers may also accept READONLY connections, and thus called "Hot Standby" server
+- 
+
+## Replication
+
+- Replication is used for keeping "Primary" and "Standby" in sync
+- Commonly available replications are
+  - WAL based replication - Log Shipping, Streaming, Synchronous vs Asynchronous
+  - Cascading replication
+  - Physical replication
+  - Logical replication
+
+## Replication: Log Shipping
+
+- WAL segments (16 mb each) are continously sent to Standby server
+- The Standby server applied the received WAL segments
+- One WAL Segment/File sent at a time
+- Standby is not 100% in sync at all time
+
+![replication-log-shipping](../.images/replication-log-shipping.png)
+
+## Replication: Steaming Replication
+
+- WAL records are continously streamed from Primary to Standby as soon as they are added to WAL segment without waiting for the WAL file to be filled
+- The standby is much more up to date compared to Log Shipping
+- One XLOG sent at a time
+
+![replication-steaming-replication](../.images/replication-steaming-replication.png)
+
+## Replication: Synchronous Streaming
+
+- One XLOG sent at a time
+- Primary waits for the XLOG to be committed by the Standby
+- Standby sends confirmation
+- Primary sends commit success to client
+
+- This reduces the latency/replication lag, but comes at cost of performance as transaction commit time increases
+
+![replication-synchronous-steaming](../.images/replication-synchronous-steaming.png)
+
+## Cascading Replication
+
+- Replication from a Standby to another Standby
+- ASYNCHRONOUS replication between standby
+- Supposed for Hot Standby(s)
+
+## Physical Replication
+
+- Byte level replication of storage device across primary and standby
+  - Mirrors the file system across the primary and standby
+  - Better performance compared to log shipping
+
+## Logical Replication
+
+- DB Table level replication using pub-sub model
+- Also known as Transactional Replication
+- Use cases
+  - Change Data Capture (CDC)
+  - Consolidation of data from multiple databases
+  - Control access to subset of data
+  - 
+
