@@ -65,7 +65,7 @@ sudo nano /etc/consul.d/server.hcl
 
     server = true
     bootstrap_expect = 1
-    #server_rejoin_age_max: "8760h"
+    server_rejoin_age_max = "8760h"
     bind_addr = "192.168.100.41"
     client_addr = "0.0.0.0"
 
