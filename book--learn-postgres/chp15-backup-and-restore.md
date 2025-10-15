@@ -1,3 +1,30 @@
+# [Backup/Restore](https://stackoverflow.com/questions/15692508/a-faster-way-to-copy-a-postgresql-database-or-the-best-way)
+
+```
+### METHOD 01 - Custom Format
+# Create your dumps with custom format and compression
+pg_dump -Fc -Z 9  --file=file.dump myDb
+
+# restore in 8 parallel jobs
+pg_restore -Fc -j 8  file.dump
+
+
+### METHOD 02 - Directory format (Fastest)
+# Create backup in directory format with 8 parallel jobs
+time pg_dump -j 8 -Fd -f /tmp/newout.dir fsdcm_external
+
+# PG_RESTORE | always use tuning for postgres.conf with format directory With -j option
+work_mem = 32MB
+shared_buffers = 4GB
+maintenance_work_mem = 2GB
+full_page_writes = off
+autovacuum = off
+wal_buffers = -1
+
+time pg_restore -j 8 --format=d -C -d postgres /tmp/newout.dir/`
+```
+
+
 # `pg_dump` Help
 ```
 |------------$ pg_dump --help

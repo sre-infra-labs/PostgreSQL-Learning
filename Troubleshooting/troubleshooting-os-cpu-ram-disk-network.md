@@ -507,5 +507,42 @@ ss -tulnp | grep 5432
 
 ![ss-established-connections](../.images/ss-established-connections.png)
 
+## Identify the Disk
 
+```
+# List all available block devices including their partitions and mount points
+    # skip loopback and cd rom
+lsblk -e 7,11
+
+# Get detailed info about disks and their partitions
+sudo fdisk -l
+```
+
+## Partition the Disk
+
+- Tools available for partitioning of disk
+  - fdisk
+  - parted
+  - gdisk
+
+```
+sudo fdisk /dev/vdb
+
+```
+
+![fdisk-creation-partition](../.images/fdisk-creation-partition.png)
+
+To use the fdisk utility to partition your disk:
+
+- Press n to create a new partition.
+- Select the partition type (usually p for primary).
+- Specify the partition number, first sector, and last sector (you can usually just press Enter to accept the defaults).
+- If you want to create more partitions, repeat steps 1-3.
+- Press w to write the changes to the disk and exit fdisk.
+
+> Remember that you can only format and mount partitions, not the entire disk itself. If your disk doesn’t have any partitions yet, you’ll need to create at least one before you can format it.
+
+## Format the Partition
+
+- This process creates the structure that Linux uses to organize and access the data on disk
 
