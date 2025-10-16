@@ -36,17 +36,23 @@ LIMIT 3;
 # Top Queries by Total I/O Time
 ```
 SELECT
-    -- Total time spent waiting for I/O operations (Read + Write) in ms
-    round((blk_read_time + blk_write_time)::numeric, 2) AS total_io_time_ms,
+	datname,
+    -- Sum of blocks read from disk and blocks dirtied (to be written)
+    (shared_blks_read + shared_blks_dirtied) AS total_disk_io_blocks,
     calls,
-    -- Time per execution
-    round((blk_read_time + blk_write_time) / calls::numeric, 2) AS avg_io_time_ms,
+    round((shared_blks_read + shared_blks_dirtied) / calls::numeric, 2) AS avg_io_blocks_per_call,
+    -- Cache Hit Ratio (higher is better)
+    round(
+        shared_blks_hit::numeric * 100 / NULLIF(shared_blks_hit + shared_blks_read, 0),
+        2
+    ) AS cache_hit_percent,
     query
 FROM
-    pg_stat_statements
+    pg_stat_statements ss join pg_database d on d.oid = ss.dbid
 ORDER BY
-    total_io_time_ms DESC
-LIMIT 5;
+    --total_disk_io_blocks DESC
+	avg_io_blocks_per_call desc
+LIMIT 50;
 ```
 
 

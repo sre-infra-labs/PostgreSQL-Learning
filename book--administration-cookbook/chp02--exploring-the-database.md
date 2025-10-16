@@ -21,7 +21,9 @@ show server_version_num ;
 # What is server uptime?
 
 ```
-select pg_postmaster_start_time(), date_trunc('second', current_timestamp - pg_postmaster_start_time()) as uptime;
+select  pg_postmaster_start_time(), 
+        date_trunc('second', current_timestamp - pg_postmaster_start_time()) as uptime,
+        ;
 
         pg_postmaster_start_time         |  uptime
         ---------------------------------+----------

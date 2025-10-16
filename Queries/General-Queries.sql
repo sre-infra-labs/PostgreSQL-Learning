@@ -3,6 +3,11 @@
 **  
 */
 
+-- get user connect server and port. Would be null for Unix socket connections
+select  pg_postmaster_start_time(), 
+        date_trunc('second', current_timestamp - pg_postmaster_start_time()) as uptime,
+        inet_server_addr(), inet_server_port();
+
 -- vacuum command
 VACUUM (VERBOSE, ANALYZE);
 
