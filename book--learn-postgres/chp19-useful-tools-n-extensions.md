@@ -3,6 +3,14 @@
 - https://www.postgresql.org/docs/current/contrib.html
 
 ```
+
+
+[pg_oidc_validator](https://github.com/Percona-Lab/pg_oidc_validator/tree/main)
+pg_oidc_validator is an OAuth validator module for Postgres 18, providing authentication via validating Open ID Connect (OIDC) tokens.
+
+[credcheck](https://github.com/HexaCluster/credcheck)
+The credcheck PostgreSQL extension provides few general credential checks, which will be evaluated during the user creation, during the password change and user renaming
+
 pg_stat_statements
 pg_stat_statements tracks all queries that are executed on the server and records average runtime per query "class" among other parameters.
 
@@ -28,8 +36,8 @@ pg_fact_loader_14-2.0.1-1PGDG.f42.noarch.rpm
 This extension is used for efficiently loading fact data into PostgreSQL, often used in data warehousing or ETL processes. It helps in handling large bulk inserts while maintaining the integrity of the data.
 Ajay => No
 
-pg_ivm_14-1.0-.rhel8.x86_64.rpm
-The pg_ivm extension provides support for Incremental Materialized Views (IVMs). This can be very useful for data warehouses or reporting systems, where materialized views are frequently updated to reflect incremental changes in the underlying data.
+[pg_ivm](https://github.com/sraoss/pg_ivm)
+Incremental View Maintenance (IVM) is a way to make materialized views up-to-date in which only incremental changes are computed and applied on views rather than recomputing the contents from scratch as REFRESH MATERIALIZED VIEW does. IVM can update materialized views more efficiently than recomputation when only small parts of the view are changed.
 Ajay => No
 
 pg_partman_14-4.5.1-2.rhel8.x86_64.rpm
@@ -48,7 +56,8 @@ pg_profile_14-4.4-1PGDG.rhel8.noarch.rpm
 pg_profile allows you to analyze query performance in detail, offering insights into how queries interact with the database and where bottlenecks may occur. It's useful for diagnosing performance issues.
 Ajay => Explore
 
-pg_qualstats_14-2.0.3-1.rhel8.x86_64.rpm
+[pg_qualstats](https://github.com/powa-team/pg_qualstats)
+A PostgreSQL extension for collecting statistics about predicates, helping find what indices are missing.
 pg_qualstats is an extension that provides detailed statistics about the queries executed on a PostgreSQL database, specifically focusing on the conditions (WHERE clauses) in SQL queries. It helps DBAs and developers optimize queries by giving visibility into commonly used conditions.
 Ajay => Explore
 
@@ -135,6 +144,7 @@ btree_gist	Allows B-tree indexable types to be used with GiST indexes.
 pg_trgm	Enables trigram-based indexing for fast LIKE/ILIKE/fuzzy searches.
 fuzzystrmatch	Functions for approximate string matching.
 hypopg	Simulates hypothetical indexes (used for "what-if" planning).
+bloom - Implements Bloom filter indexes for queries with many combined WHERE conditions, offering space-efficient indexes when traditional methods are too large.
 
 ✅ Partitioning / Table Management
 Extension	Purpose
@@ -144,7 +154,7 @@ pg_repack	Reorganizes tables/indexes to reduce bloat without locks.
 
 ✅ Monitoring / Introspection
 Extension	Purpose
-pg_stat_kcache	Tracks OS-level metrics like CPU time per query (requires Linux perf stats).
+pg_stat_kcache	Gather statistics about physical disk access and CPU consumption done by backends.
 pg_stat_monitor	Enhanced replacement for pg_stat_statements (by Percona).
 pg_buffercache	Shows what data is in PostgreSQL’s shared buffer cache.
 pg_visibility	Shows visibility map and heap tuple visibility.
