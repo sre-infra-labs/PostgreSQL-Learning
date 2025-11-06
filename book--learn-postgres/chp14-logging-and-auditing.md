@@ -11,16 +11,32 @@ select pg_reload_conf();
 
 
 # Changes for PostgreSQL.conf
+
+## `auto_explain` to Capture Execution Plans for Slow Queries
+
+`EXPLAIN (ANALYZE, SETTINGS, COSTS, TIMING, SUMMARY, WAL, VERBOSE, BUFFERS, FORMAT JSON)`
+
+
 ```
 session_preload_libraries = 'auto_explain'
-auto_explain.log_min_duration = '5s'
+
+auto_explain.log_min_duration = '1000ms'
 auto_explain.log_format = 'json'
 auto_explain.log_verbose = 'on'
 auto_explain.log_analyze = 'on'
 auto_explain.log_buffers = 'on'
 auto_explain.log_wal = 'on'
 auto_explain.log_timing = 'on'
+auto_explain.log_triggers = 'on'
+auto_explain.log_summary = 'on'
 auto_explain.log_settings = 'on'
+auto_explain.log_nested_statements = on
+
+```
+
+## `pg_stat_statements` to Capture Slow Queries
+
+```
 shared_preload_libraries = 'pg_stat_statements'    # (change requires restart)
 
 logging_collector = on
