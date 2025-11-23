@@ -1,4 +1,4 @@
-# pgbench
+# [pgbench](https://www.postgresql.org/docs/current/pgbench.html)
 
 > pgbench is native tool installed with postgresql that can be used for benchmarking postgresql database cluster.
 

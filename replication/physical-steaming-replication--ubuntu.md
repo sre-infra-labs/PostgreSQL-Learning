@@ -154,3 +154,34 @@ su - postgres
 ```
 INSERT INTO numbers VALUES(2,'Two');
 ```
+
+
+## Troubleshooting Queries
+
+```
+SELECT
+    -- 1. Sync Method
+    client_addr AS standby_address,
+    state AS replication_state,
+    sync_state AS sync_method,
+
+    -- 2. Replication Lag in MB
+    -- lag_bytes / (1024 * 1024)
+    ROUND(
+        (pg_wal_lsn_diff(pg_current_wal_lsn(), flush_lsn)) / (1024 * 1024.0)
+    , 2) AS replication_lag_mb,
+
+    -- 3. Replication Lag in Milliseconds
+    -- Requires a separate query on the standby or using the 'pg_last_wal_receive_lsn' on primary 
+    -- and 'pg_last_wal_replay_lsn' on standby to calculate time lag, 
+    -- but the 'pg_stat_replication' view itself does not provide a direct time lag function.
+    -- We can use the 'write_lag' or 'flush_lag' columns which are timing delays:
+    COALESCE(
+        EXTRACT(EPOCH FROM write_lag) * 1000, 
+        EXTRACT(EPOCH FROM flush_lag) * 1000
+    ) AS write_flush_lag_ms
+FROM
+    pg_stat_replication;
+
+
+```
