@@ -29,6 +29,8 @@ Untitled*.ipynb
 consul_secret.yml
 
 vault-pass
+.venv
+venv
 
 
 # Byte-compiled / optimized / DLL files

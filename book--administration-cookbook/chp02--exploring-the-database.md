@@ -189,12 +189,12 @@ select pg_size_pretty(pg_total_relation_size('users'));
 # Which are my biggest tables?
 
 ```
-SELECT quote_ident(table_schema)||'.'||quote_ident(table_name) as name
-,pg_relation_size(quote_ident(table_schema)
-|| '.' || quote_ident(table_name)) as size
+SELECT  quote_ident(table_schema)||'.'||quote_ident(table_name) as tbl_name
+        ,pg_size_pretty(pg_relation_size(quote_ident(table_schema) || '.' || quote_ident(table_name))) as table_size
+        ,pg_size_pretty(pg_total_relation_size(quote_ident(table_schema) || '.' || quote_ident(table_name))) as table_size_all
 FROM information_schema.tables
 WHERE table_schema NOT IN ('information_schema', 'pg_catalog')
-ORDER BY size DESC
+ORDER BY table_size_all DESC, table_size DESC
 LIMIT 10;
 
                       name              |    size
@@ -243,6 +243,23 @@ WHERE oid = 'posts'::regclass;
                 59451924 |  59451924
 
 
+-- Rough Estimate query
+  -- Row estimate = number of data blocks * rows per block
+  -- Row estimate = (pg_relation_size/block_size) * (rel_tuples/rel_pages)
+  -- Row estimate = (pg_relation_size*rel_tuples) / (8192*rel_pages)
+SELECT  (CASE WHEN reltuples > 0
+                THEN (pg_relation_size(oid) * reltuples) / (relpages::bigint * current_setting('block_size')::bigint)
+                ELSE 0
+        END)::bigint AS estimated_row_count
+        ,reltuples::bigint
+FROM pg_class
+WHERE oid = 'posts'::regclass;
+
+        estimated_row_count | reltuples
+        ---------------------+-----------
+                59451924 |  59451924
+
+
 -- or Create function, and use it
 
 CREATE OR REPLACE FUNCTION estimated_row_count(text)
@@ -266,3 +283,29 @@ select estimated_row_count('public.posts');
         (1 row)
 ```
 
+# How much memory does a database current use?
+
+```
+create extension pg_buffercache;
+
+select * from pg_buffercache limit 1 \gx
+
+select datname,
+        pg_size_pretty( cast(current_setting('block_size') as bigint) * count(*) ) as buffers
+from pg_buffercache c
+left join pg_database d
+  on c.reldatabase = d.oid
+group by datname
+order by datname;
+
+```
+
+# File Types
+
+- `TOAST` - The Oversized Attribute Storage Technique
+- 
+- Below file types are used for maintenance
+- `_fsm` - Free Space Map
+- `_vm` - Visibility Map
+- `_init` - Are used by *unlogged tables* and their indexes, to restore them after a crash.
+  - In event of crash, unlogged tables must be truncated

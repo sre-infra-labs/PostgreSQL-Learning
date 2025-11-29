@@ -3,7 +3,7 @@
 - https://www.postgresql.org/docs/current/contrib.html
 
 ```
-
+select * from pg_extension;
 
 [pg_oidc_validator](https://github.com/Percona-Lab/pg_oidc_validator/tree/main)
 pg_oidc_validator is an OAuth validator module for Postgres 18, providing authentication via validating Open ID Connect (OIDC) tokens.
@@ -17,7 +17,7 @@ pg_stat_statements tracks all queries that are executed on the server and record
 pg_stat_plans
 pg_stat_plans extends on pg_stat_statements and records query plans for all executed quries. This is very helpful when you're experiencing performance regressions due to inefficient query plans due to changed parameters or table sizes.
 
-pg_activity
+[pg_activity](https://github.com/dalibo/pg_activity?tab=readme-ov-file)
 pg_activity is a htop like application for PostgreSQL server activity monitoring, written in Python.
 
 [pgmetrics](https://pgmetrics.io/)
@@ -491,6 +491,41 @@ DROP EXTENSION IF EXISTS pg_trgm;
 RESET enable_seqscan;
 
 ```
+
+# Install [pg_stat_monitor extension](https://github.com/percona/pg_stat_monitor?tab=readme-ov-file#building-from-source)
+
+```
+cd ~/Github/
+git clone git://github.com/Percona/pg_stat_monitor.git
+
+cd pg_stat_monitor
+
+export PG_CONFIG=/usr/lib/postgresql/16/bin/pg_config
+
+make USE_PGXS=1
+
+make USE_PGXS=1 install
+or
+sudo make USE_PGXS=1 install PG_CONFIG=/usr/lib/postgresql/16/bin/pg_config
+
+
+ALTER SYSTEM SET shared_preload_libraries = 'pg_stat_monitor';
+or
+sudo vim /etc/postgresql/16/main/conf.d/dba.conf
+
+postgres=# select name, setting, source, sourcefile, sourceline
+from pg_settings
+where name = 'shared_preload_libraries';
+           name           |                  setting                   |       source       |               sourcefile                | sourceline 
+--------------------------+--------------------------------------------+--------------------+-----------------------------------------+------------
+ shared_preload_libraries | pg_stat_statements,pgaudit,pg_stat_monitor | configuration file | /etc/postgresql/16/main/conf.d/dba.conf |         26
+
+
+SELECT application_name, userid AS user_name, datname AS database_name, substr(query,0, 50) AS query, calls, client_ip
+FROM pg_stat_monitor;
+```
+
+
 
 # Migrating from SQLServer to PostgreSQL using pgloader
 - [https://pgloader.io/](https://pgloader.io/)

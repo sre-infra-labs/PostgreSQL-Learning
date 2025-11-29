@@ -48,6 +48,23 @@ and 1=1;
 
 SELECT pid,usename, datname, client_addr, application_name, state, backend_start, query_start, now() - query_start AS duration, query
 FROM pg_stat_activity
-WHERE state = 'active'
+WHERE 1=1
+--and state = 'active'
 AND usename <> 'postgres'
 ORDER BY duration DESC;
+
+
+/*
+-- Read data from big table, and discard same
+psql -d stackoverflow2013 -qAt -c "SELECT /* psql qAt */ * FROM posts;" > /dev/null
+
+
+-- in psql interactive
+\o /dev/null
+SELECT * FROM your_table;    -- result will be discarded
+\o                          -- reset output back to normal
+
+
+
+sudo -u postgres pg_activity -U postgres
+*/
