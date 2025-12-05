@@ -46,11 +46,12 @@ and 1=1;
 
 \x
 
-SELECT pid,usename, datname, client_addr, application_name, state, backend_start, query_start, now() - query_start AS duration, query
+SELECT now() - query_start AS duration, pid,usename, datname, client_addr, application_name, state, backend_start, query_start, query
 FROM pg_stat_activity
 WHERE 1=1
 --and state = 'active'
-AND usename <> 'postgres'
+and state not in ('idle')
+AND usename not in ('postgres','replicator')
 ORDER BY duration DESC;
 
 

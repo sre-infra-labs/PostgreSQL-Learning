@@ -9,7 +9,10 @@ Default User - u0_a432
 # install package
 pkg update
 pkg upgrade
+
 pkg install openssh
+pkg install openssh-sftp-server
+termux-setup-storage
 
     /data/data/com.termux/files/usr/etc/ssh/ssh_host_rsa_key
     /data/data/com.termux/files/usr/etc/ssh/ssh_host_rsa_key.pub
@@ -26,6 +29,9 @@ ssh-copy-id -p 8022 u0_a432@ajay-mobile
 
 # take ssh
 ssh -p 8022 u0_a432@ajay-mobile
+
+# take sftp connection
+sftp -p 8022 u0_a432@ajay-mobile
 
 ```
 

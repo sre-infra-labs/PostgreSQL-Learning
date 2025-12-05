@@ -5,6 +5,12 @@
 ```
 select * from pg_extension;
 
+[pgfincore]()
+This extension implements a set of functions to manage PostgreSQL data pages in the operating system's file cache.
+
+[pg_prewarm]()
+This extension comes as part of contrib module, and helps in preparing shared buffers early after crash/reboot.
+
 [pg_oidc_validator](https://github.com/Percona-Lab/pg_oidc_validator/tree/main)
 pg_oidc_validator is an OAuth validator module for Postgres 18, providing authentication via validating Open ID Connect (OIDC) tokens.
 
