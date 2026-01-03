@@ -24,6 +24,28 @@ wal_buffers = -1
 time pg_restore -j 8 --format=d -C -d postgres /tmp/newout.dir/`
 ```
 
+## Backup restore using directory format for large databases
+```
+pg_dump \
+  -Fd \
+  -j 4 \
+  -v \
+  -h facebook.contoso.com \
+  -U postgres \
+  -f ./facebook.contoso.com__facebook \
+  facebook
+
+psql -c "create database facebook;"
+
+pg_restore \
+  -d facebook \
+  -j 4 \
+  -v \
+  -h localhost \
+  -U postgres \
+  ./facebook.contoso.com__facebook
+```
+
 
 # `pg_dump` Help
 ```

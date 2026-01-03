@@ -13,6 +13,7 @@ psql postgresql://myuser:mystrongpassword@myhost:5432/mydb
 ```
 # find user used for postgresql service. Usually its postgres
 ps aux | grep postgresql.conf
+ps -few | grep -E -- '[p]ost.*-[D]'
 
     [root@pg-cls2-prod1 ansible]# ps aux | grep postgresql.conf
     postgres   50418  0.0  1.2 2150876 98688 ?       S    Sep11   0:33 /usr/pgsql-16/bin/postgres -D /var/lib/pgsql/16/data --config-file=/var/lib/pgsql/16/data/postgresql.conf --listen_addresses=pg-cls2-prod1,127.0.0.1 --port=5432 --cluster_name=pg-cls2-prod --wal_level=replica --hot_standby=on --max_connections=200 --max_wal_senders=10 --max_prepared_transactions=0 --max_locks_per_transaction=512 --track_commit_timestamp=off --max_replication_slots=10 --max_worker_processes=4 --wal_log_hints=on
