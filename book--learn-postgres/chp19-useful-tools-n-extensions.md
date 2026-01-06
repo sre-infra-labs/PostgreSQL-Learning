@@ -20,6 +20,9 @@ The credcheck PostgreSQL extension provides few general credential checks, which
 pg_stat_statements
 pg_stat_statements tracks all queries that are executed on the server and records average runtime per query "class" among other parameters.
 
+[pg_wait_sampling](https://www.youtube.com/watch?v=pbzYkoh9K4g)
+pg_wait_sampling is an extension for collecting sampling statistics of wait events.
+
 pg_stat_plans
 pg_stat_plans extends on pg_stat_statements and records query plans for all executed quries. This is very helpful when you're experiencing performance regressions due to inefficient query plans due to changed parameters or table sizes.
 
