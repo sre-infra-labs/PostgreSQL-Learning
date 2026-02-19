@@ -120,7 +120,7 @@ sudo systemctl status postgres_exporter.service
 Edit /etc/prometheus/prometheus.yml
 
 ```
-- job_name: postgres
+- job_name: postgres_exporter
   static_configs:
   - targets: ['localhost:9187']
 ```
