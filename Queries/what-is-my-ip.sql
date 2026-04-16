@@ -1,8 +1,8 @@
 SELECT
     inet_server_addr() AS server_ip,
-    :'HOST' AS server_hostname,
+    current_setting('cluster_name') AS server_hostname,
     current_database() AS database_name,
-    current_user as current_user,
+    current_user AS "current_user",
     pg_postmaster_start_time() AS server_start_time,
     now() - pg_postmaster_start_time() AS uptime,
     version() AS pg_version,
@@ -11,8 +11,7 @@ SELECT
     current_setting('cluster_name') AS cluster_name,
     current_setting('max_connections')::int AS max_connections,
     current_setting('port')::int AS configured_port,
-    inet_server_addr() || ':' || inet_server_port() AS server_address;
-;
+    inet_server_addr()::text || ':' || inet_server_port()::text AS server_address;
 
 SELECT current_setting('listen_addresses');
 

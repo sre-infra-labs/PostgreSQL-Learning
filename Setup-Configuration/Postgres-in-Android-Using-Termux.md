@@ -82,4 +82,7 @@ pg_dump -h localhost stackoverflow2010 > /tmp/stackoverflow2010.sql
 psql -h ajay-mobile stackoverflow2010 < /tmp/stackoverflow2010.sql
 
 
+# Copy contents from mobile
+ssh -p 8022 u0_a432@192.168.1.6
+scp -r -P 8022 u0_a432@192.168.1.6:"/data/data/com.termux/files/home/storage/shared/Extra*Content*/Study/" .
 ```
