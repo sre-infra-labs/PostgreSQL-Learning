@@ -1,0 +1,20 @@
+---
+- name: Check if Docker network '{{ docker_network_name }}' exists
+  community.docker.docker_network_info:
+    name: "{{ docker_network_name }}"
+  register: network_info
+  ignore_errors: true
+
+- name: Create Docker network '{{ docker_network_name }}'
+  community.docker.docker_network:
+    name: "{{ docker_network_name }}"
+    driver: "{{ docker_network_driver }}"
+    ipam_config:
+      - subnet: "{{ docker_network_subnet }}"
+        gateway: "{{ docker_network_gateway }}"
+    state: present
+  when: not (network_info.exists | default(false))
+
+- name: Docker network is ready
+  ansible.builtin.debug:
+    msg: "Network '{{ docker_network_name }}' is ready (subnet: {{ docker_network_subnet }})"

@@ -1,0 +1,55 @@
+# Docker network settings
+docker_network_name: "pg-cluster-net"
+docker_network_subnet: "172.20.0.0/24"
+docker_network_gateway: "172.20.0.1"
+docker_network_driver: "bridge"
+
+# Container image — built from Dockerfile in the project root
+pg_node_image: "pg-cluster-node:latest"
+pg_node_dockerfile_path: "{{ playbook_dir }}"
+
+# etcd runs INSIDE each pg container (no separate etcd container)
+# etcd forms a 3-member cluster using container IPs over the Docker network
+# Ports 2379 (client) and 2380 (peer) are internal — no host mapping required
+
+# PostgreSQL node containers
+# pg_port:          host-side port (5432 inside container)
+# patroni_port:     host-side port (8008 inside container)
+# pg_exporter_port: host-side port (9194 inside container)
+# pgbouncer_port:   host-side port (6432 inside container)
+pg_containers:
+  - name: pg1
+    ip: "172.20.0.11"
+    ssh_port: 2221
+    pg_port: 5433
+    patroni_port: 8011
+    pg_exporter_port: 9194
+    pgbouncer_port: 6433
+  - name: pg2
+    ip: "172.20.0.12"
+    ssh_port: 2222
+    pg_port: 5434
+    patroni_port: 8012
+    pg_exporter_port: 9195
+    pgbouncer_port: 6434
+  - name: pg3
+    ip: "172.20.0.13"
+    ssh_port: 2223
+    pg_port: 5435
+    patroni_port: 8013
+    pg_exporter_port: 9196
+    pgbouncer_port: 6435
+
+# Dedicated pgBouncer routing container (always routes to the current leader)
+pgbouncer_container_name: "pg-bouncer"
+pgbouncer_ip: "172.20.0.20"
+pgbouncer_host_port: 5436      # clients connect here; routes to leader
+pgbouncer_container_port: 6432 # pgBouncer listens on this inside the container
+
+# Docker named volumes
+pg_data_volume_prefix: "pg-data"
+pg_log_volume_prefix: "pg-logs"
+pg_backup_volume: "pg-backups"
+
+# SSH key for Ansible access to containers
+ansible_ssh_public_key_path: "~/.ssh/id_rsa.pub"

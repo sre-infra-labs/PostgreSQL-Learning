@@ -1,0 +1,45 @@
+# DBA Input Variables for Docker-based PostgreSQL 18 Cluster
+# Modify these values before running the playbook
+
+debug: true
+
+# Cluster name — must be unique across all clusters
+patroni_cluster_name: "pg-docker-cls1"
+pgbackrest_stanza_name: "pg-docker-cls1"
+
+# ReInit Standby — set to true ONLY when rebuilding after a failure (skips package install)
+# reinit_cluster: true
+# cleanup_pgbackrest_backups: true
+
+# PostgreSQL version (PGDG repo)
+postgresql_version: "18"
+postgresql_port: "5432"
+
+# Hardware info (Docker container resources — adjust based on your Mac's allocation)
+server_hardware:
+  cpu_count: 2
+  ram_gb: 4
+  disk_gb: 20
+
+# postgresql.conf tuning params
+pg_params:
+  work_mem: "4MB"
+  maintenance_work_mem: "256MB"
+
+# Application database and users
+db_name: "dba"
+db_user_rw: dba_rw
+db_user_ro: dba_ro
+
+# Docker network (pre-existing network is used; will be created if absent)
+docker_network_name: "pg-cluster-net"
+
+# etcd DCS — runs INSIDE each pg container (3-member cluster)
+# etcd_hosts is auto-built from inventory IPs in defaults/main.yml — no override needed
+etcd_version: "3.5.17"
+
+# pgBouncer settings (installed inside each pg container)
+pgbouncer_listen_port: 6432
+pgbouncer_pool_mode: "transaction"
+pgbouncer_max_client_conn: 200
+pgbouncer_default_pool_size: 25

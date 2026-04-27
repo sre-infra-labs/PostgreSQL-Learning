@@ -1,0 +1,36 @@
+---
+- name: Install PostgreSQL 18 Cluster in Docker containers
+  hosts: all
+  become: true
+  become_user: root
+  gather_facts: true
+  vars_files:
+    - sensitive-values
+    - vars/dba_vars.yml
+  collections:
+    - community.postgresql
+
+  pre_tasks:
+    - name: Starting PostgreSQL Cluster Installation
+      ansible.builtin.debug:
+        msg: "Installing PostgreSQL 18 with Patroni + etcd + pgbackrest + pgbouncer + pg_exporter"
+
+  roles:
+    - role: roles/pg_cluster
+
+  post_tasks:
+    - name: PostgreSQL Cluster Installation Completed
+      ansible.builtin.debug:
+        msg: "PostgreSQL 18 cluster installation completed successfully!"
+
+# Full install:
+#   ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
+#
+# Reinitialize cluster (after failure):
+#   ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass -e reinit_cluster=true
+#
+# Reinitialize and clean backups:
+#   ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass -e reinit_cluster=true -e cleanup_pgbackrest_backups=true
+#
+# Run specific task only:
+#   ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass --tags pgbouncer

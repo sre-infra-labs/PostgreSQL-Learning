@@ -1,0 +1,22 @@
+---
+- name: Check if pg-cluster-node image already exists
+  community.docker.docker_image_info:
+    name: "{{ pg_node_image }}"
+  register: image_info
+
+- name: Build pg-cluster-node Docker image from project Dockerfile
+  community.docker.docker_image:
+    name: pg-cluster-node
+    tag: latest
+    build:
+      path: "{{ pg_node_dockerfile_path }}"
+      dockerfile: "{{ pg_node_dockerfile_path }}/Dockerfile"
+      pull: false
+    source: build
+    force_source: false
+  when: image_info.images | length == 0
+  register: build_result
+
+- name: Image status
+  ansible.builtin.debug:
+    msg: "{{ 'Image built successfully' if (build_result.changed | default(false)) else 'Image already up to date' }}"

@@ -1,0 +1,4 @@
+PG_SUPERUSER_PWD: Pa$$w0rd
+DB_USER_RW_PASSWORD: Pa$$w0rd
+DB_USER_RO_PASSWORD: Pa$$w0rd
+PGBACKREST_REPO1_PATH: /var/lib/pgbackrest

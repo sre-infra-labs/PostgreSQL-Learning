@@ -1,0 +1,35 @@
+---
+- name: Setup Docker Infrastructure for PostgreSQL Cluster
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars_files:
+    - sensitive-values
+    - vars/dba_vars.yml
+  collections:
+    - community.docker
+
+  pre_tasks:
+    - name: Starting Docker Infrastructure Setup
+      ansible.builtin.debug:
+        msg: "Setting up Docker infrastructure for 3-node PostgreSQL 18 cluster (Patroni + etcd)"
+
+  roles:
+    - role: roles/docker_infrastructure
+
+  post_tasks:
+    - name: Docker Infrastructure Setup Completed
+      ansible.builtin.debug:
+        msg:
+          - "Docker infrastructure is ready!"
+          - "  pg1  => SSH: localhost:2221 | PG: localhost:5433 | Patroni: localhost:8011 | Exporter: localhost:9194"
+          - "  pg2  => SSH: localhost:2222 | PG: localhost:5434 | Patroni: localhost:8012 | Exporter: localhost:9195"
+          - "  pg3  => SSH: localhost:2223 | PG: localhost:5435 | Patroni: localhost:8013 | Exporter: localhost:9196"
+          - "  etcd => localhost:2379"
+          - "  pgbouncer => localhost:5436 (leader routing)"
+          - ""
+          - "Next: ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass"
+
+# ansible-playbook playbook-setup-docker.yml
+# ansible-playbook playbook-setup-docker.yml --tags network    # only network
+# ansible-playbook playbook-setup-docker.yml --tags containers # only containers

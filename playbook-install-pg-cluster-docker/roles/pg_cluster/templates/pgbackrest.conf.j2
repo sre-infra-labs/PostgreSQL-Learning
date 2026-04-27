@@ -1,0 +1,19 @@
+
+[global]
+repo1-type={{ pgbackrest_repo1_type | default('posix') }}
+repo1-path={{ pgbackrest_repo1_path | default('/var/lib/pgbackrest') }}
+repo1-retention-full={{ pgbackrest_repo1_retention_full | default(7) }}
+repo1-retention-archive-type=full
+
+log-level-console=info
+log-level-file=debug
+
+process-max={{ server_hardware['cpu_count'] | default(2) }}
+compress-type={{ pgbackrest_compress_type | default('lz4') }}
+compress-level=3
+
+archive-async=y
+spool-path=/var/spool/pgbackrest
+
+[{{ pgbackrest_stanza_name }}]
+pg1-path={{ pgbackrest_pg1_path | default(postgresql_data_dir) }}

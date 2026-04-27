@@ -1,0 +1,45 @@
+; pgBouncer configuration — managed by Ansible
+; Patroni callback updates [databases] section on leader change
+
+[databases]
+; Route all connections to local PostgreSQL (Patroni manages which node is primary)
+* = host=127.0.0.1 port={{ postgresql_port }}
+
+; Application database shorthand
+{{ db_name }} = host=127.0.0.1 port={{ postgresql_port }} dbname={{ db_name }}
+
+[pgbouncer]
+logfile          = /var/log/pgbouncer/pgbouncer.log
+pidfile          = /var/run/postgresql/pgbouncer.pid
+
+listen_addr      = 0.0.0.0
+listen_port      = {{ pgbouncer_listen_port | default(6432) }}
+
+auth_type        = scram-sha-256
+auth_file        = /etc/pgbouncer/userlist.txt
+
+pool_mode        = {{ pgbouncer_pool_mode | default('transaction') }}
+
+max_client_conn  = {{ pgbouncer_max_client_conn | default(200) }}
+default_pool_size = {{ pgbouncer_default_pool_size | default(25) }}
+min_pool_size    = 5
+reserve_pool_size = 5
+reserve_pool_timeout = 3
+
+server_lifetime  = 3600
+server_idle_timeout = 600
+client_idle_timeout = 600
+
+server_reset_query = DISCARD ALL
+
+; Logging
+log_connections  = 0
+log_disconnections = 0
+log_pooler_errors = 1
+stats_period     = 60
+
+ignore_startup_parameters = extra_float_digits
+
+; Admin access
+admin_users      = {{ patroni_superuser_username }}
+stats_users      = {{ patroni_superuser_username }},{{ db_user_ro }}

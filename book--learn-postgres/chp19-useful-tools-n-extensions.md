@@ -31,6 +31,7 @@ pg_activity is a htop like application for PostgreSQL server activity monitoring
 
 [pgmetrics](https://pgmetrics.io/)
 pgmetrics collects a lot of information and statistics from a running PostgreSQL server and displays it in easy-to-read text format or export it as JSON for scripting.
+pgDash is monitoring application built on top of pgmetrics. https://pgdash.io/.
 
 pgexporter
 pgexporter is Prometheus exporter for PostgreSQL server metrics.

@@ -1,0 +1,75 @@
+---
+- name: Inside pg_cluster/tasks/main.yml
+  ansible.builtin.debug:
+    msg: "Installing PostgreSQL {{ postgresql_version }} cluster with Patroni + etcd + pgbackrest + pgbouncer"
+
+- name: Include defaults/creds.yml
+  include_vars:
+    file: "{{ role_path }}/defaults/creds.yml"
+
+- name: Include defaults/dba_vars.yml
+  include_vars:
+    file: "{{ role_path }}/defaults/dba_vars.yml"
+
+- name: Confirm before reinitializing cluster
+  ansible.builtin.pause:
+    prompt: "WARNING: Reinitializing the cluster will delete all data. Type 'yes' to continue:"
+  register: reinit_confirmation
+  when: reinit_cluster is defined and reinit_cluster | bool
+  delegate_to: localhost
+  run_once: true
+
+- name: Abort if user did not confirm reinit
+  ansible.builtin.fail:
+    msg: "Cluster reinitialization aborted by user."
+  when:
+    - reinit_cluster is defined and reinit_cluster | bool
+    - reinit_confirmation.user_input != "yes"
+
+- name: Run prechecks
+  include_tasks: custom/prechecks.yml
+  tags: prechecks
+
+- name: Setup PGDG repository
+  include_tasks: custom/repository.yml
+  tags: repository
+  when: not (reinit_cluster is defined and reinit_cluster | bool)
+
+- name: Install packages
+  include_tasks: custom/packages.yml
+  tags: packages
+  when: not (reinit_cluster is defined and reinit_cluster | bool)
+
+- name: Configure .pgpass
+  include_tasks: custom/pgpass.yml
+  tags: pgpass
+
+- name: Install and configure etcd (inside container, 3-member cluster)
+  include_tasks: custom/etcd.yml
+  tags: etcd
+  when: not (reinit_cluster is defined and reinit_cluster | bool)
+
+- name: Install and configure Patroni
+  include_tasks: custom/patroni.yml
+  tags: patroni
+
+- name: Configure pgBackRest
+  include_tasks: custom/pgbackrest.yml
+  tags: pgbackrest
+
+- name: Install and configure pgBouncer
+  include_tasks: custom/pgbouncer.yml
+  tags: pgbouncer
+
+- name: Install pg_exporter
+  include_tasks: custom/pg_exporter.yml
+  tags: pg_exporter
+
+- name: Create application database and users
+  include_tasks: custom/user.yml
+  tags: users
+
+- name: Show Patroni cluster status
+  include_tasks: custom/patronictl_list.yml
+  tags: patronictl_list
+  when: inventory_hostname in groups['leader']

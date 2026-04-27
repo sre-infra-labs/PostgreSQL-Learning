@@ -1,0 +1,23 @@
+---
+- name: reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+  listen: 'systemd daemon-reload'
+
+- name: restart patroni
+  ansible.builtin.service:
+    name: patroni
+    state: restarted
+  listen: 'restart patroni'
+
+- name: reload pgbouncer
+  ansible.builtin.service:
+    name: pgbouncer
+    state: reloaded
+  listen: 'reload pgbouncer'
+
+- name: restart pg_exporter
+  ansible.builtin.service:
+    name: postgres_exporter
+    state: restarted
+  listen: 'restart pg_exporter'

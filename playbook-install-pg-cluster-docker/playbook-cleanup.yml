@@ -1,0 +1,201 @@
+---
+# Cleanup playbook — tears down the PostgreSQL Docker cluster so the full setup
+# can be run again from scratch. Designed for repeated learning / testing cycles.
+#
+# USAGE
+# ─────
+# Full cleanup (containers + volumes, keep image + network):
+#   ansible-playbook playbook-cleanup.yml
+#
+# Skip the confirmation prompt (for scripting):
+#   ansible-playbook playbook-cleanup.yml -e skip_confirm=true
+#
+# Also remove the Docker image (forces a full rebuild next time):
+#   ansible-playbook playbook-cleanup.yml -e remove_image=true
+#
+# Also remove the Docker network:
+#   ansible-playbook playbook-cleanup.yml -e remove_network=true
+#
+# Nuclear option — remove everything:
+#   ansible-playbook playbook-cleanup.yml -e remove_image=true -e remove_network=true
+#
+# Selective cleanup using tags:
+#   ansible-playbook playbook-cleanup.yml --tags containers
+#   ansible-playbook playbook-cleanup.yml --tags volumes
+#   ansible-playbook playbook-cleanup.yml --tags image
+#   ansible-playbook playbook-cleanup.yml --tags network
+
+- name: Cleanup Docker PostgreSQL Cluster
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    # --- what to clean (override with -e) ---
+    remove_containers: true    # stop + remove pg1, pg2, pg3, pg-bouncer
+    remove_volumes:    true    # remove all named Docker volumes
+    remove_image:      false   # remove pg-cluster-node:latest image (slow to rebuild)
+    remove_network:    false   # remove Docker network (skip if it pre-existed)
+    skip_confirm:      false   # set true to bypass the confirmation prompt
+
+    # --- derived from docker_infrastructure defaults ---
+    _all_containers:
+      - pg1
+      - pg2
+      - pg3
+      - pg-bouncer
+
+    _all_volumes:
+      - pg-data-pg1
+      - pg-data-pg2
+      - pg-data-pg3
+      - pg-logs-pg1
+      - pg-logs-pg2
+      - pg-logs-pg3
+      - pg-backups
+
+    _docker_image:   "pg-cluster-node:latest"
+    _docker_network: "pg-cluster-net"
+
+  pre_tasks:
+    - name: Show cleanup plan
+      ansible.builtin.debug:
+        msg:
+          - "======================================================"
+          - "  PostgreSQL Docker Cluster — Cleanup Plan"
+          - "======================================================"
+          - "  Containers  : {{ _all_containers | join(', ') }}"
+          - "  Volumes     : {{ _all_volumes | join(', ') }}"
+          - "  Image       : {{ _docker_image }}  (remove={{ remove_image }})"
+          - "  Network     : {{ _docker_network }} (remove={{ remove_network }})"
+          - "======================================================"
+
+    - name: Confirm destructive cleanup
+      ansible.builtin.pause:
+        prompt: |
+          WARNING: This will permanently delete all containers and data volumes.
+          Type 'yes' to continue, anything else to abort
+      register: _confirm
+      when: not (skip_confirm | bool)
+
+    - name: Abort if not confirmed
+      ansible.builtin.fail:
+        msg: "Cleanup aborted."
+      when:
+        - not (skip_confirm | bool)
+        - _confirm.user_input | lower != 'yes'
+
+  tasks:
+
+    # ------------------------------------------------------------------ #
+    #  CONTAINERS                                                          #
+    # ------------------------------------------------------------------ #
+    - name: Stop containers
+      ansible.builtin.command: docker stop {{ item }}
+      loop: "{{ _all_containers }}"
+      ignore_errors: true
+      changed_when: false
+      tags: containers
+      when: remove_containers | bool
+
+    - name: Remove containers
+      community.docker.docker_container:
+        name: "{{ item }}"
+        state: absent
+        force_kill: true
+      loop: "{{ _all_containers }}"
+      ignore_errors: true
+      tags: containers
+      when: remove_containers | bool
+
+    - name: Containers removed
+      ansible.builtin.debug:
+        msg: "Containers removed: {{ _all_containers | join(', ') }}"
+      tags: containers
+      when: remove_containers | bool
+
+    # ------------------------------------------------------------------ #
+    #  VOLUMES                                                             #
+    # ------------------------------------------------------------------ #
+    - name: Remove Docker named volumes
+      community.docker.docker_volume:
+        name: "{{ item }}"
+        state: absent
+      loop: "{{ _all_volumes }}"
+      ignore_errors: true
+      tags: volumes
+      when: remove_volumes | bool
+
+    - name: Volumes removed
+      ansible.builtin.debug:
+        msg: "Volumes removed: {{ _all_volumes | join(', ') }}"
+      tags: volumes
+      when: remove_volumes | bool
+
+    # ------------------------------------------------------------------ #
+    #  IMAGE (optional — slow to rebuild, skipped by default)             #
+    # ------------------------------------------------------------------ #
+    - name: Remove pg-cluster-node Docker image
+      community.docker.docker_image:
+        name: "{{ _docker_image }}"
+        state: absent
+        force_absent: true
+      ignore_errors: true
+      tags: image
+      when: remove_image | bool
+
+    - name: Image removed
+      ansible.builtin.debug:
+        msg: "Image '{{ _docker_image }}' removed — will be rebuilt on next Phase 1 run"
+      tags: image
+      when: remove_image | bool
+
+    # ------------------------------------------------------------------ #
+    #  NETWORK (optional — skip if the network pre-existed)               #
+    # ------------------------------------------------------------------ #
+    - name: Remove Docker network
+      community.docker.docker_network:
+        name: "{{ _docker_network }}"
+        state: absent
+        force: true
+      ignore_errors: true
+      tags: network
+      when: remove_network | bool
+
+    - name: Network removed
+      ansible.builtin.debug:
+        msg: "Network '{{ _docker_network }}' removed"
+      tags: network
+      when: remove_network | bool
+
+    # ------------------------------------------------------------------ #
+    #  KNOWN HOSTS — remove stale SSH entries for containers              #
+    # ------------------------------------------------------------------ #
+    - name: Remove stale SSH known_hosts entries for container ports
+      ansible.builtin.known_hosts:
+        name: "[127.0.0.1]:{{ item }}"
+        state: absent
+      loop:
+        - 2221
+        - 2222
+        - 2223
+        - 2224
+      ignore_errors: true
+      tags: containers
+
+  post_tasks:
+    - name: Cleanup complete — ready for a fresh setup run
+      ansible.builtin.debug:
+        msg:
+          - "======================================================"
+          - "  Cleanup done!  Run the setup again with:"
+          - ""
+          - "  Step 1 (Docker infra):"
+          - "    ansible-playbook playbook-setup-docker.yml \\"
+          - "      --vault-password-file=vault-pass"
+          - ""
+          - "  Step 2 (PG cluster install):"
+          - "    ansible-playbook -i hosts.yml \\"
+          - "      playbook-install-pg-cluster.yml \\"
+          - "      --vault-password-file=vault-pass"
+          - "======================================================"
