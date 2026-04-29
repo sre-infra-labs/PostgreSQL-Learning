@@ -44,3 +44,26 @@ pgbouncer_listen_port: 6432
 pgbouncer_pool_mode: "transaction"
 pgbouncer_max_client_conn: 200
 pgbouncer_default_pool_size: 25
+
+# HAProxy settings (installed inside each pg container)
+# Port 5000 → primary-only write traffic (checks GET /primary on Patroni REST API)
+# Port 5001 → replica read traffic     (checks GET /replica on Patroni REST API)
+# Port 7000 → HAProxy stats HTTP UI
+haproxy_write_port: 5000
+haproxy_read_port: 5001
+haproxy_stats_port: 7000
+haproxy_stats_user: admin
+
+# Keepalived VRRP settings (installed inside each pg container)
+# VIP 172.18.0.10 floats to whichever node is the Patroni primary
+# Connect via VIP:5000 (write) or VIP:5001 (read) for fully HA access
+keepalived_vip: "172.18.0.10"          # primary/write VIP → always points to Patroni leader
+keepalived_replica_vip: "172.18.0.9"  # replica VIP → sync standby (sync mode) or any healthy replica
+keepalived_vip_prefix: "24"
+keepalived_interface: "eth0"
+keepalived_virtual_router_id: 51      # VI_PRIMARY=51, VI_REPLICA=52
+keepalived_auth_pass: "pglabvr1"
+keepalived_check_interval: 2
+keepalived_check_rise: 2
+keepalived_check_fall: 3
+keepalived_weight: 100

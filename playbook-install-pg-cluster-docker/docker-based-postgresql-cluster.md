@@ -136,7 +136,7 @@ ansible-galaxy collection install community.docker community.postgresql
 ### 3. Ensure an SSH key exists
 
 ```bash
-ls ~/.ssh/id_rsa.pub 2>/dev/null || ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""
+ls ~/.ssh/id_ed25519.pub 2>/dev/null || ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ""
 ```
 
 ### 4. Docker Desktop must be running
@@ -289,9 +289,9 @@ ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
   --vault-password-file=vault-pass -e reinit_cluster=true -e cleanup_pgbackrest_backups=true
 
 # SSH into containers
-ssh -i ~/.ssh/id_rsa -p 2221 -o StrictHostKeyChecking=no ansible@127.0.0.1   # pg1
-ssh -i ~/.ssh/id_rsa -p 2222 -o StrictHostKeyChecking=no ansible@127.0.0.1   # pg2
-ssh -i ~/.ssh/id_rsa -p 2223 -o StrictHostKeyChecking=no ansible@127.0.0.1   # pg3
+ssh -i ~/.ssh/id_ed25519 -p 2221 -o StrictHostKeyChecking=no ansible@127.0.0.1   # pg1
+ssh -i ~/.ssh/id_ed25519 -p 2222 -o StrictHostKeyChecking=no ansible@127.0.0.1   # pg2
+ssh -i ~/.ssh/id_ed25519 -p 2223 -o StrictHostKeyChecking=no ansible@127.0.0.1   # pg3
 
 # Stop / restart all containers
 docker stop pg1 pg2 pg3 pg-bouncer

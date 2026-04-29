@@ -21,3 +21,15 @@
     name: postgres_exporter
     state: restarted
   listen: 'restart pg_exporter'
+
+- name: reload haproxy
+  ansible.builtin.service:
+    name: haproxy
+    state: reloaded
+  listen: 'reload haproxy'
+
+- name: restart keepalived
+  ansible.builtin.service:
+    name: keepalived
+    state: restarted
+  listen: 'restart keepalived'

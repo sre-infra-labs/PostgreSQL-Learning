@@ -13,7 +13,7 @@
   pre_tasks:
     - name: Starting PostgreSQL Cluster Installation
       ansible.builtin.debug:
-        msg: "Installing PostgreSQL 18 with Patroni + etcd + pgbackrest + pgbouncer + pg_exporter"
+        msg: "Installing PostgreSQL 18 with Patroni + etcd + pgbackrest + pgbouncer + pg_exporter + HAProxy + Keepalived"
 
   roles:
     - role: roles/pg_cluster
@@ -34,3 +34,4 @@
 #
 # Run specific task only:
 #   ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass --tags pgbouncer
+#   ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass --tags haproxy,keepalived

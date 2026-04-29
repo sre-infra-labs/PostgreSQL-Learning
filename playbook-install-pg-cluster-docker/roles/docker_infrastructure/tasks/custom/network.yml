@@ -1,25 +1,19 @@
 ---
 - name: Check if Docker network '{{ docker_network_name }}' exists
-  community.docker.docker_network_info:
-    name: "{{ docker_network_name }}"
-  register: network_info
+  ansible.builtin.command: docker network inspect {{ docker_network_name }}
+  register: network_inspect
+  failed_when: false
+  changed_when: false
 
-- name: Network already exists — using it
+- name: Fail if required network does not exist
+  ansible.builtin.fail:
+    msg: >
+      Docker network '{{ docker_network_name }}' does not exist.
+      This is a shared lab network — create it first:
+        docker network create --driver bridge --subnet={{ docker_network_subnet }} {{ docker_network_name }}
+  when: network_inspect.rc != 0
+
+- name: Network exists — attaching pg containers to it
   ansible.builtin.debug:
-    msg: "Network '{{ docker_network_name }}' exists ({{ (network_info.networks[0].IPAM.Config[0].Subnet) if network_info.networks else 'unknown' }}) — attaching pg containers to it"
-  when: network_info.networks | length > 0
-
-- name: Create Docker network '{{ docker_network_name }}' (only if absent)
-  community.docker.docker_network:
-    name: "{{ docker_network_name }}"
-    driver: "{{ docker_network_driver }}"
-    ipam_config:
-      - subnet: "{{ docker_network_subnet }}"
-        gateway: "{{ docker_network_gateway }}"
-    state: present
-  when: network_info.networks | length == 0
-
-- name: New network created
-  ansible.builtin.debug:
-    msg: "Network '{{ docker_network_name }}' created ({{ docker_network_subnet }})"
-  when: network_info.networks | length == 0
+    msg: "Network '{{ docker_network_name }}' exists — pg containers will be attached to it"
+  when: network_inspect.rc == 0

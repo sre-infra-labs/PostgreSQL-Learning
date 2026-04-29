@@ -14,16 +14,33 @@
   retries: 3
   environment: "{{ proxy_env | default({}) }}"
 
-- name: Install PostgreSQL {{ postgresql_version }} packages and extensions
+- name: Install PostgreSQL {{ postgresql_version }} required packages
   ansible.builtin.package:
     name: "{{ item }}"
     state: present
-  loop: "{{ postgres_packages }}"
+  loop: "{{ postgres_packages_required }}"
   register: pg_pkg_status
   until: pg_pkg_status is success
   delay: 5
   retries: 3
   environment: "{{ proxy_env | default({}) }}"
+
+- name: Install optional PostgreSQL extensions (skip if not yet in PGDG for PG{{ postgresql_version }})
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ postgres_packages_optional }}"
+  register: pg_ext_status
+  ignore_errors: true
+  environment: "{{ proxy_env | default({}) }}"
+
+- name: Report skipped optional extensions
+  ansible.builtin.debug:
+    msg: "Optional extension not available (skipped): {{ item.item }}"
+  loop: "{{ pg_ext_status.results }}"
+  when: item.failed | default(false)
+  loop_control:
+    label: "{{ item.item }}"
 
 - name: Drop default PostgreSQL cluster ({{ postgresql_version }}/main) if present
   ansible.builtin.command: >
@@ -38,29 +55,23 @@
     enabled: no
   ignore_errors: true
 
-- name: Install Patroni packages
+- name: Install Patroni apt dependencies (psutil, etcd3 library)
   ansible.builtin.package:
     name: "{{ item }}"
     state: present
   loop: "{{ patroni_packages }}"
-  register: patroni_pkg_status
-  until: patroni_pkg_status is success
+  register: patroni_dep_status
+  until: patroni_dep_status is success
   delay: 5
   retries: 3
   environment: "{{ proxy_env | default({}) }}"
 
-- name: Install python3-etcd3 for Patroni (apt)
-  ansible.builtin.package:
-    name: python3-etcd3
-    state: present
-  register: etcd3_apt
-  ignore_errors: true
-
-- name: Install etcd3 library via pip (fallback if apt fails)
+- name: Install Patroni {{ patroni_install_version }} via pip
   ansible.builtin.pip:
-    name: etcd3
+    name: "patroni[etcd3]=={{ patroni_install_version }}"
     state: present
-  when: etcd3_apt is failed
+    executable: pip3
+    extra_args: "--break-system-packages"
 
 - name: Ensure postgres user exists
   ansible.builtin.user:
@@ -81,11 +92,11 @@
   when: pg_wait_tracer_enabled | default(false) | bool
 
 - name: Clone pg_wait_tracer repository
-  ansible.builtin.git:
-    repo: "{{ pg_wait_tracer_repo }}"
-    dest: /tmp/pg_wait_tracer
-    version: "{{ pg_wait_tracer_branch }}"
-    force: true
+  ansible.builtin.shell: |
+    rm -rf /tmp/pg_wait_tracer
+    git clone --depth 1 --branch {{ pg_wait_tracer_branch }} {{ pg_wait_tracer_repo }} /tmp/pg_wait_tracer
+  environment:
+    GIT_TERMINAL_PROMPT: "0"
   when: pg_wait_tracer_enabled | default(false) | bool
 
 - name: Build and install pg_wait_tracer

@@ -24,21 +24,11 @@
     state: directory
     mode: "0750"
 
-- name: Patch Patroni systemd service — config path
-  ansible.builtin.lineinfile:
-    path: /usr/lib/systemd/system/patroni.service
-    regexp: '^(\s*)ConditionPathExists=.*$'
-    line: '\1ConditionPathExists=/etc/patroni/patroni.yml'
-    backrefs: yes
-    backup: yes
-  notify: reload systemd daemon
-
-- name: Patch Patroni systemd service — ExecStart path
-  ansible.builtin.lineinfile:
-    path: /usr/lib/systemd/system/patroni.service
-    regexp: '^(\s*)ExecStart=(.+patroni)\s+.*$'
-    line: '\1ExecStart=\2 /etc/patroni/patroni.yml'
-    backrefs: yes
+- name: Deploy Patroni systemd service file
+  ansible.builtin.template:
+    src: "{{ role_path }}/templates/patroni.service.j2"
+    dest: /etc/systemd/system/patroni.service
+    mode: "0644"
   notify: reload systemd daemon
 
 - name: Create PostgreSQL log directory
@@ -95,6 +85,15 @@
 - name: Reload systemd daemon
   ansible.builtin.systemd:
     daemon_reload: yes
+
+- name: Ensure locales package is installed
+  ansible.builtin.package:
+    name: locales
+    state: present
+
+- name: Generate {{ postgresql_locale }} locale
+  ansible.builtin.command: locale-gen {{ postgresql_locale }}
+  changed_when: true
 
 # --- Start Patroni on Leader first, then Replicas ---
 

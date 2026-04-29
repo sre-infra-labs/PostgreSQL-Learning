@@ -63,7 +63,7 @@
           LEADER_IP=$(find_leader)
           if [ -n "$LEADER_IP" ]; then
             sed -i "s|^host=.*|host=${LEADER_IP}|" $PGBOUNCER_INI
-            systemctl reload pgbouncer 2>/dev/null || pgbouncer -R $PGBOUNCER_INI
+            systemctl reload pgbouncer 2>/dev/null || systemctl restart pgbouncer 2>/dev/null
           fi
           ;;
         on_start|on_stop|on_restart)

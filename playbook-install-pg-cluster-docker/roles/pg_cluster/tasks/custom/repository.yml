@@ -26,10 +26,9 @@
     state: present
     update_cache: no
 
-- name: Update apt cache
+- name: Force apt-get update to pick up PGDG packages
   ansible.builtin.apt:
     update_cache: yes
-    cache_valid_time: 3600
 
 - name: End pg_cluster/custom/repository.yml
   ansible.builtin.debug:

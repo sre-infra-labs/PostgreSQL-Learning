@@ -11,7 +11,9 @@
   ansible.builtin.pause:
     prompt: "WARNING: Reinitializing the cluster will delete all data. Type 'yes' to continue:"
   register: reinit_confirmation
-  when: reinit_cluster is defined and reinit_cluster | bool
+  when:
+    - reinit_cluster is defined and reinit_cluster | bool
+    - not (skip_confirm is defined and skip_confirm | bool)
   delegate_to: localhost
   run_once: true
 
@@ -20,7 +22,8 @@
     msg: "Cluster reinitialization aborted by user."
   when:
     - reinit_cluster is defined and reinit_cluster | bool
-    - reinit_confirmation.user_input != "yes"
+    - not (skip_confirm is defined and skip_confirm | bool)
+    - reinit_confirmation.user_input | default('') != "yes"
 
 - name: Run prechecks
   include_tasks: custom/prechecks.yml
@@ -43,7 +46,6 @@
 - name: Install and configure etcd (inside container, 3-member cluster)
   include_tasks: custom/etcd.yml
   tags: etcd
-  when: not (reinit_cluster is defined and reinit_cluster | bool)
 
 - name: Install and configure Patroni
   include_tasks: custom/patroni.yml
@@ -64,6 +66,14 @@
 - name: Create application database and users
   include_tasks: custom/user.yml
   tags: users
+
+- name: Install and configure HAProxy
+  include_tasks: custom/haproxy.yml
+  tags: haproxy
+
+- name: Install and configure Keepalived
+  include_tasks: custom/keepalived.yml
+  tags: keepalived
 
 - name: Show Patroni cluster status
   include_tasks: custom/patronictl_list.yml

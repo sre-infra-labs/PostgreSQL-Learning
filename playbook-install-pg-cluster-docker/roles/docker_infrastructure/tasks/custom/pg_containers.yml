@@ -41,6 +41,9 @@
       - "{{ item.patroni_port }}:8008"
       - "{{ item.pg_exporter_port }}:9194"
       - "{{ item.pgbouncer_port }}:6432"
+      - "{{ item.haproxy_write_port }}:5000"
+      - "{{ item.haproxy_read_port }}:5001"
+      - "{{ item.haproxy_stats_port }}:7000"
     volumes:
       - "{{ pg_data_volume_prefix }}-{{ item.name }}:/var/lib/postgresql"
       - "{{ pg_log_volume_prefix }}-{{ item.name }}:/var/log"
@@ -75,9 +78,12 @@
   ansible.builtin.debug:
     msg:
       - "{{ item.name }} | IP: {{ item.ip }}"
-      - "  SSH:        localhost:{{ item.ssh_port }}"
-      - "  PostgreSQL: localhost:{{ item.pg_port }}"
-      - "  Patroni:    localhost:{{ item.patroni_port }}"
-      - "  pg_exporter:localhost:{{ item.pg_exporter_port }}"
-      - "  pgBouncer:  localhost:{{ item.pgbouncer_port }}"
+      - "  SSH:           localhost:{{ item.ssh_port }}"
+      - "  PostgreSQL:    localhost:{{ item.pg_port }}"
+      - "  Patroni:       localhost:{{ item.patroni_port }}"
+      - "  pg_exporter:   localhost:{{ item.pg_exporter_port }}"
+      - "  pgBouncer:     localhost:{{ item.pgbouncer_port }}"
+      - "  HAProxy write: localhost:{{ item.haproxy_write_port }} (primary only)"
+      - "  HAProxy read:  localhost:{{ item.haproxy_read_port }}  (replicas)"
+      - "  HAProxy stats: localhost:{{ item.haproxy_stats_port }} (HTTP UI)"
   loop: "{{ pg_containers }}"

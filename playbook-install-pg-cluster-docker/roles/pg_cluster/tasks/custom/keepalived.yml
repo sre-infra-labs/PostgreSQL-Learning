@@ -1,0 +1,43 @@
+---
+- name: Begin pg_cluster/custom/keepalived.yml
+  ansible.builtin.debug:
+    msg: "Installing Keepalived on {{ inventory_hostname }} — VIP: {{ keepalived_vip }} (VRID {{ keepalived_virtual_router_id }})"
+
+- name: Install Keepalived
+  ansible.builtin.package:
+    name: keepalived
+    state: present
+  environment: "{{ proxy_env | default({}) }}"
+
+- name: Allow binding to non-local IPs (needed when VIP is not yet assigned)
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-keepalived.conf
+    content: "net.ipv4.ip_nonlocal_bind = 1\n"
+    mode: "0644"
+
+- name: Apply keepalived sysctl
+  ansible.builtin.command: sysctl -p /etc/sysctl.d/99-keepalived.conf
+  changed_when: true
+  ignore_errors: true
+
+- name: Generate /etc/keepalived/keepalived.conf from template
+  ansible.builtin.template:
+    src: "{{ role_path }}/templates/keepalived.conf.j2"
+    dest: /etc/keepalived/keepalived.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart keepalived
+
+- name: Enable and start Keepalived service
+  ansible.builtin.systemd:
+    name: keepalived
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: End pg_cluster/custom/keepalived.yml
+  ansible.builtin.debug:
+    msg: >-
+      Keepalived started on {{ inventory_hostname }} (priority {{ 101 - groups['all'].index(inventory_hostname) }}) —
+      VIP {{ keepalived_vip }} will be held by whichever node is the Patroni primary.
