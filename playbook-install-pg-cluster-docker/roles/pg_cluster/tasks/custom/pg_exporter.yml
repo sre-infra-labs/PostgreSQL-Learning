@@ -1,36 +1,29 @@
 ---
-- name: Download postgres_exporter binary on localhost
+- name: Set postgres_exporter download architecture
+  ansible.builtin.set_fact:
+    pg_exporter_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}"
+
+- name: Download postgres_exporter {{ postgres_exporter_version }} into container
   ansible.builtin.get_url:
-    url: "https://github.com/prometheus-community/postgres_exporter/releases/download/v{{ postgres_exporter_version }}/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64.tar.gz"
-    dest: "/tmp/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64.tar.gz"
+    url: "https://github.com/prometheus-community/postgres_exporter/releases/download/v{{ postgres_exporter_version }}/postgres_exporter-{{ postgres_exporter_version }}.linux-{{ pg_exporter_arch }}.tar.gz"
+    dest: "/tmp/postgres_exporter-{{ postgres_exporter_version }}.linux-{{ pg_exporter_arch }}.tar.gz"
     mode: '0644'
-  delegate_to: localhost
-  run_once: true
-  become: false
 
-- name: Extract postgres_exporter archive on localhost
+- name: Extract postgres_exporter archive
   ansible.builtin.unarchive:
-    src: "/tmp/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64.tar.gz"
-    dest: "/tmp"
-    remote_src: false
-    creates: "/tmp/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64/postgres_exporter"
-  delegate_to: localhost
-  run_once: true
-  become: false
+    src: "/tmp/postgres_exporter-{{ postgres_exporter_version }}.linux-{{ pg_exporter_arch }}.tar.gz"
+    dest: /tmp/
+    remote_src: true
+    creates: "/tmp/postgres_exporter-{{ postgres_exporter_version }}.linux-{{ pg_exporter_arch }}/postgres_exporter"
 
-- name: Copy postgres_exporter binary to containers
+- name: Install postgres_exporter binary
   ansible.builtin.copy:
-    src: "/tmp/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64/postgres_exporter"
+    src: "/tmp/postgres_exporter-{{ postgres_exporter_version }}.linux-{{ pg_exporter_arch }}/postgres_exporter"
     dest: "/usr/local/bin/postgres_exporter"
     mode: '0755'
     owner: root
     group: root
-
-- name: Verify postgres_exporter binary
-  ansible.builtin.stat:
-    path: /usr/local/bin/postgres_exporter
-  register: exporter_stat
-  failed_when: not exporter_stat.stat.exists
+    remote_src: true
 
 - name: Create postgres_exporter system user
   ansible.builtin.user:

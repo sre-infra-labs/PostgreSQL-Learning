@@ -3,6 +3,33 @@
   ansible.builtin.debug:
     msg: "Running pre-installation checks"
 
+- name: Check Ansible version
+  ansible.builtin.fail:
+    msg: "Ansible {{ minimal_ansible_version }} or higher is required (found {{ ansible_version.full }})"
+  delegate_to: localhost
+  when: ansible_version.full is version(minimal_ansible_version, '<')
+
+# -------------------------------------------------------------------
+#  FRESH INSTALL GUARDS — skip these on reinit
+# -------------------------------------------------------------------
+- name: Check if data directory is already initialized
+  ansible.builtin.stat:
+    path: "{{ postgresql_data_dir }}/PG_VERSION"
+  register: pgdata_initialized
+  when: not (reinit_cluster is defined and reinit_cluster | bool)
+
+- name: Fail if data directory is already initialized
+  ansible.builtin.fail:
+    msg: "Data directory {{ postgresql_data_dir }} is already initialized. Use -e reinit_cluster=true to reinitialize."
+  when:
+    - not (reinit_cluster is defined and reinit_cluster | bool)
+    - pgdata_initialized.stat is defined
+    - pgdata_initialized.stat.exists | default(false)
+
+# -------------------------------------------------------------------
+#  REINIT CLEANUP — only runs when reinit_cluster=true
+#  etcd must already be running (from a previous install) for these
+# -------------------------------------------------------------------
 - name: Stop Patroni service (reinit mode)
   ansible.builtin.service:
     name: patroni
@@ -37,9 +64,19 @@
     - reinit_cluster is defined and reinit_cluster | bool
     - cleanup_pgbackrest_backups is defined and cleanup_pgbackrest_backups | bool
 
+- name: Check etcd is reachable before clearing keys (reinit mode)
+  ansible.builtin.uri:
+    url: "http://{{ hostvars[groups['all'][0]]['ip'] }}:2379/health"
+    method: GET
+    status_code: 200
+  register: etcd_check
+  ignore_errors: true
+  run_once: true
+  when: reinit_cluster is defined and reinit_cluster | bool
+
 - name: Remove Patroni cluster keys from etcd (reinit mode)
   ansible.builtin.uri:
-    url: "http://{{ etcd_hosts }}/v3/kv/deleterange"
+    url: "http://{{ hostvars[groups['all'][0]]['ip'] }}:2379/v3/kv/deleterange"
     method: POST
     body_format: json
     body:
@@ -48,60 +85,9 @@
     status_code: [200, 204]
   ignore_errors: true
   run_once: true
-  delegate_to: localhost
-  when: reinit_cluster is defined and reinit_cluster | bool
-
-- name: Check etcd connectivity
-  ansible.builtin.uri:
-    url: "http://{{ etcd_hosts }}/health"
-    method: GET
-    status_code: 200
-  register: etcd_check
-  failed_when: etcd_check.status != 200
-  delegate_to: localhost
-  run_once: true
-
-- name: Check if cluster already exists in etcd
-  ansible.builtin.uri:
-    url: "http://{{ etcd_hosts }}/v3/kv/range"
-    method: POST
-    body_format: json
-    body:
-      key: "{{ ('/service/' + patroni_cluster_name + '/leader') | b64encode }}"
-    status_code: [200]
-  register: etcd_cluster_check
-  delegate_to: localhost
-  run_once: true
-  failed_when: false
-
-- name: Fail if Patroni cluster already registered in etcd
-  ansible.builtin.fail:
-    msg: |
-      Patroni cluster '{{ patroni_cluster_name }}' already exists in etcd.
-      To reinitialize, run with: -e reinit_cluster=true
   when:
-    - not (reinit_cluster is defined and reinit_cluster | bool)
-    - etcd_cluster_check.json is defined
-    - etcd_cluster_check.json.kvs is defined
-    - etcd_cluster_check.json.kvs | length > 0
-
-- name: Check if data directory is already initialized
-  ansible.builtin.stat:
-    path: "{{ postgresql_data_dir }}/PG_VERSION"
-  register: pgdata_initialized
-
-- name: Fail if data directory is already initialized
-  ansible.builtin.fail:
-    msg: "Data directory {{ postgresql_data_dir }} is already initialized. Use -e reinit_cluster=true to reinitialize."
-  when:
-    - not (reinit_cluster is defined and reinit_cluster | bool)
-    - pgdata_initialized.stat.exists | default(false)
-
-- name: Check Ansible version
-  ansible.builtin.fail:
-    msg: "Ansible {{ minimal_ansible_version }} or higher is required (found {{ ansible_version.full }})"
-  delegate_to: localhost
-  when: ansible_version.full is version(minimal_ansible_version, '<')
+    - reinit_cluster is defined and reinit_cluster | bool
+    - etcd_check is not failed
 
 - name: End pg_cluster/custom/prechecks.yml
   ansible.builtin.debug:

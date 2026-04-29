@@ -9,7 +9,7 @@
 # USAGE
 # ─────
 # Standard cleanup (containers + volumes, keeps image + network):
-#   ansible-playbook playbook-cleanup.yml --vault-password-file=vault-pass
+#   ansible-playbook playbook-cleanup.yml
 #
 # Skip the confirmation prompt (for scripting / full cycle):
 #   ansible-playbook playbook-cleanup.yml -e skip_confirm=true
@@ -24,7 +24,7 @@
 #
 # Full cycle (cleanup → infra → install) in one command:
 #   ansible-playbook playbook-cleanup.yml -e skip_confirm=true && \
-#   ansible-playbook playbook-setup-docker.yml --vault-password-file=vault-pass && \
+#   ansible-playbook playbook-setup-docker.yml && \
 #   ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
 
 - name: Cleanup Docker PostgreSQL Cluster
@@ -72,7 +72,7 @@
           - "  Containers  : {{ _all_containers | join(', ') }}"
           - "  Volumes     : {{ _all_volumes | join(', ') }}"
           - "  Image       : {{ _docker_image }}  (remove={{ remove_image }})"
-          - "  Network     : {{ _docker_network }} (remove={{ remove_network }})"
+          - "  Network     : lab-network (never removed — shared with other lab containers)"
           - "======================================================"
 
     - name: Confirm destructive cleanup
@@ -178,13 +178,13 @@
           - "  Cleanup done!  Run the setup again with:"
           - ""
           - "  Step 1 — Docker infra:"
-          - "    ansible-playbook playbook-setup-docker.yml --vault-password-file=vault-pass"
+          - "    ansible-playbook playbook-setup-docker.yml"
           - ""
           - "  Step 2 — PG cluster install:"
           - "    ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass"
           - ""
           - "  Or run all three steps in one command:"
           - "    ansible-playbook playbook-cleanup.yml -e skip_confirm=true &&"
-          - "    ansible-playbook playbook-setup-docker.yml --vault-password-file=vault-pass &&"
+          - "    ansible-playbook playbook-setup-docker.yml &&"
           - "    ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass"
           - "======================================================"

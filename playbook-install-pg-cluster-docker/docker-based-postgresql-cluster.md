@@ -12,12 +12,12 @@ their Docker network IPs.
 ```
 Host (macOS)
 │
-├── Docker Network: pg-cluster-net (172.20.0.0/24)
+├── Docker Network: lab-network (172.18.0.0/16)  ← pre-existing shared network
 │   │
-│   ├── pg1  (172.20.0.11)  ← PostgreSQL 18 + Patroni + etcd (initial leader)
-│   ├── pg2  (172.20.0.12)  ← PostgreSQL 18 + Patroni + etcd (replica)
-│   ├── pg3  (172.20.0.13)  ← PostgreSQL 18 + Patroni + etcd (replica)
-│   └── pg-bouncer (172.20.0.20) ← pgBouncer leader-routing proxy
+│   ├── pg1  (172.18.0.11)  ← PostgreSQL 18 + Patroni + etcd (initial leader)
+│   ├── pg2  (172.18.0.12)  ← PostgreSQL 18 + Patroni + etcd (replica)
+│   ├── pg3  (172.18.0.13)  ← PostgreSQL 18 + Patroni + etcd (replica)
+│   └── pg-bouncer (172.18.0.20) ← pgBouncer leader-routing proxy
 │
 └── Docker Named Volume: pg-backups  (shared pgbackrest POSIX repo)
 
@@ -32,9 +32,9 @@ Port Mapping  (host → container)
 └──────────┴────────┴────────┴────────────┴──────────────┴────────────┘
 
 etcd cluster (inter-container, no host port mapping needed):
-  pg1: 172.20.0.11:2379 (client) / :2380 (peer)
-  pg2: 172.20.0.12:2379 (client) / :2380 (peer)
-  pg3: 172.20.0.13:2379 (client) / :2380 (peer)
+  pg1: 172.18.0.11:2379 (client) / :2380 (peer)
+  pg2: 172.18.0.12:2379 (client) / :2380 (peer)
+  pg3: 172.18.0.13:2379 (client) / :2380 (peer)
 ```
 
 ---
@@ -153,7 +153,7 @@ docker info   # should succeed
 
 ```bash
 cd playbook-install-pg-cluster-docker/
-echo 'Pa$$w0rd' > vault-pass
+echo 'YourVaultPassword' > vault-pass
 chmod 600 vault-pass
 ```
 
@@ -165,11 +165,11 @@ The `sensitive-values` file is already encrypted with vault. To change passwords
 ansible-vault edit sensitive-values --vault-password-file=vault-pass
 ```
 
-Current values (all set to `Pa$$w0rd`):
+Contents of `sensitive-values` (edit with vault, never put real passwords in docs):
 ```yaml
-PG_SUPERUSER_PWD:    Pa$$w0rd
-DB_USER_RW_PASSWORD: Pa$$w0rd
-DB_USER_RO_PASSWORD: Pa$$w0rd
+PG_SUPERUSER_PWD:      <your-pg-superuser-password>
+DB_USER_RW_PASSWORD:   <your-rw-user-password>
+DB_USER_RO_PASSWORD:   <your-ro-user-password>
 PGBACKREST_REPO1_PATH: /var/lib/pgbackrest
 ```
 
@@ -180,18 +180,18 @@ Edit `vars/dba_vars.yml` to adjust cluster name, PG version, hardware resources,
 ```yaml
 patroni_cluster_name: "pg-docker-cls1"
 postgresql_version: "18"
-docker_network_name: "pg-cluster-net"   # change to your existing Docker network if any
+docker_network_name: "lab-network"      # pre-existing shared Docker network
 etcd_version: "3.5.17"
 ```
 
 ### Step 4 — Run Phase 1: Docker Infrastructure
 
 ```bash
-ansible-playbook playbook-setup-docker.yml
+ansible-playbook playbook-setup-docker.yml    # no vault needed — no credentials used here
 ```
 
 What this does:
-- Creates (or verifies) Docker network `pg-cluster-net`
+- Verifies Docker network `lab-network` exists (never creates it — it's a shared network)
 - Builds `pg-cluster-node:latest` image from `Dockerfile`
 - Creates containers: `pg1`, `pg2`, `pg3` (Ubuntu 24.04 + systemd + SSH)
 - Creates container: `pg-bouncer` (pgBouncer leader-routing proxy)
@@ -223,7 +223,7 @@ What this does (on all 3 containers):
 docker exec -u postgres pg1 patronictl -c /etc/patroni/patroni.yml list
 
 # etcd cluster members
-docker exec pg1 etcdctl --endpoints=http://172.20.0.11:2379 member list
+docker exec pg1 etcdctl --endpoints=http://172.18.0.11:2379 member list
 
 # Connect directly to each node
 psql -h 127.0.0.1 -p 5433 -U postgres postgres   # pg1
@@ -240,7 +240,7 @@ curl -s http://localhost:9196/metrics | grep pg_up
 
 # etcd health on each node
 curl -s http://127.0.0.1:2379/health   # (from inside container via docker exec)
-docker exec pg1 etcdctl --endpoints=http://172.20.0.11:2379,http://172.20.0.12:2379,http://172.20.0.13:2379 endpoint health
+docker exec pg1 etcdctl --endpoints=http://172.18.0.11:2379,http://172.18.0.12:2379,http://172.18.0.13:2379 endpoint health
 ```
 
 ---
@@ -342,7 +342,7 @@ docker exec pg1 systemctl start patroni
 
 Docker Desktop manages port exposure via the `ports:` mapping defined in
 `roles/docker_infrastructure/defaults/main.yml`. All inter-container traffic
-(including etcd peer communication on port 2380) flows on the `pg-cluster-net`
+(including etcd peer communication on port 2380) flows on the `lab-network`
 internal Docker bridge network and does not need host-level firewall rules.
 
 Ports exposed to the host (macOS firewall may need to allow these if you enable
@@ -373,5 +373,5 @@ the macOS application firewall):
   Build may fail if the extension has not been updated for PG18 — the playbook warns
   and continues without failing the run.
 
-- **Passwords**: all credentials default to `Pa$$w0rd`. Change via:
-  `ansible-vault edit sensitive-values --vault-password-file=vault-pass`
+- **Passwords**: credentials are stored in the vault-encrypted `sensitive-values` file.
+  Edit with: `ansible-vault edit sensitive-values --vault-password-file=vault-pass`

@@ -63,6 +63,19 @@ pg_wait_tracer_branch: "main"
 postgres_user: "postgres"
 
 # -------------------------------------------------------------------
+# DBA config — override via vars/dba_vars.yml (set at playbook level)
+# -------------------------------------------------------------------
+postgresql_port:     "5432"
+db_name:             "dba"
+db_user_rw:          "dba_rw"
+db_user_ro:          "dba_ro"
+
+pgbouncer_listen_port:      6432
+pgbouncer_pool_mode:        "transaction"
+pgbouncer_max_client_conn:  200
+pgbouncer_default_pool_size: 25
+
+# -------------------------------------------------------------------
 # Credentials (set via creds.yml / sensitive-values vault)
 # -------------------------------------------------------------------
 db_password:            "{{ creds.PG_SUPERUSER_PWD }}"

@@ -4,7 +4,6 @@
   connection: local
   gather_facts: true
   vars_files:
-    - sensitive-values
     - vars/dba_vars.yml
   collections:
     - community.docker

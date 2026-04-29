@@ -7,10 +7,6 @@
   include_vars:
     file: "{{ role_path }}/defaults/creds.yml"
 
-- name: Include defaults/dba_vars.yml
-  include_vars:
-    file: "{{ role_path }}/defaults/dba_vars.yml"
-
 - name: Confirm before reinitializing cluster
   ansible.builtin.pause:
     prompt: "WARNING: Reinitializing the cluster will delete all data. Type 'yes' to continue:"
