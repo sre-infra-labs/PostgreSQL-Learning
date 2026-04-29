@@ -3,9 +3,13 @@
   community.docker.docker_network_info:
     name: "{{ docker_network_name }}"
   register: network_info
-  ignore_errors: true
 
-- name: Create Docker network '{{ docker_network_name }}'
+- name: Network already exists — using it
+  ansible.builtin.debug:
+    msg: "Network '{{ docker_network_name }}' exists ({{ (network_info.networks[0].IPAM.Config[0].Subnet) if network_info.networks else 'unknown' }}) — attaching pg containers to it"
+  when: network_info.networks | length > 0
+
+- name: Create Docker network '{{ docker_network_name }}' (only if absent)
   community.docker.docker_network:
     name: "{{ docker_network_name }}"
     driver: "{{ docker_network_driver }}"
@@ -13,8 +17,9 @@
       - subnet: "{{ docker_network_subnet }}"
         gateway: "{{ docker_network_gateway }}"
     state: present
-  when: not (network_info.exists | default(false))
+  when: network_info.networks | length == 0
 
-- name: Docker network is ready
+- name: New network created
   ansible.builtin.debug:
-    msg: "Network '{{ docker_network_name }}' is ready (subnet: {{ docker_network_subnet }})"
+    msg: "Network '{{ docker_network_name }}' created ({{ docker_network_subnet }})"
+  when: network_info.networks | length == 0
