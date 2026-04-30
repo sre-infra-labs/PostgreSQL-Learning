@@ -1229,3 +1229,24 @@ tee -a ~/.bashrc << 'EOF'
 export PATRONICTL_CONFIG_FILE=/etc/patroni/patroni.yml
 EOF
 ```
+
+
+## Add host entries inside docker
+```
+tee -a /etc/hosts << 'EOF'
+
+# PostgreSQL Docker cluster — lab-network 172.18.0.0/16
+172.18.0.11  pg1    # PostgreSQL :5433  pgBouncer :6433  Patroni :8011
+172.18.0.12  pg2    # PostgreSQL :5434  pgBouncer :6434  Patroni :8012
+172.18.0.13  pg3    # PostgreSQL :5435  pgBouncer :6435  Patroni :8013
+
+172.18.0.10 pg-primary pg-leader
+172.18.0.9  pg-replica
+EOF
+```
+
+## Take SSH of pg1 container
+```
+ssh -p 2221 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_ed25519 ansible@127.0.0.1 "patronictl -c /etc/patroni/patroni.yml list" 2>/dev/null
+```
+
