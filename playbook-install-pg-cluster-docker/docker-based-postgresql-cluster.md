@@ -16,12 +16,24 @@ Host (macOS)
 │   ├── 172.18.0.9  ← Keepalived Replica VIP  (floats to the highest-priority healthy replica)
 │   ├── 172.18.0.10 ← Keepalived Primary VIP  (floats to the Patroni leader)
 │   │
-│   ├── pg1  (172.18.0.11)  — PostgreSQL 18 + Patroni + etcd + pgBouncer + HAProxy + Keepalived
-│   ├── pg2  (172.18.0.12)  — PostgreSQL 18 + Patroni + etcd + pgBouncer + HAProxy + Keepalived
-│   └── pg3  (172.18.0.13)  — PostgreSQL 18 + Patroni + etcd + pgBouncer + HAProxy + Keepalived
+│   ├── pg1  (172.18.0.11)  — Leader         (primary)
+│   ├── pg2  (172.18.0.12)  — Sync Standby   (synchronous replica — confirms WAL before commit)
+│   └── pg3  (172.18.0.13)  — Replica        (asynchronous, nosync: true — never elected sync standby)
 │
 └── Docker Named Volume: pg-backups  (shared pgBackRest POSIX repo)
 ```
+
+### Replication Topology
+
+| Node | Designed Role   | Patroni Tag     | Notes                                    |
+|------|-----------------|-----------------|------------------------------------------|
+| pg1  | Leader          | —               | Primary; writes committed only after pg2 acks WAL |
+| pg2  | Sync Standby    | —               | `synchronous_node_count=1`; zero data loss on pg1 failure |
+| pg3  | Replica         | `nosync: true`  | Always async; never elected Sync Standby |
+
+Roles are dynamic — Patroni may promote pg2 or pg3 on failover. The designed topology is restored via
+`patronictl switchover` after recovery. pg3 can become leader in a disaster but will never hold the
+Sync Standby role.
 
 ### Port Mapping (host → container)
 
@@ -61,9 +73,10 @@ Notes:
   - VIPs are inside the Docker network. From Mac, use HAProxy host-mapped ports instead
     (localhost:15000 / 25000 / 35000 for writes; :15001 / 25001 / 35001 for reads).
 
-After failover (e.g. pg3 becomes new leader):
-  Keepalived detects /primary passes on pg3 → primary VIP (172.18.0.10) migrates to pg3
+After failover (e.g. pg2 promoted to leader after pg1 failure):
+  Keepalived detects /primary passes on pg2 → primary VIP (172.18.0.10) migrates to pg2
   HAProxy health checks catch up within 6–9 s (3 × inter=3s)
+  pg3 (nosync) becomes the only remaining replica; restore pg1 and switchover back when ready
 ```
 
 ---
@@ -214,9 +227,9 @@ export PGPASSWORD=$PGPWD_PERSONAL
 
 ```bash
 # No password prompt — resolved via ~/.pgpass
-psql -h pg1 -p 5433 -U postgres postgres    # replica
-psql -h pg2 -p 5434 -U postgres postgres    # leader
-psql -h pg3 -p 5435 -U postgres postgres    # replica
+psql -h pg1 -p 5433 -U postgres postgres    # leader
+psql -h pg2 -p 5434 -U postgres postgres    # sync standby
+psql -h pg3 -p 5435 -U postgres postgres    # replica (nosync)
 ```
 
 ### B. By hostname — pgBouncer (after /etc/hosts is set)
@@ -231,7 +244,7 @@ psql -h pg3 -p 6435 -U postgres postgres
 
 ```bash
 psql service=pg1            # direct PG on pg1
-psql service=pg2            # direct PG on pg2  (usually leader)
+psql service=pg2            # direct PG on pg2  (sync standby)
 psql service=pg3            # direct PG on pg3
 psql service=pg1-bouncer    # via pgBouncer on pg1
 psql service=pg1-rw         # as dba_rw on pg1
@@ -296,8 +309,8 @@ These require the containers to be recreated (see Ansible Operations below).
 
 ```bash
 # Write port on each node's HAProxy — all route to the current primary
-psql -h localhost -p 15000 -U postgres postgres   # pg1 HAProxy write
-psql -h localhost -p 25000 -U postgres postgres   # pg2 HAProxy write  ← usually primary
+psql -h localhost -p 15000 -U postgres postgres   # pg1 HAProxy write  ← usually primary
+psql -h localhost -p 25000 -U postgres postgres   # pg2 HAProxy write
 psql -h localhost -p 35000 -U postgres postgres   # pg3 HAProxy write
 
 # Read port on each node's HAProxy — all route to a healthy replica
@@ -378,52 +391,52 @@ docker exec pg2 patronictl -c /etc/patroni/patroni.yml reinit pg-docker-cls1 pg1
 export PGPASSWORD='Pg@Lab2026!'
 
 # Connect to specific node
-psql -h localhost -p 5433 -U postgres postgres   # pg1
-psql -h localhost -p 5434 -U postgres postgres   # pg2 (usually leader)
-psql -h localhost -p 5435 -U postgres postgres   # pg3
+psql -h localhost -p 5433 -U postgres postgres   # pg1 (usually leader)
+psql -h localhost -p 5434 -U postgres postgres   # pg2 (sync standby)
+psql -h localhost -p 5435 -U postgres postgres   # pg3 (replica)
 
-# Replication status (run on primary)
-psql -h localhost -p 5434 -U postgres postgres -c "
+# Replication status (run on primary — pg1)
+psql -h localhost -p 5433 -U postgres postgres -c "
   SELECT client_addr, state, sent_lsn, write_lsn, flush_lsn, replay_lsn,
          (sent_lsn - replay_lsn) AS replication_lag_bytes
   FROM pg_stat_replication;"
 
-# Replication lag in MB (run on primary)
-psql -h localhost -p 5434 -U postgres postgres -c "
+# Replication lag in MB (run on primary — pg1)
+psql -h localhost -p 5433 -U postgres postgres -c "
   SELECT client_addr,
          round((sent_lsn - replay_lsn) / 1048576.0, 2) AS lag_mb
   FROM pg_stat_replication;"
 
-# Check standby recovery status (run on replica)
-psql -h localhost -p 5433 -U postgres postgres -c "
+# Check standby recovery status (run on replica — pg2 or pg3)
+psql -h localhost -p 5434 -U postgres postgres -c "
   SELECT now() - pg_last_xact_replay_timestamp() AS replication_delay,
          pg_is_in_recovery(), pg_last_wal_receive_lsn(), pg_last_wal_replay_lsn();"
 
-# Active connections and sessions
-psql -h localhost -p 5434 -U postgres postgres -c "
+# Active connections and sessions (run on primary — pg1)
+psql -h localhost -p 5433 -U postgres postgres -c "
   SELECT count(*), state, wait_event_type, wait_event
   FROM pg_stat_activity GROUP BY state, wait_event_type, wait_event ORDER BY count DESC;"
 
-# Long-running queries (>30s)
-psql -h localhost -p 5434 -U postgres postgres -c "
+# Long-running queries (>30s) (run on primary — pg1)
+psql -h localhost -p 5433 -U postgres postgres -c "
   SELECT pid, now()-query_start AS duration, state, left(query,80) AS query
   FROM pg_stat_activity
   WHERE state != 'idle' AND query_start < now() - interval '30 seconds'
   ORDER BY duration DESC;"
 
-# pg_stat_statements top 10 by total time
-psql -h localhost -p 5434 -U postgres postgres -c "
+# pg_stat_statements top 10 by total time (run on primary — pg1)
+psql -h localhost -p 5433 -U postgres postgres -c "
   SELECT round(total_exec_time::numeric,2) AS total_ms,
          calls, round(mean_exec_time::numeric,2) AS mean_ms,
          left(query,80) AS query
   FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 10;"
 
 # Database sizes
-psql -h localhost -p 5434 -U postgres postgres -c "
+psql -h localhost -p 5433 -U postgres postgres -c "
   SELECT datname, pg_size_pretty(pg_database_size(datname)) FROM pg_database ORDER BY 2 DESC;"
 
 # Table bloat (top 10)
-psql -h localhost -p 5434 -U postgres postgres -c "
+psql -h localhost -p 5433 -U postgres postgres -c "
   SELECT schemaname, tablename,
          pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS total_size,
          n_dead_tup, n_live_tup
@@ -592,28 +605,28 @@ done
 # Show backup info (run from any node with access to shared volume)
 docker exec pg1 pgbackrest --stanza=pg-docker-cls1 info
 
-# Full backup (run on leader)
-docker exec pg2 pgbackrest --stanza=pg-docker-cls1 --log-level-console=info backup --type=full
+# Full backup (run on leader — pg1)
+docker exec pg1 pgbackrest --stanza=pg-docker-cls1 --log-level-console=info backup --type=full
 
 # Incremental backup
-docker exec pg2 pgbackrest --stanza=pg-docker-cls1 --log-level-console=info backup --type=incr
+docker exec pg1 pgbackrest --stanza=pg-docker-cls1 --log-level-console=info backup --type=incr
 
 # Differential backup
-docker exec pg2 pgbackrest --stanza=pg-docker-cls1 --log-level-console=info backup --type=diff
+docker exec pg1 pgbackrest --stanza=pg-docker-cls1 --log-level-console=info backup --type=diff
 
 # Check backup integrity
 docker exec pg1 pgbackrest --stanza=pg-docker-cls1 check
 
 # Restore (stop patroni first, then restore, then restart)
-docker exec pg2 systemctl stop patroni
-docker exec pg2 pgbackrest --stanza=pg-docker-cls1 --log-level-console=info restore --delta
-docker exec pg2 systemctl start patroni
+docker exec pg1 systemctl stop patroni
+docker exec pg1 pgbackrest --stanza=pg-docker-cls1 --log-level-console=info restore --delta
+docker exec pg1 systemctl start patroni
 
 # Point-in-time restore
-docker exec pg2 systemctl stop patroni
-docker exec pg2 pgbackrest --stanza=pg-docker-cls1 --log-level-console=info restore --delta \
+docker exec pg1 systemctl stop patroni
+docker exec pg1 pgbackrest --stanza=pg-docker-cls1 --log-level-console=info restore --delta \
   --target="2026-04-30 10:30:00" --target-action=promote
-docker exec pg2 systemctl start patroni
+docker exec pg1 systemctl start patroni
 ```
 
 ---
@@ -625,14 +638,14 @@ All commands use `docker exec` so they work from the Mac host terminal without S
 ### PostgreSQL logs
 
 ```bash
-# Tail PostgreSQL log on the current leader (pg2)
-docker exec pg2 tail -100 /var/log/postgresql/postgresql-Wed.log
+# Tail PostgreSQL log on the current leader (pg1)
+docker exec pg1 tail -100 /var/log/postgresql/postgresql-Wed.log
 
 # Follow PostgreSQL log live
-docker exec pg2 bash -c "tail -f /var/log/postgresql/postgresql-$(date +%a).log"
+docker exec pg1 bash -c "tail -f /var/log/postgresql/postgresql-$(date +%a).log"
 
 # Search for errors in PostgreSQL log
-docker exec pg2 grep -i "ERROR\|FATAL\|PANIC" /var/log/postgresql/postgresql-Wed.log | tail -20
+docker exec pg1 grep -i "ERROR\|FATAL\|PANIC" /var/log/postgresql/postgresql-Wed.log | tail -20
 
 # PostgreSQL log on all nodes
 for n in pg1 pg2 pg3; do
@@ -650,10 +663,10 @@ for n in pg1 pg2 pg3; do
 done
 
 # Follow Patroni log live on leader
-docker exec pg2 tail -f /var/log/patroni/patroni.log
+docker exec pg1 tail -f /var/log/patroni/patroni.log
 
 # Patroni log via journald
-docker exec pg2 journalctl -u patroni --no-pager -n 50
+docker exec pg1 journalctl -u patroni --no-pager -n 50
 
 # Search for failover/switchover events
 for n in pg1 pg2 pg3; do
@@ -671,10 +684,10 @@ for n in pg1 pg2 pg3; do
 done
 
 # Follow HAProxy log live
-docker exec pg2 journalctl -u haproxy -f
+docker exec pg1 journalctl -u haproxy -f
 
 # Check backend state changes in HAProxy log
-docker exec pg2 journalctl -u haproxy --no-pager | grep -i "UP\|DOWN\|BACKEND"
+docker exec pg1 journalctl -u haproxy --no-pager | grep -i "UP\|DOWN\|BACKEND"
 ```
 
 ### Keepalived logs
@@ -686,7 +699,7 @@ for n in pg1 pg2 pg3; do
 done
 
 # Follow Keepalived log live (watch VIP migrations)
-docker exec pg2 journalctl -u keepalived -f
+docker exec pg1 journalctl -u keepalived -f
 
 # Show only MASTER/BACKUP transitions
 for n in pg1 pg2 pg3; do
@@ -704,7 +717,7 @@ for n in pg1 pg2 pg3; do
 done
 
 # Follow pgBouncer log live
-docker exec pg2 tail -f /var/log/pgbouncer/pgbouncer.log
+docker exec pg1 tail -f /var/log/pgbouncer/pgbouncer.log
 
 # Search for auth errors
 for n in pg1 pg2 pg3; do
@@ -795,11 +808,12 @@ docker exec pg1 pgbackrest --stanza=pg-docker-cls1 check
 export PGPASSWORD='Pg@Lab2026!'
 
 # Before failover: note current leader and VIP holder
-docker exec pg2 patronictl -c /etc/patroni/patroni.yml list
-docker exec pg2 ip addr show eth0 | grep "inet "
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
+docker exec pg1 ip addr show eth0 | grep "inet "
 
-# Trigger failover
-docker exec pg2 patronictl -c /etc/patroni/patroni.yml failover pg-docker-cls1 --force
+# Trigger graceful switchover (promotes pg2 — the sync standby — to leader)
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 \
+  --leader pg1 --candidate pg2 --force
 
 # Watch VIP migrate (run in a second terminal, re-runs every 2s)
 watch -n 2 'for n in pg1 pg2 pg3; do echo -n "$n: "; docker exec $n ip addr show eth0 | grep "inet " | awk "{print \$2}"; done'
@@ -809,15 +823,19 @@ sleep 10
 docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5000 \
   -U postgres postgres -c "SELECT inet_server_addr(), pg_is_in_recovery();"'
 
-# Simulate node failure (stop pg2)
-docker stop pg2
+# Simulate node failure (stop pg1 — the designed primary)
+# pg2 (sync standby) is automatically promoted — zero data loss
+docker stop pg1
 sleep 15
-docker exec pg1 patronictl -c /etc/patroni/patroni.yml list   # new leader elected
+docker exec pg2 patronictl -c /etc/patroni/patroni.yml list   # pg2 elected as new leader
 
-# Recover failed node
-docker start pg2
+# Recover failed node and restore designed topology
+docker start pg1
 sleep 20
-docker exec pg1 patronictl -c /etc/patroni/patroni.yml list   # pg2 rejoins as replica
+docker exec pg2 patronictl -c /etc/patroni/patroni.yml list   # pg1 rejoins as replica
+# Switchover back to designed topology (pg1 as leader)
+docker exec pg2 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 \
+  --leader pg2 --candidate pg1 --force
 ```
 
 ---
@@ -933,6 +951,30 @@ grep PGPWD ~/.vars_personal   # should show Pg@Lab2026!
 # Verify ~/.pgpass has correct entries and permissions
 cat ~/.pgpass
 ls -la ~/.pgpass   # must be 600
+```
+
+### Writes hanging / primary blocked waiting for sync standby
+
+Symptom: write queries hang indefinitely; `pg_stat_replication` shows `sync_state = sync` for pg2
+but `sent_lsn != flush_lsn`.
+
+Cause: pg2 (Sync Standby) is down or lagging. The primary waits for pg2 to confirm WAL receipt
+before committing (`synchronous_commit = on`, `synchronous_node_count = 1`).
+
+```bash
+# Check replication state on primary (pg1)
+psql -h pg1 -p 5433 -U postgres postgres -c "
+  SELECT client_addr, state, sync_state, sent_lsn, flush_lsn FROM pg_stat_replication;"
+
+# Check pg2 status
+docker exec pg2 systemctl status patroni
+
+# If pg2 is down and you need writes to continue immediately — temporarily switch to async:
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 \
+  --force -p synchronous_mode=false
+# Restore sync mode once pg2 is back and caught up:
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 \
+  --force -p synchronous_mode=true
 ```
 
 ### Container won't start after Docker Desktop restart
@@ -1055,6 +1097,12 @@ scrape_configs:
 - **HAProxy host ports**: The HAProxy host-port mappings (15000/25001/17000 etc.) were added to
   container definitions in `roles/docker_infrastructure/defaults/main.yml` but only take effect
   when containers are recreated. The container-internal ports (5000/5001/7000) are always active.
+
+- **Synchronous replication**: `synchronous_mode: true` with `synchronous_node_count: 1` — every
+  commit on pg1 must be acknowledged by pg2 (Sync Standby) before returning to the client. pg3 is
+  excluded via `nosync: true` tag so it never holds the sync standby role. On pg1 failure, pg2 is
+  promoted with zero data loss. If pg2 goes down, writes on pg1 will block until pg2 recovers (or
+  sync mode is temporarily disabled via `patronictl edit-config`).
 
 - **Passwords**: must NOT contain `$` (PostgreSQL dollar-quote delimiter breaks Patroni post-bootstrap SQL).
 

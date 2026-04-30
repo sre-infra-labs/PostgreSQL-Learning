@@ -134,4 +134,4 @@ tags:
   nofailover: false
   noloadbalance: false
   clonefrom: false
-  nosync: false
+  nosync: {{ patroni_tag_nosync | default(false) | lower }}
