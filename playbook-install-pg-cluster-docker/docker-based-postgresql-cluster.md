@@ -13,12 +13,12 @@ Host (macOS)
 │
 ├── Docker Network: lab-network (172.18.0.0/16)
 │   │
-│   ├── 172.18.0.9  ← Keepalived Replica VIP  (floats to the highest-priority healthy replica)
+│   ├── 172.18.0.9  ← Keepalived Replica VIP  (floats to the sync standby; /synchronous endpoint)
 │   ├── 172.18.0.10 ← Keepalived Primary VIP  (floats to the Patroni leader)
 │   │
-│   ├── pg1  (172.18.0.11)  — Leader         (primary)
-│   ├── pg2  (172.18.0.12)  — Sync Standby   (synchronous replica — confirms WAL before commit)
-│   └── pg3  (172.18.0.13)  — Replica        (asynchronous, nosync: true — never elected sync standby)
+│   ├── pg1  (172.18.0.11)  — Leader or Sync Standby  (designed: Leader)
+│   ├── pg2  (172.18.0.12)  — Leader or Sync Standby  (designed: Sync Standby)
+│   └── pg3  (172.18.0.13)  — Replica                 (nosync: true — never elected Sync Standby or Leader)
 │
 └── Docker Named Volume: pg-backups  (shared pgBackRest POSIX repo)
 ```
@@ -339,6 +339,9 @@ docker exec pg2 patronictl -c /etc/patroni/patroni.yml list
 # Cluster topology with history
 docker exec pg2 patronictl -c /etc/patroni/patroni.yml topology
 
+# Cluster event history (switchovers, failovers, timeline changes)
+docker exec pg2 patronictl -c /etc/patroni/patroni.yml history pg-docker-cls1
+
 # Replication lag check
 docker exec pg2 patronictl -c /etc/patroni/patroni.yml list | grep -E "Lag|Member"
 
@@ -353,24 +356,32 @@ curl -s http://localhost:8011/patroni | python3 -m json.tool   # pg1
 curl -s http://localhost:8012/patroni | python3 -m json.tool   # pg2
 curl -s http://localhost:8013/patroni | python3 -m json.tool   # pg3
 
-# Check which node is primary (returns HTTP 200 only on primary)
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8011/primary   # 503 if replica
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8012/primary   # 200 if leader
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8013/primary   # 503 if replica
+# Check which node is primary (returns HTTP 200 only on primary, 503 otherwise)
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8011/primary   # pg1
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8012/primary   # pg2
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8013/primary   # pg3 (never primary)
 
 # Check which nodes are healthy replicas
 curl -s -o /dev/null -w "%{http_code}" http://localhost:8011/replica   # 200 if streaming replica
 curl -s -o /dev/null -w "%{http_code}" http://localhost:8013/replica   # 200 if streaming replica
 
 # Switchover (graceful, requires a leader)
-docker exec pg2 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 --force
+# IMPORTANT: cluster name is a required positional argument; omitting it triggers interactive
+# mode which aborts with "Aborted!" when Enter is pressed with no input.
+# --force suppresses the interactive confirmation prompt.
+# --leader  = current primary to step down  (check with: patronictl list)
+# --candidate = replica to promote; either pg1 or pg2 can be leader — pick the other one
+# Example (replace <current-leader> and <candidate> with actual node names):
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 \
+  --leader <current-leader> --candidate <candidate> --force
 
 # Trigger a manual failover (promotes a replica to leader)
 docker exec pg2 patronictl -c /etc/patroni/patroni.yml failover pg-docker-cls1 --force
 
 # Failover to a specific node
+# NOTE: Patroni 4.x uses --leader instead of the deprecated --master flag
 docker exec pg2 patronictl -c /etc/patroni/patroni.yml failover pg-docker-cls1 \
-  --master pg2 --candidate pg1 --force
+  --leader pg2 --candidate pg1 --force
 
 # Pause/resume Patroni automatic failover
 docker exec pg2 patronictl -c /etc/patroni/patroni.yml pause
@@ -390,10 +401,10 @@ docker exec pg2 patronictl -c /etc/patroni/patroni.yml reinit pg-docker-cls1 pg1
 ```bash
 export PGPASSWORD='Pg@Lab2026!'
 
-# Connect to specific node
-psql -h localhost -p 5433 -U postgres postgres   # pg1 (usually leader)
-psql -h localhost -p 5434 -U postgres postgres   # pg2 (sync standby)
-psql -h localhost -p 5435 -U postgres postgres   # pg3 (replica)
+# Connect to specific node (pg1 or pg2 may be leader at any time; use pg-primary for role-based access)
+psql -h localhost -p 5433 -U postgres postgres   # pg1
+psql -h localhost -p 5434 -U postgres postgres   # pg2
+psql -h localhost -p 5435 -U postgres postgres   # pg3 (always replica)
 
 # Replication status — lag in seconds and bytes (run on primary — pg1)
 # write_lag  : primary flush → standby wrote WAL to OS buffer  (network RTT)
@@ -508,8 +519,8 @@ docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5001 \
 for n in pg1 pg2 pg3; do
   echo "=== $n ===" && docker exec $n ip addr show eth0 | grep "inet "
 done
-# 172.18.0.10 (eth0:vip)    → Patroni primary
-# 172.18.0.9  (eth0:rvip)   → highest-priority healthy replica
+# 172.18.0.10 (eth0:vip)    → Patroni primary (leader)
+# 172.18.0.9  (eth0:rvip)   → sync standby (Keepalived uses /synchronous endpoint)
 
 # Keepalived service status
 for n in pg1 pg2 pg3; do
@@ -823,35 +834,37 @@ docker exec pg1 pgbackrest --stanza=pg-docker-cls1 check
 ```bash
 export PGPASSWORD='Pg@Lab2026!'
 
-# Before failover: note current leader and VIP holder
+# Step 1: Identify current leader and sync standby (either pg1 or pg2 may be leader)
 docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
-docker exec pg1 ip addr show eth0 | grep "inet "
+# Note the Leader and Sync Standby rows — use those names in the commands below.
+# pg3 always has nosync:true and is never promoted.
 
-# Trigger graceful switchover (promotes pg2 — the sync standby — to leader)
+# Step 2: Graceful switchover — swap leader and sync standby
+# Replace <leader> with the current Leader node, <standby> with the Sync Standby node.
 docker exec pg1 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 \
-  --leader pg1 --candidate pg2 --force
+  --leader <leader> --candidate <standby> --force
 
-# Watch VIP migrate (run in a second terminal, re-runs every 2s)
+# Step 3: Watch VIP migrate (run in a second terminal, re-runs every 2s)
 watch -n 2 'for n in pg1 pg2 pg3; do echo -n "$n: "; docker exec $n ip addr show eth0 | grep "inet " | awk "{print \$2}"; done'
 
-# Verify write connection lands on new leader (HAProxy updates within ~9s)
+# Step 4: Verify write connection lands on new leader (HAProxy updates within ~9s)
 sleep 10
 docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5000 \
   -U postgres postgres -c "SELECT inet_server_addr(), pg_is_in_recovery();"'
 
-# Simulate node failure (stop pg1 — the designed primary)
-# pg2 (sync standby) is automatically promoted — zero data loss
-docker stop pg1
+# Simulate node failure — stop the current leader (check with patronictl list first)
+# The sync standby (pg1 or pg2) is automatically promoted — zero data loss
+docker stop <leader>
 sleep 15
-docker exec pg2 patronictl -c /etc/patroni/patroni.yml list   # pg2 elected as new leader
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml list   # former standby is now leader
 
-# Recover failed node and restore designed topology
-docker start pg1
+# Recover failed node — it rejoins as replica and streams from the new leader
+docker start <former-leader>
 sleep 20
-docker exec pg2 patronictl -c /etc/patroni/patroni.yml list   # pg1 rejoins as replica
-# Switchover back to designed topology (pg1 as leader)
-docker exec pg2 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 \
-  --leader pg2 --candidate pg1 --force
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml list   # rejoined as replica
+# Switchover back if desired (restore any preferred topology)
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 \
+  --leader <current-leader> --candidate <former-leader> --force
 ```
 
 ---
@@ -922,9 +935,11 @@ docker exec pg2 patronictl -c /etc/patroni/patroni.yml reinit pg-docker-cls1 pg3
 
 ### Primary VIP (172.18.0.10) unreachable after switchover/failover
 
-**This should no longer happen automatically** — `patroni_pgbouncer_callback.sh` now restarts
-Keepalived on every `on_role_change` event, which forces a clean VIP re-evaluation after every
-leader transition.
+**This should no longer happen automatically** — VIP assignment is handled by the Keepalived
+notify scripts (`keepalived_notify_primary.sh` / `keepalived_notify_replica.sh`), which force
+`ip addr add/del` + `arping` on every VRRP state transition regardless of Keepalived's internal
+state. The `patroni_pgbouncer_callback.sh` callback only updates pgBouncer's target host; it does
+**not** restart Keepalived.
 
 If it still occurs (e.g. after a manual Keepalived restart or container recreation):
 
@@ -1006,24 +1021,25 @@ ls -la ~/.pgpass   # must be 600
 
 ### Writes hanging / primary blocked waiting for sync standby
 
-Symptom: write queries hang indefinitely; `pg_stat_replication` shows `sync_state = sync` for pg2
-but `sent_lsn != flush_lsn`.
+Symptom: write queries hang indefinitely; `pg_stat_replication` shows `sync_state = sync` for the
+sync standby but `sent_lsn != flush_lsn`.
 
-Cause: pg2 (Sync Standby) is down or lagging. The primary waits for pg2 to confirm WAL receipt
-before committing (`synchronous_commit = on`, `synchronous_node_count = 1`).
+Cause: The sync standby (whichever of pg1/pg2 holds that role) is down or lagging. The primary
+waits for it to confirm WAL receipt before committing (`synchronous_commit = on`,
+`synchronous_node_count = 1`).
 
 ```bash
-# Check replication state on primary (pg1)
-psql -h pg1 -p 5433 -U postgres postgres -c "
-  SELECT client_addr, state, sync_state, sent_lsn, flush_lsn FROM pg_stat_replication;"
+# Check replication state on primary — use pg-primary or patronictl list to identify it first
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
+pg-primary -c "SELECT client_addr, state, sync_state, sent_lsn, flush_lsn FROM pg_stat_replication;"
 
-# Check pg2 status
-docker exec pg2 systemctl status patroni
+# Check Patroni status on the sync standby node
+docker exec <sync-standby-node> systemctl status patroni
 
-# If pg2 is down and you need writes to continue immediately — temporarily switch to async:
+# If the sync standby is down and you need writes to continue immediately — temporarily switch to async:
 docker exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 \
   --force -p synchronous_mode=false
-# Restore sync mode once pg2 is back and caught up:
+# Restore sync mode once the sync standby is back and caught up:
 docker exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 \
   --force -p synchronous_mode=true
 ```
@@ -1141,25 +1157,33 @@ scrape_configs:
   check passes. Primary node effective priority: 201/200/199. Replicas: 101/100/99. Guarantees the
   primary always holds the primary VIP, and no node holds both VIPs simultaneously.
 
+- **Keepalived notify scripts** (`keepalived_notify_primary.sh` / `keepalived_notify_replica.sh`):
+  deployed to `/usr/local/bin/` on each node. Called by Keepalived on every VRRP state transition
+  (MASTER/BACKUP/FAULT). On MASTER: force `ip addr add <VIP>` + `arping` to gratuitously announce
+  the VIP on the network. On BACKUP/FAULT: force `ip addr del <VIP>`. This bypasses Keepalived's
+  internal VIP management which silently fails inside Docker containers.
+
 - **pgBouncer `auth_type = scram-sha-256`**: Plain text passwords in `userlist.txt` are supported
   by pgBouncer 1.16+ for SCRAM authentication. After Patroni failovers, reload pgBouncer to clear
   stale server-side connections (`systemctl reload pgbouncer`).
 
 - **Patroni `on_role_change` callback** (`patroni_pgbouncer_callback.sh`): fires on every leader
-  transition (switchover, failover, promotion). Does two things: (1) updates pgBouncer's `host=`
-  to point to the new leader IP; (2) restarts Keepalived to force a clean VIP re-evaluation.
-  This eliminates the race condition where Keepalived enters MASTER state internally but fails to
-  add the VIP to the interface during rapid role changes.
+  transition (switchover, failover, promotion). Updates pgBouncer's `host=` to the new leader IP
+  and reloads pgBouncer. It does **not** restart Keepalived — VIP management is handled exclusively
+  by `keepalived_notify_primary.sh` and `keepalived_notify_replica.sh`, which force `ip addr add/del`
+  and `arping` on every VRRP state transition. This eliminates the race condition where Keepalived
+  enters MASTER state internally but fails to add the VIP to the interface.
 
 - **HAProxy host ports**: The HAProxy host-port mappings (15000/25001/17000 etc.) were added to
   container definitions in `roles/docker_infrastructure/defaults/main.yml` but only take effect
   when containers are recreated. The container-internal ports (5000/5001/7000) are always active.
 
 - **Synchronous replication**: `synchronous_mode: true` with `synchronous_node_count: 1` — every
-  commit on pg1 must be acknowledged by pg2 (Sync Standby) before returning to the client. pg3 is
-  excluded via `nosync: true` tag so it never holds the sync standby role. On pg1 failure, pg2 is
-  promoted with zero data loss. If pg2 goes down, writes on pg1 will block until pg2 recovers (or
-  sync mode is temporarily disabled via `patronictl edit-config`).
+  commit on the leader must be acknowledged by the sync standby (whichever of pg1/pg2 holds that
+  role) before returning to the client. pg3 is excluded via `nosync: true` and never holds the sync
+  standby role. If the sync standby goes down, writes on the leader will block until it recovers (or
+  sync mode is temporarily disabled via `patronictl edit-config`). Failover between pg1 and pg2 is
+  always zero data loss.
 
 - **Passwords**: must NOT contain `$` (PostgreSQL dollar-quote delimiter breaks Patroni post-bootstrap SQL).
 
