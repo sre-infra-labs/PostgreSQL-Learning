@@ -904,6 +904,36 @@ docker exec pg2 patronictl -c /etc/patroni/patroni.yml list
 docker exec pg2 patronictl -c /etc/patroni/patroni.yml reinit pg-docker-cls1 pg3 --force
 ```
 
+### Primary VIP (172.18.0.10) unreachable after switchover/failover
+
+Symptom: `No route to host` connecting to 172.18.0.10, even though `patronictl list` shows the
+correct leader and Keepalived is active.
+
+Cause: Race condition during role transition — Keepalived entered MASTER state internally but
+failed to actually add the VIP to the interface. Restarting Keepalived on the node that should
+own the VIP re-triggers the VIP assignment.
+
+```bash
+# Identify which node is the current Patroni primary
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
+
+# Check current VIP assignments
+for n in pg1 pg2 pg3; do
+  echo -n "$n: "
+  docker exec $n ip addr show eth0 | grep "inet " | awk '{print $2}' | tr '\n' ' '; echo
+done
+
+# Restart Keepalived on the primary node to re-acquire the VIP
+docker exec <primary_node> systemctl restart keepalived
+sleep 5
+
+# Verify VIP is now assigned
+for n in pg1 pg2 pg3; do
+  echo -n "$n: "
+  docker exec $n ip addr show eth0 | grep "inet " | awk '{print $2}' | tr '\n' ' '; echo
+done
+```
+
 ### HAProxy host ports connection refused from Mac (e.g. localhost:25000)
 
 Symptom: `psql: error: connection to server at "localhost", port 25000 failed: Connection refused`
