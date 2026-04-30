@@ -27,45 +27,75 @@
     - reinit_confirmation.user_input | default('') != "yes"
 
 - name: Run prechecks
-  include_tasks: custom/prechecks.yml
+  include_tasks:
+    file: custom/prechecks.yml
+    apply:
+      tags: prechecks
   tags: prechecks
 
 - name: Setup PGDG repository
-  include_tasks: custom/repository.yml
+  include_tasks:
+    file: custom/repository.yml
+    apply:
+      tags: repository
   tags: repository
   when: not (reinit_cluster is defined and reinit_cluster | bool)
 
 - name: Install packages
-  include_tasks: custom/packages.yml
+  include_tasks:
+    file: custom/packages.yml
+    apply:
+      tags: packages
   tags: packages
   when: not (reinit_cluster is defined and reinit_cluster | bool)
 
 - name: Configure .pgpass
-  include_tasks: custom/pgpass.yml
+  include_tasks:
+    file: custom/pgpass.yml
+    apply:
+      tags: pgpass
   tags: pgpass
 
 - name: Install and configure etcd (inside container, 3-member cluster)
-  include_tasks: custom/etcd.yml
+  include_tasks:
+    file: custom/etcd.yml
+    apply:
+      tags: etcd
   tags: etcd
 
 - name: Install and configure Patroni
-  include_tasks: custom/patroni.yml
+  include_tasks:
+    file: custom/patroni.yml
+    apply:
+      tags: patroni
   tags: patroni
 
 - name: Configure pgBackRest
-  include_tasks: custom/pgbackrest.yml
+  include_tasks:
+    file: custom/pgbackrest.yml
+    apply:
+      tags: pgbackrest
   tags: pgbackrest
 
 - name: Install and configure pgBouncer
-  include_tasks: custom/pgbouncer.yml
+  include_tasks:
+    file: custom/pgbouncer.yml
+    apply:
+      tags: pgbouncer
   tags: pgbouncer
 
 - name: Install pg_exporter
-  include_tasks: custom/pg_exporter.yml
+  include_tasks:
+    file: custom/pg_exporter.yml
+    apply:
+      tags: pg_exporter
   tags: pg_exporter
 
 - name: Create application database and users
-  include_tasks: custom/user.yml
+  include_tasks:
+    file: custom/user.yml
+    apply:
+      tags: users
   tags: users
 
 - name: Install and configure HAProxy
@@ -83,6 +113,9 @@
   tags: keepalived
 
 - name: Show Patroni cluster status
-  include_tasks: custom/patronictl_list.yml
+  include_tasks:
+    file: custom/patronictl_list.yml
+    apply:
+      tags: patronictl_list
   tags: patronictl_list
   when: inventory_hostname in groups['leader']

@@ -53,8 +53,8 @@ postgres_packages_optional:
   - postgresql-{{ postgresql_version }}-pg-qualstats
   - postgresql-{{ postgresql_version }}-wait-sampling
 
-# pg_wait_tracer — compiled from source (optional, set to false to skip)
-pg_wait_tracer_enabled: true
+# pg_wait_tracer — compiled from source (optional, set to true only if containers have internet access)
+pg_wait_tracer_enabled: false
 pg_wait_tracer_repo: "https://github.com/agroal/pg_wait_tracer.git"
 pg_wait_tracer_branch: "main"
 

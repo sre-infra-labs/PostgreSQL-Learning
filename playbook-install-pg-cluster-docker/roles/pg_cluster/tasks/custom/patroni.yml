@@ -16,6 +16,25 @@
     mode: "0640"
   notify: restart patroni
 
+# ---------------------------------------------------------------------------
+# patronictl convenience — export PATRONICTL_CONFIG_FILE so -c flag is not needed.
+# Covers interactive sessions (ssh, docker exec -it ... bash).
+# For direct docker exec (docker exec pg1 patronictl ...) use:
+#   docker exec -e PATRONICTL_CONFIG_FILE=/etc/patroni/patroni.yml pg1 patronictl list
+# ---------------------------------------------------------------------------
+- name: Set PATRONICTL_CONFIG_FILE in /etc/environment
+  ansible.builtin.lineinfile:
+    path: /etc/environment
+    line: "PATRONICTL_CONFIG_FILE=/etc/patroni/patroni.yml"
+    create: true
+    mode: "0644"
+
+- name: Set PATRONICTL_CONFIG_FILE for interactive shell sessions
+  ansible.builtin.copy:
+    dest: /etc/profile.d/patroni-env.sh
+    content: "export PATRONICTL_CONFIG_FILE=/etc/patroni/patroni.yml\n"
+    mode: "0644"
+
 - name: Create Patroni log directory
   ansible.builtin.file:
     path: "{{ patroni_log_dir }}"
@@ -47,6 +66,11 @@
     state: directory
     mode: "0700"
 
+- name: Check if PostgreSQL data directory is already initialized
+  ansible.builtin.stat:
+    path: "{{ postgresql_data_dir }}/PG_VERSION"
+  register: _pg_data_initialized
+
 - name: Ensure data directory is empty before init
   ansible.builtin.file:
     path: "{{ postgresql_data_dir }}"
@@ -57,6 +81,7 @@
   loop:
     - absent
     - directory
+  when: not _pg_data_initialized.stat.exists
 
 - name: Create PostgreSQL stats temp directory
   ansible.builtin.file:
