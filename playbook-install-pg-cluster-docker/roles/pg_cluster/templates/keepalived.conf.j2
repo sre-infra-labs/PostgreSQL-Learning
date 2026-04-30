@@ -95,7 +95,7 @@ vrrp_instance VI_REPLICA {
     }
 
     virtual_ipaddress {
-        {{ keepalived_replica_vip }}/{{ keepalived_vip_prefix }} dev {{ keepalived_interface }} label {{ keepalived_interface }}:replica_vip
+        {{ keepalived_replica_vip }}/{{ keepalived_vip_prefix }} dev {{ keepalived_interface }} label {{ keepalived_interface }}:rvip
     }
 
     track_script {

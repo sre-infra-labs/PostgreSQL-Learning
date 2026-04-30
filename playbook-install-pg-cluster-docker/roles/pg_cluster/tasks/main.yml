@@ -6,6 +6,7 @@
 - name: Include defaults/creds.yml
   include_vars:
     file: "{{ role_path }}/defaults/creds.yml"
+  tags: always
 
 - name: Confirm before reinitializing cluster
   ansible.builtin.pause:
@@ -68,11 +69,17 @@
   tags: users
 
 - name: Install and configure HAProxy
-  include_tasks: custom/haproxy.yml
+  include_tasks:
+    file: custom/haproxy.yml
+    apply:
+      tags: haproxy
   tags: haproxy
 
 - name: Install and configure Keepalived
-  include_tasks: custom/keepalived.yml
+  include_tasks:
+    file: custom/keepalived.yml
+    apply:
+      tags: keepalived
   tags: keepalived
 
 - name: Show Patroni cluster status
