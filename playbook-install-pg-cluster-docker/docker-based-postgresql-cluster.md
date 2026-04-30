@@ -1108,3 +1108,43 @@ scrape_configs:
 
 - **pgBackRest stanza**: created once on the leader. All nodes share the same POSIX repo via the
   `pg-backups` Docker named volume mounted at `/var/lib/pgbackrest`.
+
+# Other Miscellaneous Commands
+
+## Unset Env Variable
+```
+unset PGPASSWORD
+```
+
+## Connect to docker container prompt, and connect to postgresql
+```
+ajaydwivedi@Ajays-MacBook-Pro PostgreSQL-Learning % docker exec -it pg2 bash
+root@pg2:/# patronictl -c /etc/patroni/patroni.yml list
++ Cluster: pg-docker-cls1 (7634451494908218688) --+-----------+
+| Member | Host        | Role    | State     | TL | Lag in MB |
++--------+-------------+---------+-----------+----+-----------+
+| pg1    | 172.18.0.11 | Replica | streaming |  2 |         0 |
+| pg2    | 172.18.0.12 | Leader  | running   |  2 |           |
+| pg3    | 172.18.0.13 | Replica | streaming |  2 |         0 |
++--------+-------------+---------+-----------+----+-----------+
+root@pg2:/# 
+root@pg2:/# su - postgres
+postgres@pg2:~$ psql
+psql (18.3 (Ubuntu 18.3-1.pgdg24.04+1))
+Type "help" for help.
+
+postgres=# 
+postgres=# \q
+postgres@pg2:~$ exit
+logout
+root@pg2:/# 
+
+```
+
+## Add environment variable
+```
+tee -a ~/.bashrc << 'EOF'
+
+export PATRONICTL_CONFIG_FILE=/etc/patroni/patroni.yml
+EOF
+```
