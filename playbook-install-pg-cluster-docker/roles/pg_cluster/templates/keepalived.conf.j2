@@ -67,6 +67,8 @@ vrrp_instance VI_PRIMARY {
     track_script {
         chk_patroni_primary
     }
+
+    notify /usr/local/bin/keepalived_notify_primary.sh
 }
 
 #---------------------------------------------------------------
@@ -101,4 +103,6 @@ vrrp_instance VI_REPLICA {
     track_script {
         chk_patroni_standby
     }
+
+    notify /usr/local/bin/keepalived_notify_replica.sh
 }

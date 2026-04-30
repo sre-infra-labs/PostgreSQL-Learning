@@ -65,10 +65,12 @@
             sed -i "s|^host=.*|host=${LEADER_IP}|" $PGBOUNCER_INI
             systemctl reload pgbouncer 2>/dev/null || systemctl restart pgbouncer 2>/dev/null
           fi
-          # Restart Keepalived so it re-evaluates VIP ownership after every role change.
-          # Prevents the race condition where Keepalived enters MASTER state internally
-          # but fails to add the VIP to the interface during Patroni leader transitions.
-          systemctl restart keepalived 2>/dev/null
+          # Keepalived VIP migration is handled entirely by the notify scripts
+          # (keepalived_notify_primary.sh / keepalived_notify_replica.sh) which
+          # force ip addr add/del on every VRRP state transition. Restarting
+          # Keepalived here is counterproductive: the restart fires BACKUP notify
+          # (removes the just-assigned VIP) then re-enters MASTER shortly after,
+          # creating an unnecessary outage window.
           ;;
         on_start|on_stop|on_restart)
           ;;

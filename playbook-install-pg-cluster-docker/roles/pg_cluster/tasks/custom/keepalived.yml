@@ -9,16 +9,68 @@
     state: present
   environment: "{{ proxy_env | default({}) }}"
 
-- name: Allow binding to non-local IPs (needed when VIP is not yet assigned)
+- name: Allow binding to non-local IPs and preserve secondary addresses on primary removal
   ansible.builtin.copy:
     dest: /etc/sysctl.d/99-keepalived.conf
-    content: "net.ipv4.ip_nonlocal_bind = 1\n"
+    content: |
+      net.ipv4.ip_nonlocal_bind = 1
+      net.ipv4.conf.all.promote_secondaries = 1
     mode: "0644"
 
 - name: Apply keepalived sysctl
   ansible.builtin.command: sysctl -p /etc/sysctl.d/99-keepalived.conf
   changed_when: true
   ignore_errors: true
+
+- name: Deploy Keepalived primary VIP notify script
+  ansible.builtin.copy:
+    dest: /usr/local/bin/keepalived_notify_primary.sh
+    mode: "0755"
+    content: |
+      #!/bin/bash
+      # Called by Keepalived: $1=GROUP|INSTANCE $2=name $3=MASTER|BACKUP|FAULT
+      # Keepalived's internal ip addr add fails silently in Docker, so we force
+      # it here on every VRRP state transition for the primary (write) VIP.
+      STATE=$3
+      VIP="{{ keepalived_vip }}"
+      PREFIX="{{ keepalived_vip_prefix }}"
+      IFACE="{{ keepalived_interface }}"
+      LABEL="${IFACE}:vip"
+
+      case "$STATE" in
+        MASTER)
+          ip addr add ${VIP}/${PREFIX} dev ${IFACE} label ${LABEL} 2>/dev/null || true
+          arping -q -A -c 3 -I ${IFACE} ${VIP} 2>/dev/null || true
+          ;;
+        BACKUP|FAULT)
+          ip addr del ${VIP}/${PREFIX} dev ${IFACE} label ${LABEL} 2>/dev/null || true
+          ;;
+      esac
+
+- name: Deploy Keepalived replica VIP notify script
+  ansible.builtin.copy:
+    dest: /usr/local/bin/keepalived_notify_replica.sh
+    mode: "0755"
+    content: |
+      #!/bin/bash
+      # Called by Keepalived: $1=GROUP|INSTANCE $2=name $3=MASTER|BACKUP|FAULT
+      # Keepalived's internal ip addr add fails silently in Docker, so we force
+      # it here on every VRRP state transition for the replica (read) VIP.
+      STATE=$3
+      VIP="{{ keepalived_replica_vip }}"
+      PREFIX="{{ keepalived_vip_prefix }}"
+      IFACE="{{ keepalived_interface }}"
+      LABEL="${IFACE}:rvip"
+
+      case "$STATE" in
+        MASTER)
+          ip addr add ${VIP}/${PREFIX} dev ${IFACE} label ${LABEL} 2>/dev/null || true
+          arping -q -A -c 3 -I ${IFACE} ${VIP} 2>/dev/null || true
+          ;;
+        BACKUP|FAULT)
+          ip addr del ${VIP}/${PREFIX} dev ${IFACE} label ${LABEL} 2>/dev/null || true
+          ;;
+      esac
 
 - name: Generate /etc/keepalived/keepalived.conf from template
   ansible.builtin.template:
