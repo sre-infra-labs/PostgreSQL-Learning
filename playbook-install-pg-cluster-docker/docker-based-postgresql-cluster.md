@@ -51,11 +51,18 @@ etcd cluster (inter-container, no host port mapping needed):
 ### Traffic Flow
 
 ```
-Application write  →  VIP 172.18.0.10:5000  →  HAProxy (any node)  →  pg2 :5432 (leader)
-Application read   →  VIP 172.18.0.10:5001  →  HAProxy (any node)  →  pg1/pg3 :5432 (replicas)
+Application write  →  VIP 172.18.0.10:5000  →  HAProxy (any node)  →  <leader> :5432
+Application read   →  VIP 172.18.0.9:5001   →  HAProxy (any node)  →  <replica> :5432
 
-After failover (e.g. pg1 becomes new leader):
-  Keepalived detects /primary passes on pg1 → VIP migrates to pg1
+Notes:
+  - Any node's HAProxy correctly routes writes to the leader and reads to replicas,
+    so both VIPs work for both ports. The replica VIP (172.18.0.9) is the preferred
+    read endpoint because it floats away from a node that loses its replica status.
+  - VIPs are inside the Docker network. From Mac, use HAProxy host-mapped ports instead
+    (localhost:15000 / 25000 / 35000 for writes; :15001 / 25001 / 35001 for reads).
+
+After failover (e.g. pg3 becomes new leader):
+  Keepalived detects /primary passes on pg3 → primary VIP (172.18.0.10) migrates to pg3
   HAProxy health checks catch up within 6–9 s (3 × inter=3s)
 ```
 
@@ -77,91 +84,235 @@ After failover (e.g. pg1 becomes new leader):
 
 ---
 
+## Mac Host One-Time Setup
+
+Run these steps once on your Mac to enable password-free named connections.
+
+### 1. /etc/hosts — hostname aliases
+
+```bash
+sudo tee -a /etc/hosts << 'EOF'
+
+# PostgreSQL Docker cluster — lab-network 172.18.0.0/16
+127.0.0.1  pg1    # PostgreSQL :5433  pgBouncer :6433  Patroni :8011
+127.0.0.1  pg2    # PostgreSQL :5434  pgBouncer :6434  Patroni :8012
+127.0.0.1  pg3    # PostgreSQL :5435  pgBouncer :6435  Patroni :8013
+EOF
+```
+
+Verify: `ping -c1 pg1` should resolve to `127.0.0.1`.
+
+### 2. ~/.pgpass — password file
+
+File: `~/.pgpass` (permissions must be `chmod 600`)
+
+```
+pg1:*:*:*:Pg@Lab2026!
+pg2:*:*:*:Pg@Lab2026!
+pg3:*:*:*:Pg@Lab2026!
+127.0.0.1:*:*:*:Pg@Lab2026!
+localhost:*:*:*:Pg@Lab2026!
+```
+
+Wildcard entries cover all ports, databases, and users on each hostname.
+`PGPASSWORD` env var takes precedence over `.pgpass`; keep them in sync in `~/.vars_personal`.
+
+### 3. ~/.pg_service.conf — named services
+
+File: `~/.pg_service.conf` — connect with `psql service=<name>` or `PGSERVICE=<name>`.
+
+```ini
+[pg1]           host=pg1  port=5433  user=postgres  dbname=postgres
+[pg2]           host=pg2  port=5434  user=postgres  dbname=postgres
+[pg3]           host=pg3  port=5435  user=postgres  dbname=postgres
+
+[pg1-bouncer]   host=pg1  port=6433  user=postgres  dbname=postgres
+[pg2-bouncer]   host=pg2  port=6434  user=postgres  dbname=postgres
+[pg3-bouncer]   host=pg3  port=6435  user=postgres  dbname=postgres
+
+[pg1-rw]        host=pg1  port=5433  user=dba_rw    dbname=dba
+[pg2-rw]        host=pg2  port=5434  user=dba_rw    dbname=dba
+[pg3-rw]        host=pg3  port=5435  user=dba_rw    dbname=dba
+
+[pg1-ro]        host=pg1  port=5433  user=dba_ro    dbname=dba
+[pg2-ro]        host=pg2  port=5434  user=dba_ro    dbname=dba
+[pg3-ro]        host=pg3  port=5435  user=dba_ro    dbname=dba
+```
+
+### 4. ~/.zshrc — dynamic shell functions
+
+Add to `~/.zshrc` (already done if you followed the setup steps):
+
+```zsh
+_PG_NODES=("8011:pg1:5433" "8012:pg2:5434" "8013:pg3:5435")
+
+# Connect to current Patroni primary — accepts any extra psql args
+function pg-primary() {
+  for _entry in "${_PG_NODES[@]}"; do
+    local _pp="${_entry%%:*}" _rest="${_entry#*:}"
+    local _h="${_rest%%:*}"   _p="${_rest##*:}"
+    if curl -sf --max-time 2 "http://localhost:${_pp}/primary" >/dev/null 2>&1; then
+      echo "[pg-primary -> ${_h}:${_p}]"; psql -h "${_h}" -p "${_p}" -U postgres "$@"; return $?
+    fi
+  done; echo "ERROR: no primary found" >&2; return 1
+}
+
+# Connect to first available healthy replica
+function pg-replica() {
+  for _entry in "${_PG_NODES[@]}"; do
+    local _pp="${_entry%%:*}" _rest="${_entry#*:}"
+    local _h="${_rest%%:*}"   _p="${_rest##*:}"
+    if curl -sf --max-time 2 "http://localhost:${_pp}/replica" >/dev/null 2>&1; then
+      echo "[pg-replica -> ${_h}:${_p}]"; psql -h "${_h}" -p "${_p}" -U postgres "$@"; return $?
+    fi
+  done; echo "ERROR: no replica found" >&2; return 1
+}
+
+# Print Patroni cluster state, Keepalived VIPs, and HAProxy backend health
+function pg-status() {
+  echo "=== Patroni cluster ==="
+  docker exec pg1 patronictl -c /etc/patroni/patroni.yml list 2>/dev/null \
+    || docker exec pg2 patronictl -c /etc/patroni/patroni.yml list 2>/dev/null \
+    || echo "ERROR: containers not reachable"
+
+  echo ""
+  echo "=== Keepalived VIPs ==="
+  for _n in pg1 pg2 pg3; do
+    docker exec "${_n}" ip addr show eth0 2>/dev/null \
+      | awk -v node="${_n}" '/inet / && !/172\.18\.0\.1[123]\//{printf "  %-4s <- %s\n", node, $2}'
+  done
+
+  echo ""
+  echo "=== HAProxy backends (be_write / be_read) ==="
+  for _n in pg1 pg2 pg3; do
+    if docker exec "${_n}" systemctl is-active haproxy >/dev/null 2>&1; then
+      docker exec "${_n}" bash -c \
+        'curl -s -u "admin:Pg@Lab2026!" "http://127.0.0.1:7000/;csv" \
+         | grep -v "^#\|FRONTEND\|stats" | cut -d, -f1,2,18' 2>/dev/null
+      break
+    fi
+  done
+}
+
+alias psql-pg1='psql service=pg1'
+alias psql-pg2='psql service=pg2'
+alias psql-pg3='psql service=pg3'
+```
+
+### 5. ~/.vars_personal — PGPASSWORD
+
+```bash
+export PGPWD_PERSONAL='Pg@Lab2026!'
+export PGPASSWORD=$PGPWD_PERSONAL
+```
+
+---
+
 ## Connecting to PostgreSQL
 
-### A. Direct connections (always available from Mac host)
+### A. By hostname — direct PG (after /etc/hosts is set)
 
 ```bash
-export PGPASSWORD='Pg@Lab2026!'
-
-# pg1 (usually replica)
-psql -h localhost -p 5433 -U postgres -d postgres
-
-# pg2 (usually leader)
-psql -h localhost -p 5434 -U postgres -d postgres
-
-# pg3 (usually replica)
-psql -h localhost -p 5435 -U postgres -d postgres
-
-# Check which node is the leader
-psql -h localhost -p 5433 -U postgres -d postgres -c "SELECT pg_is_in_recovery();"
-# f = primary (leader), t = replica (standby)
+# No password prompt — resolved via ~/.pgpass
+psql -h pg1 -p 5433 -U postgres postgres    # replica
+psql -h pg2 -p 5434 -U postgres postgres    # leader
+psql -h pg3 -p 5435 -U postgres postgres    # replica
 ```
 
-### B. Via pgBouncer on each node (always available from Mac host)
-
-pgBouncer routes to local PostgreSQL. Since Patroni callback updates the target on role-change,
-each pgBouncer stays pointed at `127.0.0.1:5432` (its own node).
+### B. By hostname — pgBouncer (after /etc/hosts is set)
 
 ```bash
-export PGPASSWORD='Pg@Lab2026!'
-
-psql -h localhost -p 6433 -U postgres -d postgres   # pgBouncer on pg1 → pg1
-psql -h localhost -p 6434 -U postgres -d postgres   # pgBouncer on pg2 → pg2 (leader)
-psql -h localhost -p 6435 -U postgres -d postgres   # pgBouncer on pg3 → pg3
+psql -h pg1 -p 6433 -U postgres postgres
+psql -h pg2 -p 6434 -U postgres postgres
+psql -h pg3 -p 6435 -U postgres postgres
 ```
 
-### C. Via Keepalived VIPs (available inside Docker network / container exec)
-
-The VIPs float between containers — clients always reach the right node without knowing
-which physical container currently holds the role.
+### C. Named service (after /etc/hosts is set)
 
 ```bash
-# Primary VIP → always reaches the Patroni leader
-docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5432 -U postgres -d postgres \
+psql service=pg1            # direct PG on pg1
+psql service=pg2            # direct PG on pg2  (usually leader)
+psql service=pg3            # direct PG on pg3
+psql service=pg1-bouncer    # via pgBouncer on pg1
+psql service=pg1-rw         # as dba_rw on pg1
+psql service=pg1-ro         # as dba_ro on pg1
+```
+
+### D. Dynamic shell functions — role-based (after /etc/hosts is set)
+
+These query Patroni REST API on ports 8011/8012/8013 to find the current role automatically.
+No need to know which container is currently the leader.
+
+```bash
+pg-primary                                          # open psql on current leader
+pg-primary -c "SELECT pg_is_in_recovery();"         # run query on leader
+pg-primary -d dba -c "SELECT count(*) FROM ..."     # specific database
+
+pg-replica                                          # open psql on first healthy replica
+pg-replica -c "SELECT pg_last_wal_replay_lsn();"   # check replica lag
+
+pg-status                                           # cluster overview (Patroni + VIPs + HAProxy)
+```
+
+### E. Via Keepalived VIPs (Docker-internal — from container exec)
+
+The VIPs float between containers. Accessible inside the Docker network (not from Mac host directly).
+
+```bash
+# Primary VIP (172.18.0.10) — always the Patroni leader
+docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5432 -U postgres postgres \
   -c "SELECT inet_server_addr(), pg_is_in_recovery();"'
 
-# Replica VIP → reaches the highest-priority healthy replica (pg1 when available)
-docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.9 -p 5432 -U postgres -d postgres \
+# Replica VIP (172.18.0.9) — highest-priority healthy replica
+docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.9 -p 5432 -U postgres postgres \
   -c "SELECT inet_server_addr(), pg_is_in_recovery();"'
 ```
 
-### D. Via HAProxy + Keepalived VIP (best practice — inside Docker network)
+### F. Via HAProxy + VIP (Docker-internal — best practice for applications)
 
-Combine both: use Keepalived VIP to reach a node's HAProxy, then HAProxy routes to the
-correct backend based on the Patroni health check. This is fully transparent to the application.
+HAProxy routes based on Patroni health check — write port goes only to primary,
+read port goes only to replicas, regardless of which container's HAProxy you hit.
 
 ```bash
-# Writes (primary only) — HAProxy verifies via GET /primary → 200
-docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5000 -U postgres -d postgres \
-  -c "SELECT inet_server_addr() AS server, pg_is_in_recovery() AS is_replica;"'
-# Result: server=172.18.0.12, is_replica=f  ← always the leader
+# Writes via primary VIP + HAProxy write port
+docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5000 -U postgres postgres \
+  -c "SELECT inet_server_addr(), pg_is_in_recovery();"'
+# → always returns the primary node, is_replica=f
 
-# Reads (replicas only) — HAProxy verifies via GET /replica → 200
-docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5001 -U postgres -d postgres \
-  -c "SELECT inet_server_addr() AS server, pg_is_in_recovery() AS is_replica;"'
-# Result: server=172.18.0.11, is_replica=t  ← a replica (round-robins across healthy replicas)
+# Reads via primary VIP + HAProxy read port
+docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5001 -U postgres postgres \
+  -c "SELECT inet_server_addr(), pg_is_in_recovery();"'
+# → always returns a replica, is_replica=t
 
-# Using replica VIP + HAProxy read port
-docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.9 -p 5001 -U postgres -d postgres \
-  -c "SELECT inet_server_addr() AS server, pg_is_in_recovery() AS is_replica;"'
+# Reads via replica VIP + HAProxy read port
+docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.9 -p 5001 -U postgres postgres \
+  -c "SELECT inet_server_addr(), pg_is_in_recovery();"'
 ```
 
-### E. Via HAProxy host-mapped ports (requires container recreation)
+### G. Via HAProxy host-mapped ports (from Mac host — after container recreation)
 
-The HAProxy host-port mappings (15000, 25000, 35000 etc.) were added AFTER the current
-containers were created. To expose them to the Mac host, recreate the containers:
+HAProxy ports are exposed to the Mac host via per-container port mappings.
+These require the containers to be recreated (see Ansible Operations below).
 
 ```bash
-# WARNING: recreating containers preserves data volumes but resets container state
-ansible-playbook playbook-setup-docker.yml    # recreates containers with new port mappings
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
-  --vault-password-file=vault-pass -e reinit_cluster=true -e skip_confirm=true
+# Write port on each node's HAProxy — all route to the current primary
+psql -h localhost -p 15000 -U postgres postgres   # pg1 HAProxy write
+psql -h localhost -p 25000 -U postgres postgres   # pg2 HAProxy write  ← usually primary
+psql -h localhost -p 35000 -U postgres postgres   # pg3 HAProxy write
 
-# After recreation — HAProxy directly from Mac host (via any node's host port):
-export PGPASSWORD='Pg@Lab2026!'
-psql -h localhost -p 25000 -U postgres -d postgres   # pg2 HAProxy write port → primary
-psql -h localhost -p 15001 -U postgres -d postgres   # pg1 HAProxy read port  → replica
+# Read port on each node's HAProxy — all route to a healthy replica
+psql -h localhost -p 15001 -U postgres postgres   # pg1 HAProxy read
+psql -h localhost -p 25001 -U postgres postgres   # pg2 HAProxy read
+psql -h localhost -p 35001 -U postgres postgres   # pg3 HAProxy read
+
+# HAProxy stats page (open in browser)
+open http://localhost:17000    # pg1 stats  (admin / Pg@Lab2026!)
+open http://localhost:27000    # pg2 stats
+open http://localhost:37000    # pg3 stats
+
+# Using hostname aliases (after /etc/hosts)
+psql -h pg1 -p 15000 -U postgres postgres   # HAProxy write via pg1
+psql -h pg2 -p 25001 -U postgres postgres   # HAProxy read  via pg2
 ```
 
 ---
@@ -733,6 +884,55 @@ docker exec pg2 patronictl -c /etc/patroni/patroni.yml list
 
 # Reinitialize lagging replica from scratch
 docker exec pg2 patronictl -c /etc/patroni/patroni.yml reinit pg-docker-cls1 pg3 --force
+```
+
+### HAProxy host ports connection refused from Mac (e.g. localhost:25000)
+
+Symptom: `psql: error: connection to server at "localhost", port 25000 failed: Connection refused`
+
+Cause: Containers were created before the HAProxy host-port mappings were added to the Ansible
+`pg_containers` definition. Docker port mappings are baked in at container creation time and cannot
+be changed without recreating the container.
+
+```bash
+# Verify whether the ports are actually mapped on the running containers
+docker ps --format "table {{.Names}}\t{{.Ports}}" | grep pg
+
+# If ports like 15000/25000/35000 are missing, recreate containers:
+# 1. Destroy containers (volumes are named and survive this step — data is safe)
+docker rm -f pg1 pg2 pg3
+
+# 2. Recreate with correct port mappings (reads from roles/docker_infrastructure/defaults/main.yml)
+ansible-playbook playbook-setup-docker.yml
+
+# 3. Reinstall cluster software on the fresh containers
+ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
+```
+
+### psql password authentication failed despite correct ~/.pgpass
+
+Symptom: `FATAL: password authentication failed` even though `~/.pgpass` has the right entry.
+
+Cause: The `PGPASSWORD` environment variable takes precedence over `~/.pgpass`. If it is set to an
+old or wrong value in the current shell session (e.g. from `~/.vars_personal`), it will override
+the password file silently.
+
+```bash
+# Check what PGPASSWORD is set to in the current shell
+echo "PGPASSWORD=${PGPASSWORD}"
+
+# Fix: reload the env file (if ~/.vars_personal has been corrected)
+source ~/.vars_personal
+
+# Or unset PGPASSWORD entirely to fall back to ~/.pgpass
+unset PGPASSWORD
+
+# Verify ~/.vars_personal has the correct password
+grep PGPWD ~/.vars_personal   # should show Pg@Lab2026!
+
+# Verify ~/.pgpass has correct entries and permissions
+cat ~/.pgpass
+ls -la ~/.pgpass   # must be 600
 ```
 
 ### Container won't start after Docker Desktop restart

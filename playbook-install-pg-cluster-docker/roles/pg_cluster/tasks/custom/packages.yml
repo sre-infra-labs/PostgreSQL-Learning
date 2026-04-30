@@ -97,6 +97,9 @@
     git clone --depth 1 --branch {{ pg_wait_tracer_branch }} {{ pg_wait_tracer_repo }} /tmp/pg_wait_tracer
   environment:
     GIT_TERMINAL_PROMPT: "0"
+    GIT_ASKPASS: "/bin/false"
+  register: pg_wait_tracer_clone
+  failed_when: false
   when: pg_wait_tracer_enabled | default(false) | bool
 
 - name: Build and install pg_wait_tracer
@@ -107,7 +110,10 @@
   register: pg_wait_tracer_install
   failed_when: false
   changed_when: pg_wait_tracer_install.rc == 0
-  when: pg_wait_tracer_enabled | default(false) | bool
+  when:
+    - pg_wait_tracer_enabled | default(false) | bool
+    - pg_wait_tracer_clone is defined
+    - pg_wait_tracer_clone.rc == 0
 
 - name: Warn if pg_wait_tracer build failed
   ansible.builtin.debug:
@@ -115,7 +121,8 @@
   when:
     - pg_wait_tracer_enabled | default(false) | bool
     - pg_wait_tracer_install is defined
-    - pg_wait_tracer_install.rc != 0
+    - not (pg_wait_tracer_install.skipped | default(false))
+    - (pg_wait_tracer_install.rc | default(0)) != 0
 
 - name: End pg_cluster/custom/packages.yml
   ansible.builtin.debug:
