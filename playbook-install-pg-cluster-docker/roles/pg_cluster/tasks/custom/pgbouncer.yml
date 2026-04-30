@@ -65,6 +65,10 @@
             sed -i "s|^host=.*|host=${LEADER_IP}|" $PGBOUNCER_INI
             systemctl reload pgbouncer 2>/dev/null || systemctl restart pgbouncer 2>/dev/null
           fi
+          # Restart Keepalived so it re-evaluates VIP ownership after every role change.
+          # Prevents the race condition where Keepalived enters MASTER state internally
+          # but fails to add the VIP to the interface during Patroni leader transitions.
+          systemctl restart keepalived 2>/dev/null
           ;;
         on_start|on_stop|on_restart)
           ;;

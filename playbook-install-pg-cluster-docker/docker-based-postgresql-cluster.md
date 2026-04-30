@@ -362,15 +362,15 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:8013/primary   # 503 if 
 curl -s -o /dev/null -w "%{http_code}" http://localhost:8011/replica   # 200 if streaming replica
 curl -s -o /dev/null -w "%{http_code}" http://localhost:8013/replica   # 200 if streaming replica
 
+# Switchover (graceful, requires a leader)
+docker exec pg2 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 --force
+
 # Trigger a manual failover (promotes a replica to leader)
 docker exec pg2 patronictl -c /etc/patroni/patroni.yml failover pg-docker-cls1 --force
 
 # Failover to a specific node
 docker exec pg2 patronictl -c /etc/patroni/patroni.yml failover pg-docker-cls1 \
   --master pg2 --candidate pg1 --force
-
-# Switchover (graceful, requires a leader)
-docker exec pg2 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 --force
 
 # Pause/resume Patroni automatic failover
 docker exec pg2 patronictl -c /etc/patroni/patroni.yml pause
@@ -395,22 +395,35 @@ psql -h localhost -p 5433 -U postgres postgres   # pg1 (usually leader)
 psql -h localhost -p 5434 -U postgres postgres   # pg2 (sync standby)
 psql -h localhost -p 5435 -U postgres postgres   # pg3 (replica)
 
-# Replication status (run on primary — pg1)
-psql -h localhost -p 5433 -U postgres postgres -c "
-  SELECT client_addr, state, sent_lsn, write_lsn, flush_lsn, replay_lsn,
-         (sent_lsn - replay_lsn) AS replication_lag_bytes
-  FROM pg_stat_replication;"
-
-# Replication lag in MB (run on primary — pg1)
+# Replication status — lag in seconds and bytes (run on primary — pg1)
+# write_lag  : primary flush → standby wrote WAL to OS buffer  (network RTT)
+# flush_lag  : primary flush → standby flushed WAL to disk     (commit overhead for sync standby)
+# replay_lag : primary flush → standby applied WAL to data     (replica data staleness)
+# replication_lag_sec: replay_lag when active; 0 when idle and fully caught up (lag_mb=0)
 psql -h localhost -p 5433 -U postgres postgres -c "
   SELECT client_addr,
+         application_name,
+         state,
+         sync_state,
+         extract(epoch FROM write_lag)::numeric(10,3)  AS write_lag_sec,
+         extract(epoch FROM flush_lag)::numeric(10,3)  AS flush_lag_sec,
+         extract(epoch FROM replay_lag)::numeric(10,3) AS replay_lag_sec,
+         COALESCE(
+           extract(epoch FROM replay_lag)::numeric(10,3),
+           CASE WHEN sent_lsn = replay_lsn THEN 0.000 END
+         )                                             AS replication_lag_sec,
          round((sent_lsn - replay_lsn) / 1048576.0, 2) AS lag_mb
-  FROM pg_stat_replication;"
+  FROM pg_stat_replication
+  ORDER BY client_addr;"
 
 # Check standby recovery status (run on replica — pg2 or pg3)
+# replication_delay: seconds since last transaction was replayed on this replica
 psql -h localhost -p 5434 -U postgres postgres -c "
-  SELECT now() - pg_last_xact_replay_timestamp() AS replication_delay,
-         pg_is_in_recovery(), pg_last_wal_receive_lsn(), pg_last_wal_replay_lsn();"
+  SELECT pg_is_in_recovery(),
+         extract(epoch FROM (now() - pg_last_xact_replay_timestamp()))::numeric(10,3) AS replication_delay_sec,
+         pg_last_wal_receive_lsn(),
+         pg_last_wal_replay_lsn(),
+         round((pg_wal_lsn_diff(pg_last_wal_receive_lsn(), pg_last_wal_replay_lsn())) / 1048576.0, 2) AS receive_vs_replay_lag_mb;"
 
 # Active connections and sessions (run on primary — pg1)
 psql -h localhost -p 5433 -U postgres postgres -c "
@@ -451,7 +464,8 @@ psql -h localhost -p 5433 -U postgres postgres -c "
 # HAProxy backend health summary (CSV stats from inside a container)
 docker exec pg2 bash -c \
   'curl -s -u "admin:Pg@Lab2026!" "http://127.0.0.1:7000/;csv" \
-   | grep -v "^#" | cut -d, -f1,2,18 | column -t -s,'
+   | grep -v "^#" | cut -d, -f1,2,18 \
+   | awk -F, '"'"'{printf "%-12s %-8s %s\n", $1, $2, $3}'"'"''
 
 # Full stats page (open in browser after port-forwarding)
 # From inside container: http://172.18.0.12:7000/  (admin / <PG_SUPERUSER_PWD>)
@@ -459,12 +473,14 @@ docker exec pg2 bash -c \
 # Check which backends are UP (for write port)
 docker exec pg2 bash -c \
   'curl -s -u "admin:Pg@Lab2026!" "http://127.0.0.1:7000/;csv" \
-   | grep "be_write" | cut -d, -f1,2,18'
+   | grep "be_write" | cut -d, -f1,2,18 \
+   | awk -F, '"'"'{printf "%-12s %-8s %s\n", $1, $2, $3}'"'"''
 
 # Check which backends are UP (for read port)
 docker exec pg2 bash -c \
   'curl -s -u "admin:Pg@Lab2026!" "http://127.0.0.1:7000/;csv" \
-   | grep "be_read" | cut -d, -f1,2,18'
+   | grep "be_read" | cut -d, -f1,2,18 \
+   | awk -F, '"'"'{printf "%-12s %-8s %s\n", $1, $2, $3}'"'"''
 
 # HAProxy service status on each node
 for n in pg1 pg2 pg3; do
@@ -906,12 +922,17 @@ docker exec pg2 patronictl -c /etc/patroni/patroni.yml reinit pg-docker-cls1 pg3
 
 ### Primary VIP (172.18.0.10) unreachable after switchover/failover
 
+**This should no longer happen automatically** — `patroni_pgbouncer_callback.sh` now restarts
+Keepalived on every `on_role_change` event, which forces a clean VIP re-evaluation after every
+leader transition.
+
+If it still occurs (e.g. after a manual Keepalived restart or container recreation):
+
 Symptom: `No route to host` connecting to 172.18.0.10, even though `patronictl list` shows the
 correct leader and Keepalived is active.
 
-Cause: Race condition during role transition — Keepalived entered MASTER state internally but
-failed to actually add the VIP to the interface. Restarting Keepalived on the node that should
-own the VIP re-triggers the VIP assignment.
+Cause: Race condition — Keepalived entered MASTER state internally but failed to add the VIP to
+the interface.
 
 ```bash
 # Identify which node is the current Patroni primary
@@ -1123,6 +1144,12 @@ scrape_configs:
 - **pgBouncer `auth_type = scram-sha-256`**: Plain text passwords in `userlist.txt` are supported
   by pgBouncer 1.16+ for SCRAM authentication. After Patroni failovers, reload pgBouncer to clear
   stale server-side connections (`systemctl reload pgbouncer`).
+
+- **Patroni `on_role_change` callback** (`patroni_pgbouncer_callback.sh`): fires on every leader
+  transition (switchover, failover, promotion). Does two things: (1) updates pgBouncer's `host=`
+  to point to the new leader IP; (2) restarts Keepalived to force a clean VIP re-evaluation.
+  This eliminates the race condition where Keepalived enters MASTER state internally but fails to
+  add the VIP to the interface during rapid role changes.
 
 - **HAProxy host ports**: The HAProxy host-port mappings (15000/25001/17000 etc.) were added to
   container definitions in `roles/docker_infrastructure/defaults/main.yml` but only take effect
