@@ -1072,7 +1072,7 @@ podman exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 127.0.0.1 -p 5432 -U p
 # ⚠️ NOTE: etcd will show "unhealthy cluster" when pg1 & pg2 are down (lost quorum).
 # This is EXPECTED — we proceed to failover anyway.
 echo "=== etcd Status (will show unhealthy due to quorum loss) ===" 
-podman exec pg3 etcdctl --endpoints=http://172.18.0.13:2379 endpoint health 2>&1 | head -1 || echo "Expected: etcd unhealthy due to lost quorum (2/3 nodes down)"
+podman exec pg3 etcdctl --endpoints=http://172.18.0.13:2379 endpoint health 2>&1 | grep -E "^http://|Error:" | head -1 || echo "Expected: etcd unhealthy due to lost quorum (2/3 nodes down)"
 
 # Step 7: Execute MANUAL failover (CRITICAL STEP)
 # ⚠️ NOTE: This command is the critical test. It may timeout/fail if etcd quorum is permanently lost.

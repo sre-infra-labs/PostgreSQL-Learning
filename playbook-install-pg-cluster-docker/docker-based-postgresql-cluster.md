@@ -1115,7 +1115,7 @@ docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 127.0.0.1 -p 5432 -U p
 ⚠️ **IMPORTANT**: When pg1 & pg2 are stopped, etcd loses quorum (2 of 3 nodes down). etcd will report "unhealthy cluster" — this is **EXPECTED**.
 
 ```bash
-docker exec pg3 bash -c 'etcdctl --endpoints=http://172.18.0.13:2379 endpoint health 2>&1 | head -1 || echo "Expected: etcd unhealthy due to lost quorum (2/3 nodes down)"'
+docker exec pg3 bash -c 'etcdctl --endpoints=http://172.18.0.13:2379 endpoint health 2>&1 | grep -E "^http://|Error:" | head -1 || echo "Expected: etcd unhealthy due to lost quorum (2/3 nodes down)"'
 ```
 
 **Expected output**:
