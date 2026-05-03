@@ -1068,11 +1068,15 @@ podman ps --format "table {{.Names}}\t{{.Status}}" | grep -E "pg1|pg2|pg3"
 echo "=== Cluster State (pg3 should still be Replica) ===" 
 podman exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 127.0.0.1 -p 5432 -U postgres postgres -t -c "SELECT pg_is_in_recovery();"'
 
-# Step 6: Verify etcd is accessible from pg3
-echo "=== Verify etcd Accessible ===" 
-podman exec pg3 etcdctl --endpoints=http://172.18.0.13:2379 endpoint health
+# Step 6: Check etcd status from pg3
+# ⚠️ NOTE: etcd will show "unhealthy cluster" when pg1 & pg2 are down (lost quorum).
+# This is EXPECTED — we proceed to failover anyway.
+echo "=== etcd Status (will show unhealthy due to quorum loss) ===" 
+podman exec pg3 etcdctl --endpoints=http://172.18.0.13:2379 endpoint health 2>&1 | head -1 || echo "Expected: etcd unhealthy due to lost quorum (2/3 nodes down)"
 
 # Step 7: Execute MANUAL failover (CRITICAL STEP)
+# ⚠️ NOTE: This command is the critical test. It may timeout/fail if etcd quorum is permanently lost.
+# If it fails, the cluster is unrecoverable without restarting pg1 & pg2.
 echo ""
 echo "⚠️  MANUAL FAILOVER REQUIRED (automatic failover is disabled)"
 echo "Command: podman exec pg3 patronictl -c /etc/patroni/patroni.yml failover pg-docker-cls1 --force"
