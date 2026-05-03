@@ -756,9 +756,18 @@ done
 ### pgBackRest logs
 
 ```bash
-# pgBackRest log
+# pgBackRest backup log
 docker exec pg1 cat /var/log/pgbackrest/pg-docker-cls1-backup.log 2>/dev/null | tail -30
+
+# List all pgBackRest logs
 docker exec pg1 ls /var/log/pgbackrest/
+
+# Check stanza status and health
+docker exec pg1 pgbackrest --stanza=pg-docker-cls1 info
+docker exec pg1 pgbackrest --stanza=pg-docker-cls1 check
+
+# Check stanza details (system-id, wal_system_identifier, etc.)
+docker exec pg1 sudo -u postgres pgbackrest --stanza=pg-docker-cls1 info --log-level-console=info
 ```
 
 ### etcd logs
@@ -932,6 +941,45 @@ docker exec pg2 patronictl -c /etc/patroni/patroni.yml list
 # Reinitialize lagging replica from scratch
 docker exec pg2 patronictl -c /etc/patroni/patroni.yml reinit pg-docker-cls1 pg3 --force
 ```
+
+### pgBackRest stanza system-id mismatch
+
+**Symptom**: Backup fails with error:
+```
+ERROR: [051]: PostgreSQL version X, system-id XXXXXXXXX do not match stanza version X, system-id YYYYYYYYY
+HINT: is this the correct stanza?
+```
+
+**Cause**: The pgBackRest stanza was created with a different PostgreSQL instance (different system-id).
+This happens when the PostgreSQL cluster is reinitialized (via `reinit_cluster=true` in Ansible or
+manual data directory reset) but the old pgBackRest stanza metadata still exists in `/var/lib/pgbackrest`.
+
+**Fix**: Delete the old stanza and create a new one (this will remove all old backups for this stanza):
+
+```bash
+# SSH into the leader container and switch to postgres user
+docker exec -it pg1 bash
+su - postgres
+
+# Delete the old stanza (all backups for this stanza will be removed)
+pgbackrest --stanza=pg-docker-cls1 stanza-delete --force
+
+# Create a new stanza synchronized with the current PostgreSQL instance
+pgbackrest --stanza=pg-docker-cls1 stanza-create
+
+# Verify the stanza is now valid
+pgbackrest --stanza=pg-docker-cls1 check
+
+# Exit back to root
+exit
+exit
+
+# Now run a full backup
+docker exec pg1 pgbackrest --stanza=pg-docker-cls1 --log-level-console=info backup --type=full
+```
+
+**Note**: The stanza-delete + stanza-create cycle re-synchronizes pgBackRest with the current
+PostgreSQL instance (system-id, wal_system_identifier, and other metadata).
 
 ### Primary VIP (172.18.0.10) unreachable after switchover/failover
 
