@@ -52,6 +52,14 @@
 20. [Prometheus Scrape Config](#prometheus-scrape-config)
 21. [Design Notes](#design-notes)
 22. [Podman Infrastructure Conversion](#podman-infrastructure-conversion)
+23. [Multi-Region DCS Deployment for Production DR](#multi-region-dcs-deployment-for-production-dr)
+   - [Why Separate DCS Nodes Matter](#why-separate-dcs-nodes-matter-for-dr)
+   - [DCS Quorum Rules](#dcs-quorum-rules-critical-for-dr)
+   - [Multi-Region Deployment Scenarios](#multi-region-deployment-scenarios)
+   - [Network Latency Considerations](#network-latency-considerations)
+   - [DCS Node Placement Best Practice](#dcs-node-placement-best-practice)
+   - [Impact on DR Testing](#impact-on-dr-testing)
+   - [Adding Nodes On-The-Fly](#adding-nodes-on-the-fly)
 
 ---
 
@@ -1074,14 +1082,31 @@ podman exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 127.0.0.1 -p 5432 -U p
 echo "=== etcd Status (will show unhealthy due to quorum loss) ===" 
 podman exec pg3 etcdctl --endpoints=http://172.18.0.13:2379 endpoint health 2>&1 | grep -E "^http://|Error:" | head -1 || echo "Expected: etcd unhealthy due to lost quorum (2/3 nodes down)"
 
-# Step 7: Execute MANUAL failover (CRITICAL STEP)
-# ⚠️ NOTE: This command is the critical test. It may timeout/fail if etcd quorum is permanently lost.
-# If it fails, the cluster is unrecoverable without restarting pg1 & pg2.
+# Step 7: ⚠️ CRITICAL LIMITATION ⚠️
+# patronictl failover CANNOT work when etcd has lost quorum (pg1 & pg2 down).
+# The command will fail with: "Etcd is not responding properly"
+# 
+# REASON: patronictl requires DCS (etcd) to:
+#   1. Read current cluster state
+#   2. Write failover decision
+#   3. Communicate with pg3's Patroni daemon
+#
+# With 2/3 etcd nodes down → no quorum → no DCS operations possible
+#
+# WORKAROUND FOR TESTING:
+# Restart pg1 & pg2 FIRST to restore etcd quorum, THEN test failover:
 echo ""
-echo "⚠️  MANUAL FAILOVER REQUIRED (automatic failover is disabled)"
-echo "Command: podman exec pg3 patronictl -c /etc/patroni/patroni.yml failover pg-docker-cls1 --force"
+echo "⚠️  ETCD QUORUM LOST - Cannot proceed with patronictl failover"
+echo "⚠️  Solution: Restart pg1 & pg2 to restore etcd quorum FIRST"
 echo ""
-podman exec pg3 patronictl -c /etc/patroni/patroni.yml failover pg-docker-cls1 --force
+echo "Run this in a separate terminal:"
+echo "  podman start pg1 pg2"
+echo "  sleep 20"
+echo "  podman exec pg3 patronictl -c /etc/patroni/patroni.yml list  # verify etcd healthy"
+echo ""
+echo "Then proceed with failover test by stopping pg1 & pg2 again"
+echo ""
+echo "SKIPPING failover step (will work once etcd quorum is restored)"
 
 # Step 8: Wait for promotion
 echo "=== Waiting for promotion..." 
@@ -2181,6 +2206,232 @@ podman volume rm pg-data-pg1 pg-data-pg2 pg-data-pg3 \
 ansible-playbook playbook-setup-podman.yml
 ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
 ```
+
+---
+
+## Multi-Region DCS Deployment for Production DR
+
+### Overview
+
+For production Disaster Recovery (DR) to work reliably, the Distributed Configuration Store (DCS) — Consul or etcd — **must be deployed on separate nodes** from the PostgreSQL cluster, and **distributed across multiple regions** for geographic resilience.
+
+This section explains multi-region DCS deployment strategies and how they impact DR testing and failover behavior.
+
+### Why Separate DCS Nodes Matter for DR
+
+**Problem with Co-Located DCS** (current lab setup):
+```
+pg1: PostgreSQL + Patroni + etcd
+pg2: PostgreSQL + Patroni + etcd
+pg3: PostgreSQL + Patroni + etcd
+```
+
+When pg1 & pg2 stop → etcd loses quorum → patronictl failover fails ❌
+
+**Solution with Separate DCS** (production setup):
+```
+PostgreSQL Cluster       DCS Cluster (Separate)
+├── pg1 (Patroni)       ├── etcd1 (India)
+├── pg2 (Patroni)       ├── etcd2 (US East)
+└── pg3 (Patroni)       └── etcd3 (EU)
+                        (Always running, independent)
+```
+
+When pg1 & pg2 stop → etcd still has quorum → patronictl failover works ✅
+
+### DCS Quorum Rules (Critical for DR)
+
+**Quorum = majority = floor(n/2) + 1**
+
+| Nodes | Quorum | Can Lose | Multi-Region Viable? |
+|-------|--------|----------|----------------------|
+| 1     | 1      | 0        | ❌ No (SPOF) |
+| 2     | 2      | 0        | ❌ No (need both) |
+| **3** | **2**  | **1**    | ⚠️ Only if distributed |
+| 4     | 3      | 1        | ⚠️ Even numbers wasteful |
+| 5     | 3      | 2        | ✅ Recommended |
+| 7     | 4      | 3        | ✅ Enterprise HA |
+
+**Key Rule**: Even number of nodes = wasted resources (no better fault tolerance than n-1)
+
+### Multi-Region Deployment Scenarios
+
+#### ❌ NOT Recommended: Majority in One Region
+
+```
+3-Node etcd: 2 India + 1 US
+├── etcd1 (India)
+├── etcd2 (India)
+└── etcd3 (US East)
+
+Quorum = 2
+India region down → only etcd3 remains (1 node) → NO QUORUM ❌
+```
+
+**Problem**: If India region fails, only 1 DCS node remains = cluster unavailable
+
+#### ✅ Recommended: 5-Node Distributed
+
+```
+5-Node etcd: 2 India + 2 US + 1 EU
+├── etcd1 (India)
+├── etcd2 (India)
+├── etcd3 (US East)
+├── etcd4 (US East)
+└── etcd5 (EU Central)
+
+Quorum = 3
+Any 1 region down → at least 3 nodes remain ✅
+```
+
+**Benefits**:
+- Quorum survives loss of 1 entire region
+- Geographic diversity prevents single-region outages
+- Better latency distribution
+
+#### ✅ Enterprise: 7-Node Distributed
+
+```
+7-Node etcd: 3 India + 2 US + 2 EU
+├── etcd1, etcd2, etcd3 (India)
+├── etcd4, etcd5 (US East)
+└── etcd6, etcd7 (EU Central)
+
+Quorum = 4
+Can tolerate 3 node failures
+Can tolerate 1 entire region down AND 1 more node elsewhere ✅
+```
+
+**Benefits**:
+- Extreme fault tolerance
+- Can lose entire region + additional node
+- Maximum availability for critical deployments
+
+### Network Latency Considerations
+
+etcd and Consul are consensus-based and sensitive to network latency:
+
+| Latency | Impact | Viable? |
+|---------|--------|---------|
+| < 10ms  | Excellent | ✅ Same data center |
+| 10-50ms | Good | ✅ Same region |
+| 50-100ms | Acceptable | ⚠️ Monitor |
+| > 100ms | Poor | ❌ Risk of split-brain |
+
+**Recommendation**:
+- India ↔ US East: ~250ms (may cause slowness)
+- India ↔ EU: ~300ms (may cause slowness)
+- **Solution**: Use 3 regional data centers with < 50ms latency between them, or accept higher latency with larger timeout values
+
+### DCS Node Placement Best Practice
+
+```
+Production Setup:
+├── Data Center 1 (Region A): 2 etcd nodes
+├── Data Center 2 (Region B): 2 etcd nodes
+└── Data Center 3 (Region C): 1 etcd node (tie-breaker)
+
+Total: 5 nodes, Quorum = 3
+Tolerates: 1 entire region failure + 1 additional node failure
+```
+
+### Impact on DR Testing
+
+With properly distributed separate DCS cluster:
+
+**Before**: Co-located etcd (current)
+- Stop pg1 & pg2 → etcd quorum lost → DR test fails ❌
+- Workaround: Restart pg1 & pg2 to restore quorum, then test
+
+**After**: Separate distributed etcd (production)
+- Stop pg1 & pg2 → DCS unaffected → DR test works perfectly ✅
+- Can test complete failure scenarios without DCS interference
+- Failover works as designed
+
+### Adding Nodes On-The-Fly
+
+Both Consul and etcd support dynamic node addition:
+
+**etcd - Add node**:
+```bash
+# 1. On etcd leader, add new member
+etcdctl member add etcd4 --peer-urls=https://etcd4:2380
+
+# 2. Start new etcd node with join-existing=true
+# 3. Verify cluster health
+etcdctl endpoint health
+```
+
+**Consul - Add node**:
+```bash
+# 1. Start new Consul server
+consul agent -server -join=<existing-consul-ip>
+
+# 2. Verify cluster membership
+consul members
+```
+
+**No cluster downtime required** — existing cluster keeps operating while new node syncs data.
+
+### Example: From 3-Node to 5-Node (Scaled for DR)
+
+```
+Initial Setup (Not resilient to region loss):
+├── etcd1 (India)
+├── etcd2 (India)
+└── etcd3 (US East)
+Quorum = 2 (fragile)
+
+Upgrade Plan:
+1. Add etcd4 (US East): etcdctl member add etcd4
+   Result: 4 nodes, Quorum = 3 (still need majority)
+
+2. Add etcd5 (EU Central): etcdctl member add etcd5
+   Result: 5 nodes, Quorum = 3 (resilient!)
+
+Final Setup (Resilient):
+├── etcd1, etcd2 (India)
+├── etcd3, etcd4 (US East)
+└── etcd5 (EU Central)
+Quorum = 3 ✅ Can survive any region failure
+```
+
+**Execution**: 0 downtime, PostgreSQL cluster keeps running
+
+### Verification Commands
+
+**Check etcd cluster health across regions**:
+```bash
+etcdctl --endpoints=https://etcd1:2379,https://etcd2:2379,https://etcd3:2379,https://etcd4:2379,https://etcd5:2379 \
+  endpoint health
+```
+
+**Monitor Patroni connectivity to DCS**:
+```bash
+# Patroni logs should show healthy DCS connection
+pg1: journalctl -u patroni -f | grep -i "dcs\|etcd"
+
+# All nodes should show quorum achieved
+patronictl -c /etc/patroni/patroni.yml list
+```
+
+**Check network latency between regions**:
+```bash
+ping etcd2  # India ↔ US
+ping etcd5  # India ↔ EU
+# Target: < 50ms for best performance
+```
+
+### Summary: Multi-Region DCS for Production DR
+
+| Factor | Lab Setup | Production Setup |
+|--------|-----------|------------------|
+| DCS Location | Co-located with PG | Separate nodes |
+| DCS Nodes | 3 (on pg1, pg2, pg3) | 5+ across regions |
+| Quorum Resilience | Fails when 2 PG nodes down | Survives PG failures |
+| DR Test Works | No (need workaround) | Yes (complete test) |
+| Region Failure | Cluster unavailable | Cluster available |
+| Setup Complexity | Simple (lab) | Complex (prod) |
 
 ---
 
