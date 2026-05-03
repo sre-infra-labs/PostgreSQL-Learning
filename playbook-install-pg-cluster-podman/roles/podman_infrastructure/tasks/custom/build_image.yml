@@ -1,0 +1,17 @@
+---
+- name: Check if {{ pg_node_image }} image exists
+  ansible.builtin.command: podman images {{ pg_node_image }}
+  register: image_check
+  failed_when: false
+  changed_when: false
+
+- name: Build Podman image from Dockerfile
+  ansible.builtin.command: |
+    podman build -t {{ pg_node_image }} {{ pg_node_dockerfile_path }}
+  when: "'pg-cluster-node' not in image_check.stdout"
+  register: build_output
+  changed_when: true
+
+- name: Image build result
+  ansible.builtin.debug:
+    msg: "{{ build_output.stdout_lines if build_output.changed else ['Image already exists: ' + pg_node_image] }}"

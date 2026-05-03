@@ -1,0 +1,40 @@
+---
+- name: Begin pg_cluster/custom/haproxy.yml
+  ansible.builtin.debug:
+    msg: "Installing HAProxy on {{ inventory_hostname }} — write:{{ haproxy_write_port }} read:{{ haproxy_read_port }} stats:{{ haproxy_stats_port }}"
+
+- name: Install HAProxy
+  ansible.builtin.package:
+    name: haproxy
+    state: present
+  environment: "{{ proxy_env | default({}) }}"
+
+- name: Generate /etc/haproxy/haproxy.cfg from template
+  ansible.builtin.template:
+    src: "{{ role_path }}/templates/haproxy.cfg.j2"
+    dest: /etc/haproxy/haproxy.cfg
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload haproxy
+
+- name: Enable and start HAProxy service
+  ansible.builtin.systemd:
+    name: haproxy
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Wait for HAProxy write port to be available
+  ansible.builtin.wait_for:
+    host: 0.0.0.0
+    port: "{{ haproxy_write_port }}"
+    state: started
+    timeout: 30
+    delay: 2
+
+- name: End pg_cluster/custom/haproxy.yml
+  ansible.builtin.debug:
+    msg: >-
+      HAProxy ready on {{ inventory_hostname }} —
+      write=:{{ haproxy_write_port }} read=:{{ haproxy_read_port }} stats=:{{ haproxy_stats_port }}

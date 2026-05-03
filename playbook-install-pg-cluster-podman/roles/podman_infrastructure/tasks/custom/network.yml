@@ -1,0 +1,19 @@
+---
+- name: Check if Podman network '{{ podman_network_name }}' exists
+  ansible.builtin.command: podman network inspect {{ podman_network_name }}
+  register: network_inspect
+  failed_when: false
+  changed_when: false
+
+- name: Fail if required network does not exist
+  ansible.builtin.fail:
+    msg: >
+      Podman network '{{ podman_network_name }}' does not exist.
+      This is a shared lab network — create it first:
+        podman network create --driver bridge --subnet={{ podman_network_subnet }} {{ podman_network_name }}
+  when: network_inspect.rc != 0
+
+- name: Network exists — attaching pg containers to it
+  ansible.builtin.debug:
+    msg: "Network '{{ podman_network_name }}' exists — pg containers will be attached to it"
+  when: network_inspect.rc == 0

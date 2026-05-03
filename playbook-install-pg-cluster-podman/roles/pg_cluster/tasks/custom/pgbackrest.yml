@@ -1,0 +1,66 @@
+---
+- name: Create pgBackRest directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /var/log/pgbackrest,        mode: '0770' }
+    - { path: /etc/pgbackrest,             mode: '0740' }
+    - { path: /etc/pgbackrest/conf.d,      mode: '0740' }
+    - { path: /var/spool/pgbackrest,       mode: '0740' }
+    - { path: "{{ pgbackrest_repo1_path }}", mode: '0750' }
+
+- name: Generate /etc/pgbackrest/pgbackrest.conf from template
+  ansible.builtin.template:
+    src: "{{ role_path }}/templates/pgbackrest.conf.j2"
+    dest: /etc/pgbackrest/pgbackrest.conf
+    owner: postgres
+    group: postgres
+    mode: '0640'
+
+- name: Wait for Patroni leader PostgreSQL to accept connections
+  ansible.builtin.wait_for:
+    host: localhost
+    port: "{{ postgresql_port }}"
+    state: started
+    timeout: 120
+    delay: 5
+  when: inventory_hostname in groups['leader']
+
+- name: Create pgBackRest stanza
+  ansible.builtin.command:
+    cmd: pgbackrest --stanza={{ pgbackrest_stanza_name }} --log-level-console=info stanza-create
+  become_user: postgres
+  register: stanza_result
+  retries: 3
+  delay: 10
+  failed_when: false
+  when: inventory_hostname in groups['leader']
+
+- name: Fail if stanza-create returned real errors
+  ansible.builtin.fail:
+    msg: "pgbackrest stanza-create failed: {{ stanza_result.stdout | default('Unknown') }}"
+  when:
+    - inventory_hostname in groups['leader']
+    - stanza_result is defined
+    - stanza_result.rc is defined
+    - stanza_result.rc != 0
+    - "'ERROR' in (stanza_result.stdout | default(''))"
+    - "'did an error occur during stanza-upgrade' not in (stanza_result.stdout | default(''))"
+
+- name: Upgrade pgBackRest stanza if needed
+  ansible.builtin.command:
+    cmd: pgbackrest --stanza={{ pgbackrest_stanza_name }} --log-level-console=info stanza-upgrade
+  become_user: postgres
+  when:
+    - inventory_hostname in groups['leader']
+    - stanza_result is defined
+    - stanza_result.rc is defined
+    - stanza_result.rc != 0
+    - "'did an error occur during stanza-upgrade' in (stanza_result.stdout | default(''))"
+  register: stanza_upgrade_result
+  retries: 3
+  delay: 10

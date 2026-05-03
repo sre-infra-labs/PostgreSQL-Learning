@@ -1,0 +1,49 @@
+---
+# A dedicated pgBouncer container that always routes connections to the current Patroni leader.
+# A watchdog script inside the container polls each node's Patroni REST API (/primary endpoint)
+# every 10 seconds and reloads pgBouncer when the leader changes.
+#
+# Clients connect to: localhost:5436 (host) → pgBouncer:6432 → Patroni leader:5432
+
+- name: Read SSH public key from local machine
+  ansible.builtin.slurp:
+    src: "{{ ansible_ssh_public_key_path | expanduser }}"
+  register: ssh_pub_key
+  ignore_errors: true
+
+- name: Create pgBouncer routing container
+  community.docker.docker_container:
+    name: "{{ pgbouncer_container_name }}"
+    image: "{{ pg_node_image }}"
+    state: started
+    restart_policy: unless-stopped
+    privileged: true
+    cgroupns_mode: host
+    tmpfs:
+      - /run
+      - /run/lock
+    networks:
+      - name: "{{ docker_network_name }}"
+        ipv4_address: "{{ pgbouncer_ip }}"
+    ports:
+      - "2224:22"
+      - "{{ pgbouncer_host_port }}:{{ pgbouncer_container_port }}"
+    volumes:
+      - "/sys/fs/cgroup:/sys/fs/cgroup:rw"
+    hostname: "{{ pgbouncer_container_name }}"
+
+- name: Inject SSH public key into pgBouncer container
+  ansible.builtin.shell: |
+    docker exec {{ pgbouncer_container_name }} bash -c "
+      mkdir -p /home/ansible/.ssh
+      chmod 700 /home/ansible/.ssh
+      echo '{{ ssh_pub_key.content | b64decode | trim }}' > /home/ansible/.ssh/authorized_keys
+      chmod 600 /home/ansible/.ssh/authorized_keys
+      chown -R ansible:ansible /home/ansible/.ssh
+    "
+  changed_when: true
+  when: ssh_pub_key is not failed
+
+- name: pgBouncer container is ready
+  ansible.builtin.debug:
+    msg: "pgBouncer container '{{ pgbouncer_container_name }}' running at {{ pgbouncer_ip }} — host port {{ pgbouncer_host_port }}"

@@ -1,0 +1,13 @@
+---
+# Master playbook — runs Phase 1 (Docker infra) then Phase 2 (PG cluster install)
+# Usage: ansible-playbook site.yml --vault-password-file=vault-pass
+#
+# To run phases individually:
+#   Phase 1: ansible-playbook playbook-setup-docker.yml
+#   Phase 2: ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
+
+- name: Phase 1 - Setup Docker Infrastructure
+  import_playbook: playbook-setup-docker.yml
+
+- name: Phase 2 - Install PostgreSQL 18 Cluster
+  import_playbook: playbook-install-pg-cluster.yml

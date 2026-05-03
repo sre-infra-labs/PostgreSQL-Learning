@@ -1,0 +1,108 @@
+! Keepalived VRRP config for {{ inventory_hostname }}
+! VIP {{ keepalived_vip }} → Patroni primary (write)
+! VIP {{ keepalived_replica_vip }} → sync standby when synchronous_mode=true, else any healthy replica
+
+global_defs {
+    router_id {{ inventory_hostname }}
+    script_user root
+    enable_script_security
+}
+
+#---------------------------------------------------------------
+# Script 1: passes only on the Patroni primary
+#---------------------------------------------------------------
+vrrp_script chk_patroni_primary {
+    script "/usr/bin/curl -sf --max-time 2 http://127.0.0.1:{{ patroni_restapi_port }}/primary"
+    interval {{ keepalived_check_interval }}
+    rise    {{ keepalived_check_rise }}
+    fall    {{ keepalived_check_fall }}
+    weight  {{ keepalived_weight }}
+}
+
+#---------------------------------------------------------------
+# Script 2: passes on sync standby (synchronous_mode=true) or any
+#           healthy replica (synchronous_mode=false → /replica)
+#---------------------------------------------------------------
+vrrp_script chk_patroni_standby {
+{% if synchronous_mode | bool %}
+    script "/usr/bin/curl -sf --max-time 2 http://127.0.0.1:{{ patroni_restapi_port }}/synchronous"
+{% else %}
+    script "/usr/bin/curl -sf --max-time 2 http://127.0.0.1:{{ patroni_restapi_port }}/replica"
+{% endif %}
+    interval {{ keepalived_check_interval }}
+    rise    {{ keepalived_check_rise }}
+    fall    {{ keepalived_check_fall }}
+    weight  {{ keepalived_weight }}
+}
+
+#---------------------------------------------------------------
+# VRRP instance 1 — Primary/Write VIP ({{ keepalived_vip }})
+# virtual_router_id: {{ keepalived_virtual_router_id }}
+#---------------------------------------------------------------
+vrrp_instance VI_PRIMARY {
+    state  BACKUP
+    interface {{ keepalived_interface }}
+    virtual_router_id {{ keepalived_virtual_router_id }}
+    priority {{ 101 - groups['all'].index(inventory_hostname) }}
+    advert_int 1
+
+    unicast_src_ip {{ ip }}
+    unicast_peer {
+{% for host in groups['all'] %}
+{% if host != inventory_hostname %}
+        {{ hostvars[host]['ip'] }}
+{% endif %}
+{% endfor %}
+    }
+
+    authentication {
+        auth_type PASS
+        auth_pass {{ keepalived_auth_pass }}
+    }
+
+    virtual_ipaddress {
+        {{ keepalived_vip }}/{{ keepalived_vip_prefix }} dev {{ keepalived_interface }} label {{ keepalived_interface }}:vip
+    }
+
+    track_script {
+        chk_patroni_primary
+    }
+
+    notify /usr/local/bin/keepalived_notify_primary.sh
+}
+
+#---------------------------------------------------------------
+# VRRP instance 2 — Replica/Standby VIP ({{ keepalived_replica_vip }})
+# virtual_router_id: {{ keepalived_virtual_router_id + 1 }}
+#---------------------------------------------------------------
+vrrp_instance VI_REPLICA {
+    state  BACKUP
+    interface {{ keepalived_interface }}
+    virtual_router_id {{ keepalived_virtual_router_id | int + 1 }}
+    priority {{ 101 - groups['all'].index(inventory_hostname) }}
+    advert_int 1
+
+    unicast_src_ip {{ ip }}
+    unicast_peer {
+{% for host in groups['all'] %}
+{% if host != inventory_hostname %}
+        {{ hostvars[host]['ip'] }}
+{% endif %}
+{% endfor %}
+    }
+
+    authentication {
+        auth_type PASS
+        auth_pass {{ keepalived_auth_pass }}
+    }
+
+    virtual_ipaddress {
+        {{ keepalived_replica_vip }}/{{ keepalived_vip_prefix }} dev {{ keepalived_interface }} label {{ keepalived_interface }}:rvip
+    }
+
+    track_script {
+        chk_patroni_standby
+    }
+
+    notify /usr/local/bin/keepalived_notify_replica.sh
+}
