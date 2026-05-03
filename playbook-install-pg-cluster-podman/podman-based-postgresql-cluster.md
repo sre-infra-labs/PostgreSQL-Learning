@@ -1062,8 +1062,11 @@ echo "=== Verify pg1 & pg2 Offline ==="
 podman ps --format "table {{.Names}}\t{{.Status}}" | grep -E "pg1|pg2|pg3"
 
 # Step 5: Check cluster state (pg3 still Replica)
+# ⚠️ NOTE: When pg1 & pg2 are stopped, etcd loses quorum (2/3 down).
+# Patroni cannot connect to DCS — patronictl will timeout/fail.
+# Use direct PostgreSQL query to verify pg3 is still in recovery mode (replica):
 echo "=== Cluster State (pg3 should still be Replica) ===" 
-podman exec pg3 patronictl -c /etc/patroni/patroni.yml list | grep -E "pg3|Replica"
+podman exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 127.0.0.1 -p 5432 -U postgres postgres -t -c "SELECT pg_is_in_recovery();"'
 
 # Step 6: Verify etcd is accessible from pg3
 echo "=== Verify etcd Accessible ===" 

@@ -1094,22 +1094,21 @@ sleep 5
 
 #### Step 4: Verify pg1 & pg2 are DOWN, pg3 is still REPLICA
 
+⚠️ **IMPORTANT**: When pg1 & pg2 are stopped, etcd loses quorum (2 of 3 nodes down). Patroni on pg3 cannot connect to the DCS. **Do NOT use `patronictl list`** — it will timeout.
+
+Instead, directly query PostgreSQL on pg3 to verify it's still in recovery mode (replica):
+
 ```bash
-docker exec pg3 patronictl -c /etc/patroni/patroni.yml list
+docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 127.0.0.1 -p 5432 -U postgres postgres -t -c "SELECT pg_is_in_recovery();"'
 ```
 
 **Expected output**:
 ```
-+ Cluster: pg-docker-cls1 (7634451494908218688) --+-----------+
-| Member | Host        | Role    | State     | TL | Lag in MB |
-+--------+-------------+---------+-----------+----+-----------+
-| pg1    | 172.18.0.11 | Leader  | down      |  1 |       N/A |
-| pg2    | 172.18.0.12 | Standby | down      |  1 |       N/A |
-| pg3    | 172.18.0.13 | Replica | streaming |  1 |          |
-+--------+-------------+---------+-----------+----+-----------+
+ t
+(1 row)
 ```
 
-**Verify**: pg1 and pg2 are DOWN; pg3 remains Replica (automatic failover disabled)
+**Verify**: pg3 returns `t` (true) — pg3 is still in recovery mode (replica status confirmed)
 
 #### Step 5: Verify etcd accessibility from pg3
 
