@@ -29,36 +29,14 @@
 
 ### Failover & Disaster Recovery
 15. [Failover Testing](#failover-testing)
-16. [Disaster Recovery (DR) Testing: Complete Reference](#disaster-recovery-dr-testing-complete-reference)
-   - [DR Quick Overview](#dr-quick-overview)
-   - [DR Test Validation Matrix](#dr-test-validation-matrix)
-   - [Pre-DR Baseline Verification](#pre-dr-baseline-verification)
-   - [Disaster Scenario](#disaster-scenario)
-   - [Manual Promotion](#manual-promotion)
-   - [DR Mode Active](#dr-mode-active)
-   - [Recovery Phase](#recovery-phase)
-   - [Restore Topology](#restore-topology)
-   - [Post-Recovery Validation](#post-recovery-validation)
-   - [Understanding Timeline & LSN](#understanding-timeline--lsn)
-   - [Replication Slots During DR](#replication-slots-during-dr)
-   - [DR Troubleshooting](#dr-troubleshooting)
-   - [Complete DR Test Verification Checklist](#complete-dr-test-verification-checklist)
-   - [DR Test Execution Guide](#dr-test-execution-guide)
+16. [Disaster Recovery (DR) Failover & Failback — Multi-Region](#disaster-recovery-dr-failover--failback--multi-region)
 
 ### Infrastructure & Deployment
 17. [Troubleshooting](#troubleshooting)
 18. [Common Ansible Operations](#common-ansible-operations)
 19. [Prometheus Scrape Config](#prometheus-scrape-config)
 20. [Design Notes](#design-notes)
-21. [Multi-Region DCS Deployment for Production DR](#multi-region-dcs-deployment-for-production-dr)
-   - [Why Separate DCS Nodes Matter](#why-separate-dcs-nodes-matter-for-dr)
-   - [DCS Quorum Rules](#dcs-quorum-rules-critical-for-dr)
-   - [Multi-Region Deployment Scenarios](#multi-region-deployment-scenarios)
-   - [Network Latency Considerations](#network-latency-considerations)
-   - [DCS Node Placement Best Practice](#dcs-node-placement-best-practice)
-   - [Impact on DR Testing](#impact-on-dr-testing)
-   - [Adding Nodes On-The-Fly](#adding-nodes-on-the-fly)
-22. [Other Miscellaneous Commands](#other-miscellaneous-commands)
+21. [Other Miscellaneous Commands](#other-miscellaneous-commands)
 
 ---
 
@@ -94,24 +72,53 @@ Host (macOS)
 │   ├── 172.18.0.9  ← Keepalived Replica VIP  (floats to the sync standby; /synchronous endpoint)
 │   ├── 172.18.0.10 ← Keepalived Primary VIP  (floats to the Patroni leader)
 │   │
-│   ├── pg1  (172.18.0.11)  — Leader or Sync Standby  (designed: Leader)
-│   ├── pg2  (172.18.0.12)  — Leader or Sync Standby  (designed: Sync Standby)
-│   └── pg3  (172.18.0.13)  — Replica                 (nosync: true — never elected Sync Standby or Leader)
+│   ├─ Region A (Primary Cluster — pg-docker-cls1)
+│   │  ├── pg1  (172.18.0.11) — Leader or Sync Standby  (designed: Leader)
+│   │  ├── pg2  (172.18.0.12) — Leader or Sync Standby  (designed: Sync Standby)
+│   │  └── pg3  (172.18.0.13) — Replica                 (nosync: true — never elected Sync Standby or Leader)
+│   │
+│   └─ Region B (Standby Cluster — pg-docker-cls1) [Optional for DR]
+│      └── pg4  (172.18.0.14) — Standby (single-node, streams from Region A leader)
 │
 └── Docker Named Volume: pg-backups  (shared pgBackRest POSIX repo)
 ```
 
-### Replication Topology
+### Replication Topology — Primary Cluster (Region A)
 
-| Node | Designed Role   | Patroni Tag     | Notes                                    |
-|------|-----------------|-----------------|------------------------------------------|
-| pg1  | Leader          | —               | Primary; writes committed only after pg2 acks WAL |
-| pg2  | Sync Standby    | —               | `synchronous_node_count=1`; zero data loss on pg1 failure |
-| pg3  | Replica         | `nosync: true`  | Always async; never elected Sync Standby |
+| Node | Designed Role   | Notes                                    |
+|------|-----------------|------------------------------------------|
+| pg1  | Leader          | Primary; writes committed only after pg2 acks WAL |
+| pg2  | Sync Standby    | `synchronous_node_count=1`; zero data loss on pg1 failure |
+| pg3  | Replica         | Async replica; `nosync: true` — never elected Sync Standby or Leader |
 
-Roles are dynamic — Patroni may promote pg2 or pg3 on failover. The designed topology is restored via
-`patronictl switchover` after recovery. pg3 can become leader in a disaster but will never hold the
-Sync Standby role.
+Roles are dynamic — Patroni may promote any node on failover. The designed topology is restored via
+`patronictl switchover` after recovery.
+
+### Multi-Region Setup (Standby Cluster — Region B)
+
+For Disaster Recovery (DR), deploy a single-node standby cluster **pg4** in Region B that streams
+from the primary cluster's leader:
+
+```
+Region A (Primary) — pg-docker-cls1         Region B (Standby) — pg-docker-cls1
+├─ pg1 (172.18.0.11) Leader                 └─ pg4 (172.18.0.14) Standby
+├─ pg2 (172.18.0.12) Sync Standby              (streams from pg1/pg2)
+└─ pg3 (172.18.0.13) Replica                   (same cluster name = promotable)
+
+All on same Docker network: lab-network (172.18.0.0/16)
+```
+
+**Key Differences from Primary:**
+- pg4 is **single-node** (no local etcd consensus, minimal resources)
+- pg4 is **read-only** (no writes until promoted in DR)
+- pg4 streams from primary cluster leader via `standby_cluster` configuration
+- **Same cluster name** (`pg-docker-cls1`) enables seamless promotion during DR
+
+**When to Deploy Standby:**
+- Multi-region HA/DR environment
+- RPO (Recovery Point Objective) < 1 minute
+- RTO (Recovery Time Objective) < 5 minutes
+- Need automated/manual failover to Region B
 
 ### Port Mapping (host → container)
 
@@ -123,6 +130,7 @@ Sync Standby role.
 │ pg1      │ 2221 │ 5433 │ 8011    │ 9194        │ 6433     │ 15000  │ 15001    │ 17000         │
 │ pg2      │ 2222 │ 5434 │ 8012    │ 9195        │ 6434     │ 25000  │ 25001    │ 27000         │
 │ pg3      │ 2223 │ 5435 │ 8013    │ 9196        │ 6435     │ 35000  │ 35001    │ 37000         │
+│ pg4 (DR) │ 2224 │ 5436 │ 8014    │ 9197        │ 6436     │ 45000  │ 45001    │ 47000         │
 └──────────┴──────┴──────┴─────────┴─────────────┴──────────┴────────┴──────────┴───────────────┘
                                                               write    read      stats
                                                               port     port      UI
@@ -154,7 +162,45 @@ Notes:
 After failover (e.g. pg2 promoted to leader after pg1 failure):
   Keepalived detects /primary passes on pg2 → primary VIP (172.18.0.10) migrates to pg2
   HAProxy health checks catch up within 6–9 s (3 × inter=3s)
-  pg3 (nosync) becomes the only remaining replica; restore pg1 and switchover back when ready
+  pg3 becomes a replica; restore pg1 and switchover back when ready
+```
+
+---
+
+## Standby Cluster Setup (Multi-Region DR)
+
+### Phase 1: Setup Docker Container for pg4
+
+Add pg4 to the Docker infrastructure:
+
+```bash
+# pg4 container definition is pre-configured in:
+# roles/docker_infrastructure/defaults/main.yml (172.18.0.14)
+
+# Create and run pg4 container via Docker playbook
+ansible-playbook playbook-setup-docker.yml -e 'pg_containers=[pg4]'
+```
+
+### Phase 2: Deploy PostgreSQL + Patroni on pg4
+
+Install PostgreSQL 18 with standby cluster configuration:
+
+```bash
+# Deploy standby cluster (pg4 only)
+ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass
+```
+
+### Phase 3: Verify Standby Cluster is Streaming
+
+```bash
+# Check pg4 status (should be Standby role, streaming state)
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
+
+# Expected output:
+# | pg4    | 172.18.0.14 | Standby      | streaming | TL | 0 MB | (secondary cluster) |
+
+# Verify pg4 can reach primary leader
+docker exec pg4 psql -h 172.18.0.11 -p 5432 -U postgres -c "SELECT 1;"
 ```
 
 ---
@@ -924,7 +970,7 @@ export PGPASSWORD='Pg@Lab2026!'
 # Step 1: Identify current leader and sync standby (either pg1 or pg2 may be leader)
 docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
 # Note the Leader and Sync Standby rows — use those names in the commands below.
-# pg3 always has nosync:true and is never promoted.
+# pg3 is eligible for promotion; it may be elected as Sync Standby or Leader.
 
 # Step 2: Graceful switchover — swap leader and sync standby
 # Replace <leader> with the current Leader node, <standby> with the Sync Standby node.
@@ -956,1007 +1002,191 @@ docker exec pg1 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1
 
 ---
 
-## Disaster Recovery (DR) Testing: Complete Reference
+## Disaster Recovery (DR) Failover & Failback — Multi-Region
 
-### DR Quick Overview
+### Scenario: Primary Cluster (Region A) is DOWN
 
-Test **pg3 (async replica)** becoming the active leader when **pg1 (leader)** and **pg2 (sync standby)** fail.
+**Objective**: Promote standby cluster (pg4 in Region B) to become the new primary.
 
-**Key Points for Docker/macOS**:
-- ⚠️ **Automatic failover is DISABLED** in this cluster configuration
-- ⚠️ **pg3 is async (nosync: true)** — NOT eligible for automatic promotion
-- ✓ **MANUAL command REQUIRED**: `docker exec pg3 patronictl -c /etc/patroni/patroni.yml failover pg-docker-cls1 --force`
-- ✓ After promotion, VIP (172.18.0.10) automatically migrates to pg3
-- ✓ Writes safe on pg3 — data preserved when pg1/pg2 rejoin
-- ✓ Zero application changes — apps reconnect to same VIP
-- ✓ Replication catches up — LAG in MB → 0 after recovery
+#### Step 1: Verify Primary Cluster is Unreachable
 
-### DR Test Validation Matrix
+```bash
+# From Region B or external location:
+docker exec pg4 curl -s http://172.18.0.11:8008/primary && echo "Primary reachable" || echo "Primary DOWN"
 
-Track cluster state at each phase of the test:
+# Verify pg4 status — should be in recovery:
+docker exec pg4 patronictl -c /etc/patroni/patroni.yml list
+# Expected: pg4 showing "Standby" role, "streaming" (or "in archive recovery" if replication lag)
+```
 
-| Phase | Timeline | pg1 Role | pg2 Role | pg3 Role | pg1 State | pg2 State | pg3 State | VIP Location | Lag = 0 | Notes |
-|-------|----------|----------|----------|----------|-----------|-----------|-----------|--------------|---------|-------|
-| Pre-DR | 1 | Leader | Sync Standby | Replica | running | running | running | pg1 | ✓ | Initial state |
-| After Stop | 1 | OFFLINE | OFFLINE | Replica | stopped | stopped | running | pg1 | — | pg3 still Replica (manual promotion needed) |
-| After Promotion | 2 | OFFLINE | OFFLINE | Leader | stopped | stopped | running | pg3 | — | pg3 manually promoted, writes active |
-| Recovery | 2 | catching up | catching up | Leader | running | running | running | pg3 | ✗ | Cluster reforming, replication lag high |
-| Caught Up | 2 | Replica | Replica | Leader | running | running | running | pg3 | ✓ | Replication lag = 0, ready for switchover |
-| After Switchover | 3 | Leader | Sync Standby | Replica | running | running | running | pg1 | ✓ | Original topology restored |
+#### Step 2: Promote Standby Cluster to Primary
 
-**Cycle 1**: Run full test (Pre-DR → Disaster → Promotion → DR Mode → Recovery → Switchover → Restore)  
-**Cycle 2**: Repeat to verify consistency (target: timing delta < 5 seconds)
+**CRITICAL**: This is a **one-way operation**. Once promoted, pg4 becomes the new primary with a new timeline.
+
+```bash
+# Remove standby_cluster configuration — convert pg4 to independent primary
+docker exec pg4 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 \
+  --force --set standby_cluster=null
+
+# Expected output:
+# -   standby_cluster:
+# -     host: 172.18.0.11
+# -     port: 5432
+# + standby_cluster: null
+# Configuration changed
+
+# Verify pg4 is now Primary
+docker exec pg4 patronictl -c /etc/patroni/patroni.yml list
+# Expected:
+# | pg4    | 172.18.0.14 | Leader | running | <new_TL> |
+```
+
+#### Step 3: Verify Write Access on New Primary (pg4)
+
+```bash
+# Test write access
+docker exec pg4 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.14 -p 5432 -U postgres postgres \
+  -c "CREATE TABLE dr_test (id int); INSERT INTO dr_test VALUES (1);"'
+
+# Verify data is on new primary
+docker exec pg4 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.14 -p 5432 -U postgres postgres \
+  -c "SELECT * FROM dr_test;"'
+```
+
+#### Step 4: Applications Reconnect to New Primary
+
+**Update application connection strings** to pg4 (Region B):
+- Write: `172.18.0.14:5432` (or pgBouncer `172.18.0.14:6432`)
+- Read: `172.18.0.14:5000` via HAProxy (internal port only if in Docker network)
+
+**DR Mode is now ACTIVE** — pg4 is the new primary.
 
 ---
 
-### Pre-DR Baseline Verification
+### Failback: Recover Original Primary (Region A) and Restore Original Topology
 
-#### Step 1: Verify Patroni cluster topology
+#### Step 1: Bring Original Primary Cluster Back Online
 
 ```bash
+# Start pg1, pg2 (when hardware is restored or failover cause is mitigated)
+docker start pg1 pg2 pg3
+sleep 30
+
+# Verify they rejoin but as REPLICAS of pg4 (the old standby, now primary)
+docker exec pg4 patronictl -c /etc/patroni/patroni.yml list
+# Expected output (they reconnect automatically due to standby_cluster config in etcd):
+# | pg1    | 172.18.0.11 | Replica | streaming | <pg4_TL> |
+# | pg2    | 172.18.0.12 | Replica | streaming | <pg4_TL> |
+# | pg3    | 172.18.0.13 | Replica | streaming | <pg4_TL> |
+# | pg4    | 172.18.0.14 | Leader  | running   | <pg4_TL> |
+```
+
+#### Step 2: Resolve Split-Brain (Two Independent Primaries)
+
+If Region A nodes came online **before** you demoted them, both regions have independent primaries:
+- Region A: pg1, pg2, pg3 at timeline (let's say TL 2)
+- Region B: pg4 at timeline TL 3
+
+**Fix**: Demote Region A cluster to standby of pg4 (Region B primary).
+
+```bash
+# On the Region A leader (pg1), convert it to a standby of pg4
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 \
+  --force --set "standby_cluster={host: 172.18.0.14, port: 5432}"
+
+# Expected output:
+# Configuration changed
+# +   standby_cluster:
+# +     host: 172.18.0.14
+# +     port: 5432
+
+# Verify all three Region A nodes are now replicas of pg4
+docker exec pg4 patronictl -c /etc/patroni/patroni.yml list
+# All pg1/pg2/pg3 should show "streaming" from pg4
+```
+
+#### Step 3: Verify Data Consistency (Zero Data Loss)
+
+```bash
+# On pg4 (current primary):
+docker exec pg4 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.14 -p 5432 -U postgres postgres \
+  -c "SELECT * FROM dr_test;"'
+# Should show the data you inserted during DR mode
+
+# On pg1 (recovered replica):
+docker exec pg1 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.11 -p 5432 -U postgres postgres \
+  -c "SELECT * FROM dr_test;"'
+# Should show same data (replicated from pg4)
+```
+
+#### Step 4: Wait for Region A to Catch Up
+
+```bash
+# Monitor replication lag until all pg1/pg2/pg3 have LAG = 0 MB
+watch -n 5 'docker exec pg4 patronictl -c /etc/patroni/patroni.yml list'
+
+# Expected convergence (after 1-5 min depending on WAL volume):
+# | pg1    | 172.18.0.11 | Replica | streaming | TL | 0 MB |
+# | pg2    | 172.18.0.12 | Replica | streaming | TL | 0 MB |
+# | pg3    | 172.18.0.13 | Replica | streaming | TL | 0 MB |
+# | pg4    | 172.18.0.14 | Leader  | running   | TL |      |
+```
+
+#### Step 5: Failback to Original Primary (pg1)
+
+Once Region A is fully caught up, perform a graceful switchover to restore the original topology.
+
+```bash
+# Switchover from pg4 (Region B) back to pg1 (Region A leader)
+docker exec pg4 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 \
+  --leader pg4 --candidate pg1 --force
+
+# Verify failback succeeded:
 docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
+# Expected:
+# | pg1    | 172.18.0.11 | Leader       | running   | <new_TL> |
+# | pg2    | 172.18.0.12 | Sync Standby | streaming | <new_TL> |
+# | pg3    | 172.18.0.13 | Replica      | streaming | <new_TL> |
+# | pg4    | 172.18.0.14 | Standby      | streaming | <new_TL> |  (back to standby)
 ```
 
-**Expected output** (or run from pg2/pg3 if pg1 is not accessible):
-```
-+ Cluster: pg-docker-cls1 (7634451494908218688) --+-----------+
-| Member | Host        | Role         | State     | TL | Lag in MB |
-+--------+-------------+--------------+-----------+----+-----------+
-| pg1    | 172.18.0.11 | Leader       | running   |  1 |           |
-| pg2    | 172.18.0.12 | Sync Standby | streaming |  1 |       0.00|
-| pg3    | 172.18.0.13 | Replica      | streaming |  1 |       0.00|
-+--------+-------------+--------------+-----------+----+-----------+
-```
-
-**Verify**: pg1=Leader, pg2=Sync Standby, pg3=Replica, Timeline=1, Lag=0.00 MB
-
-#### Step 2: Verify Keepalived VIP assignment
+#### Step 6: Restore Standby Cluster Configuration on pg4
 
 ```bash
-for n in pg1 pg2 pg3; do
-  echo -n "$n: "
-  docker exec $n ip addr show eth0 2>/dev/null | grep "inet " | awk '{print $2}'
-done
-```
+# Re-enable pg4 as standby of pg1 (Region A primary)
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 \
+  --force --set "standby_cluster={host: 172.18.0.11, port: 5432}"
 
-**Expected output**:
-```
-pg1: 172.18.0.11/16 172.18.0.10/32  ← primary VIP on pg1 (leader)
-pg2: 172.18.0.12/16 172.18.0.9/32   ← replica VIP on pg2 (sync standby)
-pg3: 172.18.0.13/16                 ← no VIP on pg3 (async replica)
-```
-
-**Verify**: Primary VIP (172.18.0.10) on pg1 (leader), Replica VIP (172.18.0.9) on pg2 (sync standby)
-
-#### Step 3: Verify HAProxy backend health
-
-```bash
-docker exec pg2 bash -c \
-  'curl -s -u "admin:Pg@Lab2026!" "http://127.0.0.1:7000/;csv" \
-   | grep "be_write\|be_read" | cut -d, -f1,2,18'
-```
-
-**Expected output**:
-```
-be_write,pg1,UP        ← pg1 is UP in write pool (leader)
-be_read,pg2,UP         ← pg2 is UP in read pool (sync standby)
-be_read,pg3,UP         ← pg3 is UP in read pool (replica)
-```
-
-**Verify**: pg1 UP in be_write, pg2 and pg3 UP in be_read
-
-#### Step 4: Verify etcd cluster health
-
-```bash
-docker exec pg1 etcdctl \
-  --endpoints=http://172.18.0.11:2379,http://172.18.0.12:2379,http://172.18.0.13:2379 \
-  endpoint health
-```
-
-**Expected output**:
-```
-http://172.18.0.11:2379, healthy, got simple pong response
-http://172.18.0.12:2379, healthy, got simple pong response
-http://172.18.0.13:2379, healthy, got simple pong response
-```
-
-**Verify**: All 3 etcd nodes healthy
-
-#### Step 5: Capture baseline replication state
-
-```bash
-docker exec pg1 bash -c "PGPASSWORD='Pg@Lab2026!' psql -h 172.18.0.11 -p 5432 -U postgres postgres -c \
-  \"SELECT now() as baseline_time, 
-          pg_current_wal_lsn() as lsn, 
-          txid_current() as txid;\""
-```
-
-**Note**: Record these values for comparison after recovery
-
----
-
-### Disaster Scenario
-
-#### Step 1: Record current state before disaster
-
-```bash
-echo "=== PRE-DISASTER STATE ==="
+# Verify pg4 is back in standby mode, streaming from pg1
 docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
+# | pg4    | 172.18.0.14 | Standby | streaming | <same_TL> |
 ```
 
-#### Step 2: Stop pg1 (leader)
-
-```bash
-echo "Stopping pg1 (leader)..."
-docker stop pg1
-sleep 5
-```
-
-#### Step 3: Stop pg2 (sync standby)
-
-```bash
-echo "Stopping pg2 (sync standby)..."
-docker stop pg2
-sleep 5
-```
-
-#### Step 4: Verify pg1 & pg2 are DOWN, pg3 is still REPLICA
-
-⚠️ **IMPORTANT**: When pg1 & pg2 are stopped, etcd loses quorum (2 of 3 nodes down). Patroni on pg3 cannot connect to the DCS. **Do NOT use `patronictl list`** — it will timeout.
-
-Instead, directly query PostgreSQL on pg3 to verify it's still in recovery mode (replica):
-
-```bash
-docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 127.0.0.1 -p 5432 -U postgres postgres -t -c "SELECT pg_is_in_recovery();"'
-```
-
-**Expected output**:
-```
- t
-(1 row)
-```
-
-**Verify**: pg3 returns `t` (true) — pg3 is still in recovery mode (replica status confirmed)
-
-#### Step 5: Check etcd status from pg3
-
-⚠️ **IMPORTANT**: When pg1 & pg2 are stopped, etcd loses quorum (2 of 3 nodes down). etcd will report "unhealthy cluster" — this is **EXPECTED**.
-
-```bash
-docker exec pg3 bash -c 'etcdctl --endpoints=http://172.18.0.13:2379 endpoint health 2>&1 | grep -E "^http://|Error:" | head -1 || echo "Expected: etcd unhealthy due to lost quorum (2/3 nodes down)"'
-```
-
-**Expected output**:
-```
-http://172.18.0.13:2379 is unhealthy: failed to commit proposal: context deadline exceeded
-```
-
-**Verify**: This is expected when pg1/pg2 are down. Proceed to failover despite etcd being unavailable.
-
-#### Step 6: Skip DCS check (will fail with lost quorum)
-
-⚠️ **NOTE**: With pg1 & pg2 down, etcd is unavailable. Patroni commands that access DCS will fail with "Etcd is not responding properly" or timeouts.
-
-This is expected and unavoidable. The failover command in the next step will work despite this because:
-1. pg3's PostgreSQL is still running
-2. We have direct access to pg3's PostgreSQL for promotion
-3. Patroni will recover connectivity once pg1/pg2 restart
-
-**Verify**: Skip DCS check. Proceed to Manual Promotion step.
+**✅ Failback Complete** — Original topology restored, pg4 back as standby.
 
 ---
 
-### Manual Promotion
-
-#### Step 1: ⚠️ CRITICAL LIMITATION: etcd Quorum Required for Failover
-
-**BLOCKER**: `patronictl failover` CANNOT work when etcd has lost quorum (pg1 & pg2 stopped).
-
-Error: `Etcd is not responding properly`
-
-**Why**: patronictl requires DCS (etcd) to:
-1. Read current cluster state
-2. Write failover decision
-3. Communicate with pg3's Patroni daemon
-
-With 2/3 etcd nodes down → no quorum → no DCS operations possible
-
-**Workaround for DR Testing**:
-
-```bash
-# Step A: Restart pg1 & pg2 to restore etcd quorum
-docker start pg1 pg2
-sleep 20
-
-# Step B: Verify etcd is now healthy
-docker exec pg3 bash -c 'etcdctl --endpoints=http://172.18.0.13:2379 endpoint health 2>&1 | grep -E "^http://|Error:" | head -1'
-
-# Step C: Now stop pg1 & pg2 again to simulate disaster
-docker stop pg1 pg2
-sleep 5
-
-# Step D: Execute failover (should work now)
-docker exec pg3 patronictl -c /etc/patroni/patroni.yml failover pg-docker-cls1 --force
-```
-
-**Expected output** (after quorum is restored):
-```
-Failing over to a replica...
-Failed over to 'pg3'
-```
-
-#### Step 2: Verify pg3 is now Leader
-
-```bash
-docker exec pg3 patronictl -c /etc/patroni/patroni.yml list
-```
-
-**Expected output**:
-```
-+ Cluster: pg-docker-cls1 (7634451494908218688) --+-----------+
-| Member | Host        | Role    | State     | TL | Lag in MB |
-+--------+-------------+---------+-----------+----+-----------+
-| pg1    | 172.18.0.11 | Leader  | down      |  2 |       N/A |
-| pg2    | 172.18.0.12 | Standby | down      |  2 |       N/A |
-| pg3    | 172.18.0.13 | Leader  | running   |  2 |           |
-+--------+-------------+---------+-----------+----+-----------+
-```
-
-**Verify**: pg3 is now Leader, Timeline advanced from 1 → 2
-
-#### Step 3b: Verify pg3 Can Perform Writes
-
-```bash
-docker exec pg3 bash -c "PGPASSWORD='Pg@Lab2026!' psql -h 172.18.0.13 -p 5432 -U postgres postgres -c \
-  \"SELECT is_wal_replay_paused(), pg_is_in_recovery();\""
-```
-
-**Expected output**:
-```
- is_wal_replay_paused | pg_is_in_recovery
-----------------------+-------------------
- f                    | f
-(1 row)
-```
-
-**Verify**: WAL replay not paused, not in recovery (pg3 is ready for writes)
-
----
-
-### DR Mode Active
-
-#### Step 1: Verify VIP migrated to pg3
-
-```bash
-for n in pg1 pg2 pg3; do
-  echo -n "$n: "
-  docker exec $n ip addr show eth0 2>/dev/null | grep "inet " | awk '{print $2}' | tr '\n' ' ' || echo "offline"
-  echo
-done
-```
-
-**Expected output**:
-```
-pg1: offline
-pg2: offline
-pg3: 172.18.0.13/16 172.18.0.10/32     ← primary VIP migrated to pg3 (leader)
-```
-
-**Verify**: Primary VIP (172.18.0.10) on pg3 (new leader)
-
-#### Step 2: Test pg3 accepts writes (DR mode active)
-
-```bash
-export PGPASSWORD='Pg@Lab2026!'
-
-# Direct connection to pg3 leader
-docker exec pg3 bash -c 'psql -h 172.18.0.13 -p 5432 -U postgres postgres -c \
-  "CREATE TABLE IF NOT EXISTS dr_test AS SELECT now();
-   INSERT INTO dr_test SELECT now();
-   SELECT COUNT(*) FROM dr_test;"'
-```
-
-**Expected output**:
-```
-      now
--------------------
- 2026-05-03 ...
-(1 row)
-
-INSERT 0 1
- count
--------
-     2
-(2 rows)
-```
-
-**Verify**: pg3 accepts writes, table creation and inserts succeed
-
-#### Step 3: Verify HAProxy write pool health
-
-```bash
-docker exec pg3 bash -c \
-  'curl -s -u "admin:Pg@Lab2026!" "http://127.0.0.1:7000/;csv" \
-   | grep "be_write" | cut -d, -f1,2,18'
-```
-
-**Expected output**:
-```
-be_write,pg3,UP     ← pg3 now in write pool (new leader)
-```
-
-**Verify**: HAProxy recognizes pg3 as write backend
-
-#### Step 4: Verify pgBouncer connectivity via VIP
-
-```bash
-docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5000 \
-  -U postgres postgres -c "SELECT inet_server_addr(), pg_is_in_recovery();"'
-```
-
-**Expected output**:
-```
- inet_server_addr | pg_is_in_recovery
-------------------+-------------------
- 172.18.0.13      | f
-(1 row)
-```
-
-**Verify**: VIP + HAProxy routes to pg3 (write endpoint accessible)
-
----
-
-### Recovery Phase
-
-#### Step 1: Restart pg1 and pg2
-
-```bash
-echo "Starting pg1 and pg2..."
-docker start pg1 pg2
-sleep 15
-```
-
-#### Step 2: Monitor cluster rejoin with timeline tracking (60+ seconds)
-
-```bash
-echo "Waiting for rejoin (monitor for 60 seconds)..."
-for i in {1..12}; do
-  echo "=== ${i}0 seconds ==="
-  docker exec pg3 patronictl -c /etc/patroni/patroni.yml list 2>/dev/null | grep -E "Member|TL|Lag"
-  sleep 5
-done
-```
-
-**Expected progression**:
-```
-T=0:   pg1 Replica (catching up), pg2 Replica (catching up), pg3 Leader (TL=2, Lag=0)
-T=5:   pg1 Replica (streaming), pg2 Replica (streaming) — replication lag high (50+ MB)
-T=15:  Lag decreasing (30 MB → 20 MB → 10 MB)
-T=30:  Lag approaching 0 (5 MB → 2 MB → 0 MB)
-T=60:  Lag = 0.00 MB — both replicas caught up
-```
-
-**Verify**: Both pg1 and pg2 rejoin as replicas and eventually catch up to pg3 (Lag = 0)
-
-#### Step 3: Monitor VIP migration during recovery
-
-```bash
-watch -n 2 'for n in pg1 pg2 pg3; do
-  echo -n "$n: "
-  docker exec $n ip addr show eth0 2>/dev/null | grep "inet " | awk "{print \$2}" | tr "\\n" " " || echo "offline"
-  echo
-done'
-```
-
-**Expected**: VIP stays on pg3 during rejoin (primary VIP follows the leader)
-
-#### Step 4: Monitor replication lag progression (real-time)
-
-```bash
-echo "Monitoring lag (Ctrl+C to stop)..."
-watch -n 3 'docker exec pg3 bash -c "
-  PGPASSWORD=Pg@Lab2026! psql -h 172.18.0.13 -p 5432 -U postgres postgres -c \
-  \"SELECT client_addr, state, 
-          round((sent_lsn - replay_lsn) / 1048576.0, 2) AS lag_mb
-   FROM pg_stat_replication ORDER BY client_addr;\"
-"'
-```
-
-**Expected progression**:
-```
-First check:   lag_mb = 50.00, 48.00  (high lag, fast catchup)
-After 15s:     lag_mb = 30.00, 28.00  (catchup continuing)
-After 30s:     lag_mb = 10.00, 8.00   (nearing convergence)
-After 45s:     lag_mb = 0.50, 0.25    (nearly caught up)
-After 60s:     lag_mb = 0.00, 0.00    ✓ (fully caught up — target achieved)
-```
-
-**Verify**: Lag decreases over time until all replicas reach 0.00 MB
-
----
-
-### Restore Topology
-
-#### Step 1: Verify lag is zero before switchover
-
-```bash
-docker exec pg3 patronictl -c /etc/patroni/patroni.yml list
-```
-
-**Expected**: Lag in MB column = 0.00 for all nodes
-
-#### Step 2: Switchover pg3 → pg1 (restore original topology)
-
-```bash
-echo "Switchover: pg3 (current leader) → pg1 (candidate)"
-docker exec pg3 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 \
-  --leader pg3 --candidate pg1 --force
-sleep 10
-```
-
-**Expected output**:
-```
-Switchover initiated.
-Switched over to 'pg1'
-```
-
-#### Step 3: Verify original topology restored
-
-```bash
-docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
-```
-
-**Expected output**:
-```
-+ Cluster: pg-docker-cls1 (7634451494908218688) --+-----------+
-| Member | Host        | Role         | State     | TL | Lag in MB |
-+--------+-------------+--------------+-----------+----+-----------+
-| pg1    | 172.18.0.11 | Leader       | running   |  3 |           |
-| pg2    | 172.18.0.12 | Sync Standby | streaming |  3 |       0.00|
-| pg3    | 172.18.0.13 | Replica      | streaming |  3 |       0.00|
-+--------+-------------+--------------+-----------+----+-----------+
-```
-
-**Verify**: pg1=Leader, pg2=Sync Standby, pg3=Replica, Timeline=3, Lag=0.00 MB
-
-#### Step 4: Verify VIP migrated back to pg1
-
-```bash
-for n in pg1 pg2 pg3; do
-  echo -n "$n: "
-  docker exec $n ip addr show eth0 | grep "inet " | awk '{print $2}'
-done
-```
-
-**Expected output**:
-```
-pg1: 172.18.0.11/16 172.18.0.10/32  ← primary VIP back on pg1
-pg2: 172.18.0.12/16 172.18.0.9/32   ← replica VIP back on pg2
-pg3: 172.18.0.13/16                 ← no VIP
-```
-
-**Verify**: VIPs restored to original nodes
-
----
-
-### Post-Recovery Validation
-
-#### Step 1: Verify all nodes operational
-
-```bash
-docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
-```
-
-**Checklist**:
-- [ ] pg1 = Leader (running)
-- [ ] pg2 = Sync Standby (streaming)
-- [ ] pg3 = Replica (streaming)
-- [ ] Timeline = 3 (post-switchover)
-- [ ] Lag in MB = 0.00 (all nodes caught up)
-
-#### Step 2: Verify all services healthy
-
-```bash
-for n in pg1 pg2 pg3; do
-  echo "=== $n ===" && docker exec $n systemctl is-active patroni haproxy keepalived pgbouncer etcd
-done
-```
-
-**Expected**: All services should return `active`
-
-#### Step 3: Verify HAProxy backend health
-
-```bash
-docker exec pg2 bash -c \
-  'curl -s -u "admin:Pg@Lab2026!" "http://127.0.0.1:7000/;csv" \
-   | grep -v "^#\|FRONTEND" | cut -d, -f1,2,18'
-```
-
-**Expected**:
-```
-be_write,pg1,UP      ← pg1 in write pool
-be_read,pg2,UP       ← pg2 in read pool
-be_read,pg3,UP       ← pg3 in read pool
-```
-
-#### Step 4: Verify data preserved
-
-```bash
-export PGPASSWORD='Pg@Lab2026!'
-docker exec pg1 bash -c 'psql -h 172.18.0.11 -p 5432 -U postgres postgres -c \
-  "SELECT COUNT(*) FROM dr_test;"'
-```
-
-**Expected**:
-```
- count
--------
-     2
-(1 row)
-```
-
-**Verify**: Data from dr_test table is still there (data preserved during DR)
-
-#### Step 5: Verify write path works
-
-```bash
-docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5000 \
-  -U postgres postgres -c "INSERT INTO dr_test SELECT now(); SELECT COUNT(*) FROM dr_test;"'
-```
-
-**Expected output**:
-```
-INSERT 0 1
- count
--------
-     3
-(1 row)
-```
-
-**Verify**: Write path functional after recovery
-
-#### Step 6: Verify read path works
-
-```bash
-docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5001 \
-  -U postgres postgres -c "SELECT inet_server_addr(), COUNT(*) FROM dr_test;"'
-```
-
-**Expected output**:
-```
- inet_server_addr | count
-------------------+-------
- 172.18.0.1[2-3]  |     3
-(1 row)
-```
-
-**Verify**: Read path routes to a replica (not pg1)
-
----
-
-### Understanding Timeline & LSN
-
-#### What is Timeline?
-
-PostgreSQL's timeline tracks branching in WAL history. Each failover creates a new timeline:
-
-- **Timeline 1**: Normal operation (pg1 leader, pg2 sync standby, pg3 replica)
-- **Timeline 2**: After pg3 promotion (pg3 becomes leader, pg1/pg2 become replicas)
-- **Timeline 3**: After switchover back to pg1 (pg1 becomes leader again)
-
-Timeline progression is **not reset** — it strictly increases on each failover/switchover/promotion.
-
-#### Check timeline on each node:
-
-```bash
-for n in pg1 pg2 pg3; do
-  echo -n "$n: "
-  docker exec $n bash -c "PGPASSWORD='Pg@Lab2026!' psql -h 127.0.0.1 -p 5432 -U postgres postgres -t -c \
-    \"SELECT timeline_id FROM pg_control_checkpoint();\""
-done
-```
-
-**Expected progression**:
-```
-At Pre-DR:        pg1: 1, pg2: 1, pg3: 1
-At Post-Promotion: pg1: 1 (down), pg2: 1 (down), pg3: 2  ← pg3 advanced to TL=2
-At Post-Recovery:  pg1: 2, pg2: 2, pg3: 2                ← pg1/pg2 rejoin at TL=2
-At Post-Switchover: pg1: 3, pg2: 3, pg3: 3               ← all advance to TL=3
-```
-
-**Why it matters**: Timeline advancement shows that the cluster successfully transitioned through the failover/promotion/recovery cycle. Stuck timeline indicates a problem (e.g., wal_level too low, WAL archiving blocking).
-
-#### What is LSN?
-
-LSN (Log Sequence Number) is PostgreSQL's internal pointer to a position in the WAL stream.
-
-- **sent_lsn**: WAL position sent from primary to replica
-- **replay_lsn**: WAL position replayed (applied) on the replica
-- **Lag = sent_lsn - replay_lsn** (measured in MB)
-
-#### Check LSN on all nodes (run on leader):
-
-```bash
-export PGPASSWORD='Pg@Lab2026!'
-docker exec pg1 bash -c 'psql -h 172.18.0.11 -p 5432 -U postgres postgres -c \
-  "SELECT client_addr, 
-          pg_wal_lsn_diff(sent_lsn, replay_lsn) / 1048576.0 as lag_mb,
-          replay_lsn
-   FROM pg_stat_replication ORDER BY client_addr;"'
-```
-
-**Expected output at different phases**:
-```
-After disaster: 
-  - pg1 offline
-  - pg2 offline
-  - pg3 (new leader) lag unknown (is primary, not replica)
-
-During recovery:
-  - pg1: lag_mb = 50.00, replay_lsn = 0/XXXXXXXX
-  - pg2: lag_mb = 48.00, replay_lsn = 0/XXXXXXXX
-  
-After catchup:
-  - pg1: lag_mb = 0.00, replay_lsn = 0/YYYYYYYY (caught up)
-  - pg2: lag_mb = 0.00, replay_lsn = 0/YYYYYYYY (caught up)
-```
-
----
-
-### Replication Slots During DR
-
-PostgreSQL replication slots track which WAL has been consumed by each replica.
-
-#### Check slot status before DR:
-
-```bash
-export PGPASSWORD='Pg@Lab2026!'
-docker exec pg1 bash -c 'psql -h 172.18.0.11 -p 5432 -U postgres postgres -c \
-  "SELECT slot_name, slot_type, active, restart_lsn FROM pg_replication_slots;"'
-```
-
-**Expected output (pre-DR)**:
-```
- slot_name | slot_type | active | restart_lsn
------------+-----------+--------+-------------
- pg2       | physical  | t      | 0/XXXXXXXX
- pg3       | physical  | t      | 0/XXXXXXXX
-(2 rows)
-```
-
-#### After pg1/pg2 are stopped:
-
-Slots remain but show `active = f` (no active consumer):
-
-```bash
-docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.13 -p 5432 -U postgres postgres -c \
-  "SELECT slot_name, slot_type, active, restart_lsn FROM pg_replication_slots;"'
-```
-
-**Expected**:
-```
- slot_name | slot_type | active | restart_lsn
------------+-----------+--------+-------------
- pg1       | physical  | f      | 0/XXXXXXXX  ← pg1 slot inactive (pg1 offline)
- pg2       | physical  | f      | 0/XXXXXXXX  ← pg2 slot inactive (pg2 offline)
-(2 rows)
-```
-
-#### After pg1/pg2 rejoin:
-
-Slots re-activate immediately:
-
-```bash
-docker exec pg1 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.13 -p 5432 -U postgres postgres -c \
-  "SELECT slot_name, slot_type, active, restart_lsn FROM pg_replication_slots;"'
-```
-
-**Expected**:
-```
- slot_name | slot_type | active | restart_lsn
------------+-----------+--------+-------------
- pg1       | physical  | t      | 0/YYYYYYYY  ← pg1 slot active, LSN updated
- pg2       | physical  | t      | 0/YYYYYYYY  ← pg2 slot active, LSN updated
-(2 rows)
-```
-
-**Why it matters**: Slots prevent WAL pruning while replicas are down, allowing them to rejoin without full resync. If a replica stays down too long, the primary's wal_keep_size may fill up.
-
----
-
-### DR Troubleshooting
-
-#### Promotion fails with "Already a Leader"
-
-**Symptom**: `patronictl failover` returns error: `Already a leader`
-
-**Cause**: pg3 may already be the leader (benign), or promoter command didn't parse correctly.
-
-**Fix**:
-```bash
-# Verify current state
-docker exec pg3 patronictl -c /etc/patroni/patroni.yml list
-
-# If pg3 is already Leader, continue with writes test
-# If pg3 is still Replica, retry:
-docker exec pg3 patronictl -c /etc/patroni/patroni.yml failover pg-docker-cls1 --force
-sleep 5
-docker exec pg3 patronictl -c /etc/patroni/patroni.yml list
-```
-
-#### Timeline not advancing during promotion
-
-**Symptom**: Timeline stuck at 1 even after pg3 promotion.
-
-**Cause**: WAL archiving failing, or PostgreSQL control file corruption.
-
-**Diagnostic steps**:
-```bash
-# Check PostgreSQL log for errors
-docker exec pg3 grep -i "timeline\|archive\|ERROR" /var/log/postgresql/postgresql-$(date +%a).log | tail -20
-
-# Check if pg3 has write access to WAL archive
-docker exec pg3 ls -la /var/lib/pgbackrest/
-
-# Try forcing a write on pg3
-docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 127.0.0.1 -p 5432 -U postgres postgres \
-  -c "CREATE TABLE timeline_test AS SELECT 1; DROP TABLE timeline_test;"'
-
-# Verify timeline after write
-docker exec pg3 bash -c "PGPASSWORD='Pg@Lab2026!' psql -h 127.0.0.1 -p 5432 -U postgres postgres -t -c \
-  \"SELECT timeline_id FROM pg_control_checkpoint();\""
-```
-
-#### Switchover hangs or takes long
-
-**Symptom**: `patronictl switchover` command hangs for >30 seconds or fails.
-
-**Cause**: Long-running transaction on current leader blocking replication.
-
-**Fix**:
-```bash
-# Identify long-running queries on current leader (pg3 in this case)
-docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 127.0.0.1 -p 5432 -U postgres postgres -c \
-  "SELECT pid, now()-query_start AS duration, state, query 
-   FROM pg_stat_activity 
-   WHERE query_start < now() - interval '\''5 seconds'\'' 
-   ORDER BY duration DESC;"'
-
-# Kill blocking query if found (get pid from above)
-# WARNING: Only do this if you own the query!
-docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 127.0.0.1 -p 5432 -U postgres postgres -c \
-  "SELECT pg_terminate_backend(<pid>);"'
-
-# Retry switchover
-docker exec pg3 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 \
-  --leader pg3 --candidate pg1 --force
-```
-
-#### HAProxy not updated after failover
-
-**Symptom**: HAProxy still routes writes to pg1 even though pg3 is leader.
-
-**Cause**: HAProxy health checks not updated (6–9 second lag typical).
-
-**Fix**:
-```bash
-# Monitor HAProxy backend status
-watch -n 2 'docker exec pg3 bash -c "
-  curl -s -u \"admin:Pg@Lab2026!\" \"http://127.0.0.1:7000/;csv\" \
-  | grep \"be_write\|be_read\" | cut -d, -f1,2,18
-"'
-
-# Wait 10–15 seconds for automatic refresh
-# If still not updated, manually reload HAProxy
-for n in pg1 pg2 pg3; do docker exec $n systemctl reload haproxy; done
-```
-
----
-
-### Complete DR Test Verification Checklist
-
-Use this checklist for each DR test cycle (Cycle 1 and Cycle 2).
-
-#### Before Starting (Pre-Test)
-- [ ] All 3 containers running: `docker ps | grep pg`
-- [ ] Patroni topology correct: `docker exec pg1 patronictl -c /etc/patroni/patroni.yml list`
-- [ ] VIP assignments correct: pg1=172.18.0.10, pg2=172.18.0.9, pg3=none
-- [ ] All services healthy: `for n in pg1 pg2 pg3; do docker exec $n systemctl is-active patroni; done`
-- [ ] Replication lag = 0.00 MB
-- [ ] etcd healthy: `docker exec pg1 etcdctl endpoint health`
-- [ ] HAProxy backends UP: `curl -s -u admin:Pg@Lab2026! http://localhost:7000/;csv | grep be_`
-- [ ] pgBackRest stanza valid: `docker exec pg1 pgbackrest --stanza=pg-docker-cls1 check`
-- [ ] Baseline data captured: record output from Step 5 in Pre-DR Baseline Verification
-
-#### Cycle 1: Full DR Test (All 4 Phases)
-
-**Phase 1: Disaster & Promotion (T=0 to T=20s)**
-- [ ] Stopped pg1
-- [ ] Stopped pg2
-- [ ] pg3 promoted via `patronictl failover --force`
-- [ ] pg3 now shows Role=Leader
-- [ ] Timeline advanced 1→2
-- [ ] VIP migrated 172.18.0.10 to pg3
-- [ ] pg3 accepts writes (dr_test table created)
-- [ ] HAProxy be_write shows pg3 UP
-
-**Phase 2: DR Mode Active (T=20 to T=30s)**
-- [ ] pg3 is writable leader
-- [ ] VIP 172.18.0.10 on pg3
-- [ ] Replica VIP 172.18.0.9 unassigned (no sync standby)
-- [ ] Data inserted into dr_test table successfully
-- [ ] pgBouncer routing via VIP works
-
-**Phase 3: Recovery & Rejoin (T=30 to T=90s)**
-- [ ] Started pg1
-- [ ] Started pg2
-- [ ] pg1 rejoins as Replica
-- [ ] pg2 rejoins as Replica (or Sync Standby after catchup)
-- [ ] Replication lag >0 initially
-- [ ] Lag progressively decreases
-- [ ] Lag reaches 0.00 MB within ~60s
-- [ ] Timeline still at 2 (no new promotion)
-- [ ] All nodes streaming
-
-**Phase 4: Switchover & Restore (T=90 to T=110s)**
-- [ ] Executed switchover pg3→pg1
-- [ ] pg1 now shows Role=Leader
-- [ ] pg2 now shows Role=Sync Standby
-- [ ] pg3 now shows Role=Replica
-- [ ] Timeline advanced 2→3
-- [ ] VIP migrated 172.18.0.10 back to pg1
-- [ ] Replica VIP 172.18.0.9 on pg2
-- [ ] All nodes streaming
-- [ ] Lag = 0.00 MB
-- [ ] Data in dr_test table preserved (count=2 or more)
-
-**Post-Phase 4 Validation**
-- [ ] All services running: `systemctl is-active patroni haproxy keepalived pgbouncer etcd`
-- [ ] Writes work: `INSERT INTO dr_test SELECT now();`
-- [ ] Reads work: `SELECT COUNT(*) FROM dr_test;`
-- [ ] All error logs checked: `grep -i ERROR /var/log/postgresql/postgresql-*.log`
-
-#### Cycle 2: Consistency Verification (Repeat Cycle 1, then compare)
-
-**Run Cycle 1 again immediately (same steps as above)**
-- [ ] Complete all 4 phases again
-- [ ] Record timing for each milestone
-
-**Comparison: Δ < 5 seconds**
-- [ ] T(promotion) Cycle 1 vs Cycle 2: Δ < 5 seconds  
-- [ ] T(lag catchup) Cycle 1 vs Cycle 2: Δ < 5 seconds  
-- [ ] T(switchover) Cycle 1 vs Cycle 2: Δ < 5 seconds  
-- [ ] T(total cycle) Cycle 1 vs Cycle 2: Δ < 5 seconds  
-
-**Consistency Checks**
-- [ ] Role transitions in same order (both cycles)
-- [ ] Timeline progression identical (both cycles)
-- [ ] LAG pattern matches (high→decreasing→zero)
-- [ ] VIP migration timing similar
-- [ ] Data integrity maintained
-- [ ] No error messages in logs (both cycles)
-
----
-
-### DR Test Execution Guide
-
-**Timeline**: Cycle 1 takes ~90–120 seconds; Cycle 2 takes ~90–120 seconds (goal: Δ < 5 sec)
-
-#### Preparation (5 min)
-
-```bash
-# Terminal 1: Reserve for monitoring
-# Terminal 2: Reserve for commands
-
-# In Terminal 1 — open live monitoring dashboard
-watch -n 2 'echo "=== PATRONI STATE ===" && \
-  docker exec pg3 patronictl -c /etc/patroni/patroni.yml list 2>/dev/null | grep -E "Member|TL|Lag" && \
-  echo "" && \
-  echo "=== VIP ASSIGNMENT ===" && \
-  for n in pg1 pg2 pg3; do echo -n "$n: "; docker exec $n ip addr show eth0 2>/dev/null | grep "inet " | awk "{print \$2}" | tr "\n" " " || echo "offline"; echo; done'
-
-# In Terminal 2 — run pre-test checklist
-docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
-```
-
-#### Cycle 1 Execution (90–120 seconds)
-
-**T=0: Start disaster**
-```bash
-# Terminal 2
-echo "[T=0] Stopping pg1..."
-docker stop pg1
-sleep 2
-echo "[T=2] Stopping pg2..."
-docker stop pg2
-sleep 3
-
-echo "[T=5] Verifying pg1/pg2 stopped, pg3 still Replica..."
-docker exec pg3 patronictl -c /etc/patroni/patroni.yml list
-```
-
-**T=8: Promote pg3**
-```bash
-echo "[T=8] Promoting pg3 to Leader..."
-docker exec pg3 patronictl -c /etc/patroni/patroni.yml failover pg-docker-cls1 --force
-sleep 5
-
-echo "[T=13] Verifying pg3 is Leader (Timeline should be 2)..."
-docker exec pg3 patronictl -c /etc/patroni/patroni.yml list
-```
-
-**T=15: Test DR mode**
-```bash
-echo "[T=15] Testing pg3 accepts writes..."
-docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.13 -p 5432 -U postgres postgres -c \
-  "CREATE TABLE IF NOT EXISTS dr_test AS SELECT now();
-   INSERT INTO dr_test SELECT now();
-   SELECT COUNT(*) FROM dr_test;"'
-
-echo "[T=20] Recording write count before recovery..."
-WRITE_COUNT_BEFORE=$(docker exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.13 -p 5432 -U postgres postgres -t -c "SELECT COUNT(*) FROM dr_test;"')
-echo "Write count: $WRITE_COUNT_BEFORE"
-```
-
-**T=25: Start recovery**
-```bash
-echo "[T=25] Starting pg1 and pg2..."
-docker start pg1 pg2
-sleep 10
-
-echo "[T=35] Monitoring lag (Ctrl+C after 60s)..."
-for i in {1..12}; do
-  echo "[T=$((25+5*i))] $(docker exec pg3 patronictl -c /etc/patroni/patroni.yml list 2>/dev/null | grep Lag | head -3)"
-  sleep 5
-done
-```
-
-**T=90: Verify recovery complete**
-```bash
-echo "[T=90] Verifying lag = 0 for all nodes..."
-docker exec pg3 patronictl -c /etc/patroni/patroni.yml list | grep "Lag"
-```
-
-**T=95: Switchover**
-```bash
-echo "[T=95] Switchover pg3 → pg1..."
-docker exec pg3 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 \
-  --leader pg3 --candidate pg1 --force
-sleep 10
-
-echo "[T=105] Verifying topology restored..."
-docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
-```
-
-**T=110: Cycle 1 complete**
-```bash
-echo "[T=110] CYCLE 1 COMPLETE"
-echo "Summary:"
-echo "  Timeline progression: 1 → 2 → 3"
-echo "  VIP migration: pg1 → pg3 → pg1"
-echo "  Data preserved: $(docker exec pg1 bash -c 'PGPASSWORD=Pg@Lab2026! psql -h 172.18.0.11 -p 5432 -U postgres postgres -t -c "SELECT COUNT(*) FROM dr_test;"')"
-
-# Record these times for comparison with Cycle 2
-echo "Record times above for consistency check with Cycle 2"
-```
-
-#### Cycle 2 Execution (Repeat steps, record timings)
-
-```bash
-echo "[CYCLE 2] Starting second iteration for consistency check..."
-# Repeat all steps from T=0 to T=110 with same commands
-# Monitor for timing consistency: goal Δ < 5 seconds
-```
-
-#### Final Validation
-
-```bash
-echo "[FINAL] Post-test checklist"
-docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
-for n in pg1 pg2 pg3; do docker exec $n systemctl is-active patroni haproxy keepalived pgbouncer etcd; done
-docker exec pg1 pgbackrest --stanza=pg-docker-cls1 check
-echo "All checks passed!"
-```
+### DR Checklist: Before & After
+
+**Pre-DR Baseline (All Healthy):**
+- [ ] Primary cluster (pg1/pg2/pg3) fully replicating, lag = 0 MB
+- [ ] Standby cluster (pg4) in streaming state, catching up to primary
+- [ ] Application connected to primary (Region A)
+- [ ] Backups recent and verified
+
+**After DR Promotion (pg4 is new primary):**
+- [ ] pg4 promoted, now accepting writes
+- [ ] pg1/pg2/pg3 unavailable or rejoined as replicas of pg4
+- [ ] Application switched to pg4 (Region B)
+- [ ] No data loss verified (SELECT * FROM dr_test)
+
+**After Failback (pg1 is primary again):**
+- [ ] pg1 promoted back to leader
+- [ ] pg2 elected Sync Standby
+- [ ] pg3 remains replica
+- [ ] pg4 back in Standby mode, streaming from pg1
+- [ ] Application reconnected to pg1 (Region A)
+- [ ] All nodes replicating, lag = 0 MB
 
 ---
 
@@ -2324,231 +1554,6 @@ scrape_configs:
 
 ---
 
-## Multi-Region DCS Deployment for Production DR
-
-### Overview
-
-For production Disaster Recovery (DR) to work reliably, the Distributed Configuration Store (DCS) — Consul or etcd — **must be deployed on separate nodes** from the PostgreSQL cluster, and **distributed across multiple regions** for geographic resilience.
-
-This section explains multi-region DCS deployment strategies and how they impact DR testing and failover behavior.
-
-### Why Separate DCS Nodes Matter for DR
-
-**Problem with Co-Located DCS** (current lab setup):
-```
-pg1: PostgreSQL + Patroni + etcd
-pg2: PostgreSQL + Patroni + etcd
-pg3: PostgreSQL + Patroni + etcd
-```
-
-When pg1 & pg2 stop → etcd loses quorum → patronictl failover fails ❌
-
-**Solution with Separate DCS** (production setup):
-```
-PostgreSQL Cluster       DCS Cluster (Separate)
-├── pg1 (Patroni)       ├── etcd1 (India)
-├── pg2 (Patroni)       ├── etcd2 (US East)
-└── pg3 (Patroni)       └── etcd3 (EU)
-                        (Always running, independent)
-```
-
-When pg1 & pg2 stop → etcd still has quorum → patronictl failover works ✅
-
-### DCS Quorum Rules (Critical for DR)
-
-**Quorum = majority = floor(n/2) + 1**
-
-| Nodes | Quorum | Can Lose | Multi-Region Viable? |
-|-------|--------|----------|----------------------|
-| 1     | 1      | 0        | ❌ No (SPOF) |
-| 2     | 2      | 0        | ❌ No (need both) |
-| **3** | **2**  | **1**    | ⚠️ Only if distributed |
-| 4     | 3      | 1        | ⚠️ Even numbers wasteful |
-| 5     | 3      | 2        | ✅ Recommended |
-| 7     | 4      | 3        | ✅ Enterprise HA |
-
-**Key Rule**: Even number of nodes = wasted resources (no better fault tolerance than n-1)
-
-### Multi-Region Deployment Scenarios
-
-#### ❌ NOT Recommended: Majority in One Region
-
-```
-3-Node etcd: 2 India + 1 US
-├── etcd1 (India)
-├── etcd2 (India)
-└── etcd3 (US East)
-
-Quorum = 2
-India region down → only etcd3 remains (1 node) → NO QUORUM ❌
-```
-
-**Problem**: If India region fails, only 1 DCS node remains = cluster unavailable
-
-#### ✅ Recommended: 5-Node Distributed
-
-```
-5-Node etcd: 2 India + 2 US + 1 EU
-├── etcd1 (India)
-├── etcd2 (India)
-├── etcd3 (US East)
-├── etcd4 (US East)
-└── etcd5 (EU Central)
-
-Quorum = 3
-Any 1 region down → at least 3 nodes remain ✅
-```
-
-**Benefits**:
-- Quorum survives loss of 1 entire region
-- Geographic diversity prevents single-region outages
-- Better latency distribution
-
-#### ✅ Enterprise: 7-Node Distributed
-
-```
-7-Node etcd: 3 India + 2 US + 2 EU
-├── etcd1, etcd2, etcd3 (India)
-├── etcd4, etcd5 (US East)
-└── etcd6, etcd7 (EU Central)
-
-Quorum = 4
-Can tolerate 3 node failures
-Can tolerate 1 entire region down AND 1 more node elsewhere ✅
-```
-
-**Benefits**:
-- Extreme fault tolerance
-- Can lose entire region + additional node
-- Maximum availability for critical deployments
-
-### Network Latency Considerations
-
-etcd and Consul are consensus-based and sensitive to network latency:
-
-| Latency | Impact | Viable? |
-|---------|--------|---------|
-| < 10ms  | Excellent | ✅ Same data center |
-| 10-50ms | Good | ✅ Same region |
-| 50-100ms | Acceptable | ⚠️ Monitor |
-| > 100ms | Poor | ❌ Risk of split-brain |
-
-**Recommendation**:
-- India ↔ US East: ~250ms (may cause slowness)
-- India ↔ EU: ~300ms (may cause slowness)
-- **Solution**: Use 3 regional data centers with < 50ms latency between them, or accept higher latency with larger timeout values
-
-### DCS Node Placement Best Practice
-
-```
-Production Setup:
-├── Data Center 1 (Region A): 2 etcd nodes
-├── Data Center 2 (Region B): 2 etcd nodes
-└── Data Center 3 (Region C): 1 etcd node (tie-breaker)
-
-Total: 5 nodes, Quorum = 3
-Tolerates: 1 entire region failure + 1 additional node failure
-```
-
-### Impact on DR Testing
-
-With properly distributed separate DCS cluster:
-
-**Before**: Co-located etcd (current)
-- Stop pg1 & pg2 → etcd quorum lost → DR test fails ❌
-- Workaround: Restart pg1 & pg2 to restore quorum, then test
-
-**After**: Separate distributed etcd (production)
-- Stop pg1 & pg2 → DCS unaffected → DR test works perfectly ✅
-- Can test complete failure scenarios without DCS interference
-- Failover works as designed
-
-### Adding Nodes On-The-Fly
-
-Both Consul and etcd support dynamic node addition:
-
-**etcd - Add node**:
-```bash
-# 1. On etcd leader, add new member
-etcdctl member add etcd4 --peer-urls=https://etcd4:2380
-
-# 2. Start new etcd node with join-existing=true
-# 3. Verify cluster health
-etcdctl endpoint health
-```
-
-**Consul - Add node**:
-```bash
-# 1. Start new Consul server
-consul agent -server -join=<existing-consul-ip>
-
-# 2. Verify cluster membership
-consul members
-```
-
-**No cluster downtime required** — existing cluster keeps operating while new node syncs data.
-
-### Example: From 3-Node to 5-Node (Scaled for DR)
-
-```
-Initial Setup (Not resilient to region loss):
-├── etcd1 (India)
-├── etcd2 (India)
-└── etcd3 (US East)
-Quorum = 2 (fragile)
-
-Upgrade Plan:
-1. Add etcd4 (US East): etcdctl member add etcd4
-   Result: 4 nodes, Quorum = 3 (still need majority)
-
-2. Add etcd5 (EU Central): etcdctl member add etcd5
-   Result: 5 nodes, Quorum = 3 (resilient!)
-
-Final Setup (Resilient):
-├── etcd1, etcd2 (India)
-├── etcd3, etcd4 (US East)
-└── etcd5 (EU Central)
-Quorum = 3 ✅ Can survive any region failure
-```
-
-**Execution**: 0 downtime, PostgreSQL cluster keeps running
-
-### Verification Commands
-
-**Check etcd cluster health across regions**:
-```bash
-etcdctl --endpoints=https://etcd1:2379,https://etcd2:2379,https://etcd3:2379,https://etcd4:2379,https://etcd5:2379 \
-  endpoint health
-```
-
-**Monitor Patroni connectivity to DCS**:
-```bash
-# Patroni logs should show healthy DCS connection
-pg1: journalctl -u patroni -f | grep -i "dcs\|etcd"
-
-# All nodes should show quorum achieved
-patronictl -c /etc/patroni/patroni.yml list
-```
-
-**Check network latency between regions**:
-```bash
-ping etcd2  # India ↔ US
-ping etcd5  # India ↔ EU
-# Target: < 50ms for best performance
-```
-
-### Summary: Multi-Region DCS for Production DR
-
-| Factor | Lab Setup | Production Setup |
-|--------|-----------|------------------|
-| DCS Location | Co-located with PG | Separate nodes |
-| DCS Nodes | 3 (on pg1, pg2, pg3) | 5+ across regions |
-| Quorum Resilience | Fails when 2 PG nodes down | Survives PG failures |
-| DR Test Works | No (need workaround) | Yes (complete test) |
-| Region Failure | Cluster unavailable | Cluster available |
-| Setup Complexity | Simple (lab) | Complex (prod) |
-
----
 
 ## Other Miscellaneous Commands
 

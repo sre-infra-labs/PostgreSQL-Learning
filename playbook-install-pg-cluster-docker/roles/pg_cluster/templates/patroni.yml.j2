@@ -126,6 +126,18 @@ postgresql:
     restore_command: "{{ postgresql_restore_command }}"
 {% endif %}
 
+{% if patroni_standby_cluster is defined and patroni_standby_cluster.host is defined and patroni_standby_cluster.host | length > 0 %}
+  standby_cluster:
+    host: {{ patroni_standby_cluster.host }}
+    port: {{ patroni_standby_cluster.port | default(5432) }}
+  {% if patroni_standby_cluster.primary_slot_name is defined and patroni_standby_cluster.primary_slot_name | length > 0 %}
+    primary_slot_name: "{{ patroni_standby_cluster.primary_slot_name }}"
+  {% endif %}
+  {% if patroni_standby_cluster.restore_command is defined and patroni_standby_cluster.restore_command | length > 0 %}
+    restore_command: "{{ patroni_standby_cluster.restore_command }}"
+  {% endif %}
+{% endif %}
+
 
 watchdog:
   mode: {{ patroni_watchdog_mode }}  # off — Docker containers have no /dev/watchdog

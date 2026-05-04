@@ -57,6 +57,16 @@ pg_containers:
     haproxy_write_port: 35000
     haproxy_read_port: 35001
     haproxy_stats_port: 37000
+  - name: pg4
+    ip: "172.18.0.14"
+    ssh_port: 2224
+    pg_port: 5436
+    patroni_port: 8014
+    pg_exporter_port: 9197
+    pgbouncer_port: 6436
+    haproxy_write_port: 45000
+    haproxy_read_port: 45001
+    haproxy_stats_port: 47000
 
 # pgBouncer routing container (always routes to the current Patroni leader)
 pgbouncer_container_name: "pg-bouncer"
