@@ -97,6 +97,7 @@
     apply:
       tags: users
   tags: users
+  when: inventory_hostname not in groups['standby']
 
 - name: Install and configure HAProxy
   include_tasks:
@@ -111,6 +112,7 @@
     apply:
       tags: keepalived
   tags: keepalived
+  when: inventory_hostname not in groups['standby']
 
 - name: Show Patroni cluster status
   include_tasks:
@@ -118,4 +120,4 @@
     apply:
       tags: patronictl_list
   tags: patronictl_list
-  when: inventory_hostname in groups['leader']
+  when: inventory_hostname in groups['leader'] or inventory_hostname in groups['standby']

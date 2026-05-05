@@ -3,11 +3,13 @@
   ansible.builtin.debug:
     msg: "Installing HAProxy on {{ inventory_hostname }} — write:{{ haproxy_write_port }} read:{{ haproxy_read_port }} stats:{{ haproxy_stats_port }}"
 
-- name: Install HAProxy
-  ansible.builtin.package:
-    name: haproxy
-    state: present
-  environment: "{{ proxy_env | default({}) }}"
+- name: Install HAProxy (shell — no python3-apt required)
+  ansible.builtin.shell: apt-get install -y haproxy
+  register: haproxy_install_status
+  until: haproxy_install_status.rc == 0
+  delay: 5
+  retries: 3
+  changed_when: true
 
 - name: Generate /etc/haproxy/haproxy.cfg from template
   ansible.builtin.template:

@@ -3,44 +3,40 @@
   ansible.builtin.debug:
     msg: "Installing system, PostgreSQL {{ postgresql_version }}, and Patroni packages"
 
-- name: Install system packages
-  ansible.builtin.package:
-    name: "{{ item }}"
-    state: present
-  loop: "{{ system_packages }}"
+- name: Install system packages (shell — no python3-apt required)
+  ansible.builtin.shell: >
+    apt-get install -y --no-install-recommends {{ system_packages | join(' ') }}
   register: system_pkg_status
-  until: system_pkg_status is success
+  until: system_pkg_status.rc == 0
   delay: 5
   retries: 3
-  environment: "{{ proxy_env | default({}) }}"
+  changed_when: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    APT_ACQUIRE_HTTP_TIMEOUT: "300"
+    APT_ACQUIRE_HTTPS_TIMEOUT: "300"
 
-- name: Install PostgreSQL {{ postgresql_version }} required packages
-  ansible.builtin.package:
-    name: "{{ item }}"
-    state: present
-  loop: "{{ postgres_packages_required }}"
+- name: Install PostgreSQL {{ postgresql_version }} required packages (shell — no python3-apt required)
+  ansible.builtin.shell: >
+    apt-get install -y --no-install-recommends {{ postgres_packages_required | join(' ') }}
   register: pg_pkg_status
-  until: pg_pkg_status is success
+  until: pg_pkg_status.rc == 0
   delay: 5
   retries: 3
-  environment: "{{ proxy_env | default({}) }}"
+  changed_when: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    APT_ACQUIRE_HTTP_TIMEOUT: "300"
+    APT_ACQUIRE_HTTPS_TIMEOUT: "300"
 
 - name: Install optional PostgreSQL extensions (skip if not yet in PGDG for PG{{ postgresql_version }})
-  ansible.builtin.package:
-    name: "{{ item }}"
-    state: present
+  ansible.builtin.shell: "apt-get install -y --no-install-recommends {{ item }} || true"
   loop: "{{ postgres_packages_optional }}"
-  register: pg_ext_status
-  ignore_errors: true
-  environment: "{{ proxy_env | default({}) }}"
-
-- name: Report skipped optional extensions
-  ansible.builtin.debug:
-    msg: "Optional extension not available (skipped): {{ item.item }}"
-  loop: "{{ pg_ext_status.results }}"
-  when: item.failed | default(false)
-  loop_control:
-    label: "{{ item.item }}"
+  changed_when: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    APT_ACQUIRE_HTTP_TIMEOUT: "300"
+    APT_ACQUIRE_HTTPS_TIMEOUT: "300"
 
 - name: Drop default PostgreSQL cluster ({{ postgresql_version }}/main) if present
   ansible.builtin.command: >
@@ -55,16 +51,18 @@
     enabled: no
   ignore_errors: true
 
-- name: Install Patroni apt dependencies (psutil, etcd3 library)
-  ansible.builtin.package:
-    name: "{{ item }}"
-    state: present
-  loop: "{{ patroni_packages }}"
+- name: Install Patroni apt dependencies (shell — no python3-apt required)
+  ansible.builtin.shell: >
+    apt-get install -y --no-install-recommends {{ patroni_packages | join(' ') }}
   register: patroni_dep_status
-  until: patroni_dep_status is success
+  until: patroni_dep_status.rc == 0
   delay: 5
   retries: 3
-  environment: "{{ proxy_env | default({}) }}"
+  changed_when: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    APT_ACQUIRE_HTTP_TIMEOUT: "300"
+    APT_ACQUIRE_HTTPS_TIMEOUT: "300"
 
 - name: Install Patroni {{ patroni_install_version }} via pip
   ansible.builtin.pip:
@@ -82,13 +80,12 @@
 # -------------------------------------------------------------------
 # pg_wait_tracer — install from source (optional)
 # -------------------------------------------------------------------
-- name: Install build dependencies for pg_wait_tracer
-  ansible.builtin.package:
-    name:
-      - git
-      - build-essential
-      - postgresql-server-dev-{{ postgresql_version }}
-    state: present
+- name: Install build dependencies for pg_wait_tracer (shell — no python3-apt required)
+  ansible.builtin.shell: >
+    apt-get install -y --no-install-recommends git build-essential postgresql-server-dev-{{ postgresql_version }}
+  changed_when: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
   when: pg_wait_tracer_enabled | default(false) | bool
 
 - name: Clone pg_wait_tracer repository

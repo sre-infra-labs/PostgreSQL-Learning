@@ -99,7 +99,7 @@ simulate_disaster() {
   echo "    ⚠️  Automatic failover is disabled in this cluster"
   echo "    ✓ Triggering manual failover to promote pg3..."
   echo ""
-  podman exec pg3 patronictl -c /etc/patroni/patroni.yml failover pg-docker-cls1 --force
+  podman exec pg3 patronictl -c /etc/patroni/patroni.yml failover pg-podman-cls1 --force
   sleep 5
 
   echo ""
@@ -220,7 +220,7 @@ restore_original_topology() {
 
   echo ""
   echo "=== Executing Switchover: pg3 → pg1 ==="
-  podman exec pg3 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 \
+  podman exec pg3 patronictl -c /etc/patroni/patroni.yml switchover pg-podman-cls1 \
     --leader pg3 --candidate pg1 --force
 
   echo ""

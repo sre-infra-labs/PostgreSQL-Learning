@@ -1,13 +1,17 @@
 ---
-# Master playbook — runs Phase 1 (Docker infra) then Phase 2 (PG cluster install)
+# Master playbook — runs Phase 1 (Podman infra) then Phase 2 (PG cluster install)
 # Usage: ansible-playbook site.yml --vault-password-file=vault-pass
 #
 # To run phases individually:
-#   Phase 1: ansible-playbook playbook-setup-docker.yml
+#   Phase 1: ansible-playbook playbook-setup-podman.yml
 #   Phase 2: ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
+#
+# For standby cluster (pg4 — Region B / Secondary DC):
+#   Phase 1b: ansible-playbook playbook-setup-podman.yml -e 'pg_containers=[pg4]'
+#   Phase 2b: ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass
 
-- name: Phase 1 - Setup Docker Infrastructure
-  import_playbook: playbook-setup-docker.yml
+- name: Phase 1 - Setup Podman Infrastructure (Primary Cluster)
+  import_playbook: playbook-setup-podman.yml
 
-- name: Phase 2 - Install PostgreSQL 18 Cluster
+- name: Phase 2 - Install PostgreSQL 18 Cluster (Primary Cluster — pg1, pg2, pg3)
   import_playbook: playbook-install-pg-cluster.yml

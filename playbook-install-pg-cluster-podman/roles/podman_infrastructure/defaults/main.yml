@@ -1,5 +1,6 @@
 # Podman network — use the pre-existing lab-network shared by all lab containers
 # The playbook will NOT recreate this network; it attaches pg containers to it.
+# Ubuntu host (ryzen9 — Ubuntu 24.04): podman network create --driver bridge --subnet=172.18.0.0/16 lab-network
 podman_network_name: "lab-network"
 podman_network_subnet: "172.18.0.0/16"
 podman_network_gateway: "172.18.0.1"
@@ -57,6 +58,16 @@ pg_containers:
     haproxy_write_port: 35000
     haproxy_read_port: 35001
     haproxy_stats_port: 37000
+  - name: pg4
+    ip: "172.18.0.14"
+    ssh_port: 2224
+    pg_port: 5437
+    patroni_port: 8014
+    pg_exporter_port: 9197
+    pgbouncer_port: 6436
+    haproxy_write_port: 45000
+    haproxy_read_port: 45001
+    haproxy_stats_port: 47000
 
 # Podman named volumes
 pg_data_volume_prefix: "pg-data"

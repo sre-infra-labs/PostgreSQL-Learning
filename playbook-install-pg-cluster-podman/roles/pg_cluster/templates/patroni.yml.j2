@@ -22,9 +22,15 @@ restapi:
   listen: 0.0.0.0:{{ patroni_restapi_port }}
   connect_address: {{ ip }}:{{ patroni_restapi_port }}
 
-# etcd3 DCS — 3-member cluster running inside each pg container
+# etcd3 DCS configuration
 etcd3:
-  hosts: {{ groups['all'] | map('extract', hostvars, 'ip') | product([':2379']) | map('join') | join(',') }}
+  {% if inventory_hostname in groups['standby'] %}
+  # Standby cluster in Region B: single-node etcd on pg4
+  hosts: {{ ip }}:2379
+  {% else %}
+  # Primary cluster in Region A: 3-member etcd cluster (pg1, pg2, pg3)
+  hosts: {{ groups['leader'] | map('extract', hostvars, 'ip') | product([':2379']) | map('join') | join(',') }},{{ groups['replica'] | map('extract', hostvars, 'ip') | product([':2379']) | map('join') | join(',') }}
+  {% endif %}
   protocol: http
 
 bootstrap:
@@ -45,6 +51,17 @@ bootstrap:
       {% for parameter in postgresql_parameters if parameter is mapping and 'option' in parameter and 'value' in parameter %}
         {{ parameter.option }}: "{{ parameter.value }}"
       {% endfor %}
+    {% if patroni_standby_cluster is defined and patroni_standby_cluster.host is defined and patroni_standby_cluster.host | length > 0 %}
+    standby_cluster:
+      host: {{ patroni_standby_cluster.host }}
+      port: {{ patroni_standby_cluster.port | default(5432) }}
+      {% if patroni_standby_cluster.primary_slot_name is defined and patroni_standby_cluster.primary_slot_name | length > 0 %}
+      primary_slot_name: "{{ patroni_standby_cluster.primary_slot_name }}"
+      {% endif %}
+      {% if patroni_standby_cluster.restore_command is defined and patroni_standby_cluster.restore_command | length > 0 %}
+      restore_command: "{{ patroni_standby_cluster.restore_command }}"
+      {% endif %}
+    {% endif %}
 
   initdb:
     - encoding: {{ postgresql_encoding }}
@@ -128,7 +145,7 @@ postgresql:
 
 
 watchdog:
-  mode: {{ patroni_watchdog_mode }}  # off — Docker containers have no /dev/watchdog
+  mode: {{ patroni_watchdog_mode }}  # off — Podman containers have no /dev/watchdog
 
 tags:
   nofailover: false

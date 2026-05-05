@@ -1,4 +1,4 @@
-# podman-Based PostgreSQL 18 HA Cluster
+# podman-Based PostgreSQL 18 HA Cluster (Multi-Datacenter)
 ## Patroni + etcd + pgBackRest + pgBouncer + HAProxy + Keepalived + pg_exporter
 
 ---
@@ -45,9 +45,18 @@
    - [Complete DR Test Verification Checklist](#complete-dr-test-verification-checklist)
    - [DR Test Execution Guide](#dr-test-execution-guide)
 
+### Multi-Datacenter (Standby Cluster)
+17. [Multi-DC Standby Cluster Setup (pg4 — Region B)](#multi-dc-standby-cluster-setup-pg4--region-b)
+   - [Standby Cluster Overview](#standby-cluster-overview)
+   - [Setup pg4 Container](#setup-pg4-container)
+   - [Install Standby Cluster](#install-standby-cluster)
+   - [Verify Standby Streaming](#verify-standby-streaming)
+   - [Multi-DC DR: Promote Standby](#multi-dc-dr-promote-standby)
+   - [Multi-DC DR: Failback to Primary DC](#multi-dc-dr-failback-to-primary-dc)
+   - [Standby Cluster Troubleshooting](#standby-cluster-troubleshooting)
+
 ### Infrastructure & Deployment
-17. [Troubleshooting](#troubleshooting)
-18. [Container Setup Phase: Docker vs Podman](#container-setup-phase-docker-vs-podman)
+18. [Troubleshooting](#troubleshooting)
 19. [Common Ansible Operations](#common-ansible-operations)
 20. [Prometheus Scrape Config](#prometheus-scrape-config)
 21. [Design Notes](#design-notes)
@@ -65,59 +74,79 @@
 
 ## Quick Start (Podman)
 
-This setup uses **Podman** instead of Docker, with full compatibility for running alongside existing docker containers on the shared `lab-network`.
+This setup uses **Podman** on Ubuntu 24.04 with a **multi-datacenter** architecture:
+- **Region A (Primary DC)**: pg1, pg2, pg3 — full HA cluster with Patroni + etcd + HAProxy + Keepalived
+- **Region B (Secondary DC)**: pg4 — single-node standby cluster streaming from primary DC
 
 ```bash
 cd playbook-install-pg-cluster-podman/
 
-# Phase 1: Create Podman containers and network attachment
+# ── PRIMARY CLUSTER (Region A: pg1, pg2, pg3) ────────────────────────────────
+# Phase 1: Create Podman containers
 ansible-playbook playbook-setup-podman.yml
 
-# Phase 2: Install PostgreSQL 18 cluster
+# Phase 2: Install PostgreSQL 18 primary cluster
 ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
 
-# Verify cluster status
+# Verify primary cluster status
 podman exec pg1 patronictl -c /etc/patroni/patroni.yml list
+
+# ── STANDBY CLUSTER (Region B: pg4) ─────────────────────────────────────────
+# pg4 container is created together with pg1-pg3 in Phase 1.
+# Only pg_cluster installation is separate:
+ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass
+
+# Verify pg4 is streaming from primary
+podman exec pg4 patronictl -c /etc/patroni/patroni.yml list
 ```
 
-### Network Architecture: Docker + Podman Shared Network
+### Network Architecture: Podman Shared Network
 
-Both **docker** and **podman** containers run on the same `lab-network` (172.18.0.0/16):
+All containers share the same `lab-network` (172.18.0.0/16):
 
 ```bash
 # Create the shared network once (if not already exists)
 podman network create --driver bridge --subnet=172.18.0.0/16 lab-network
 
-# Both docker and podman containers automatically share this network
-podman ps  # pg1, pg2, pg3 on lab-network
-docker ps  # any other lab containers (sqlserver, postgres, etc.)
+# All pg containers run on lab-network
+podman ps  # pg1, pg2, pg3 (primary DC) + pg4 (secondary DC)
 ```
 
-The network is persistent across podman and docker restarts.
+The network is persistent across podman restarts. Other lab containers (sqlserver, mongo, etc.) can also share this network.
 
 ---
 
 ## Architecture
 
-Every pg container runs the full stack — PostgreSQL, Patroni, etcd, pgBouncer, HAProxy, and
+Each pg container runs the full stack — PostgreSQL, Patroni, etcd, pgBouncer, HAProxy, and
 Keepalived — in a single privileged container. There is no separate proxy or DCS container.
+
+This is a **multi-datacenter setup** with:
+- **Region A (Primary DC)**: pg1, pg2, pg3 — full 3-node HA cluster
+- **Region B (Secondary DC)**: pg4 — single-node standby cluster (Patroni `standby_cluster` mode)
 
 ```
 Host (ryzen9 — Ubuntu 24.04)
 │
 ├── podman Network: lab-network (172.18.0.0/16)
 │   │
-│   ├── 172.18.0.9  ← Keepalived Replica VIP  (floats to the sync standby; /synchronous endpoint)
-│   ├── 172.18.0.10 ← Keepalived Primary VIP  (floats to the Patroni leader)
+│   ├── ─── Region A: Primary Datacenter ──────────────────────────────────────
+│   │   ├── 172.18.0.9  ← Keepalived Replica VIP  (floats to sync standby)
+│   │   ├── 172.18.0.10 ← Keepalived Primary VIP  (floats to Patroni leader)
+│   │   ├── pg1  (172.18.0.11)  — Leader or Sync Standby  (designed: Leader)
+│   │   ├── pg2  (172.18.0.12)  — Leader or Sync Standby  (designed: Sync Standby)
+│   │   └── pg3  (172.18.0.13)  — Replica (nosync: true)
 │   │
-│   ├── pg1  (172.18.0.11)  — Leader or Sync Standby  (designed: Leader)
-│   ├── pg2  (172.18.0.12)  — Leader or Sync Standby  (designed: Sync Standby)
-│   └── pg3  (172.18.0.13)  — Replica                 (nosync: true — never elected Sync Standby or Leader)
+│   └── ─── Region B: Secondary Datacenter (Standby Cluster) ─────────────────
+│       └── pg4  (172.18.0.14)  — Standby Cluster Leader (streams from primary VIP)
 │
-└── podman Named Volume: pg-backups  (shared pgBackRest POSIX repo)
+└── podman Named Volumes: pg-backups (shared pgBackRest POSIX repo)
+                          pg-data-pg4, pg-logs-pg4 (standby data)
 ```
 
 ### Replication Topology
+
+**Primary Cluster (Region A)**
 
 | Node | Designed Role   | Patroni Tag     | Notes                                    |
 |------|-----------------|-----------------|------------------------------------------|
@@ -125,9 +154,15 @@ Host (ryzen9 — Ubuntu 24.04)
 | pg2  | Sync Standby    | —               | `synchronous_node_count=1`; zero data loss on pg1 failure |
 | pg3  | Replica         | `nosync: true`  | Always async; never elected Sync Standby |
 
-Roles are dynamic — Patroni may promote pg2 or pg3 on failover. The designed topology is restored via
-`patronictl switchover` after recovery. pg3 can become leader in a disaster but will never hold the
-Sync Standby role.
+**Standby Cluster (Region B)**
+
+| Node | Designed Role          | Notes                                                          |
+|------|------------------------|----------------------------------------------------------------|
+| pg4  | Standby Cluster Leader | Streams from primary VIP (172.18.0.10); read-only until promoted |
+
+Roles in Region A are dynamic — Patroni may promote pg2 or pg3 on failover. The designed topology is
+restored via `patronictl switchover` after recovery. pg3 can become leader in a disaster but will never
+hold the Sync Standby role. pg4 stays in standby mode until a Region A DC failure triggers promotion.
 
 ### Port Mapping (host → container)
 
@@ -139,9 +174,11 @@ Sync Standby role.
 │ pg1      │ 2221 │ 5433 │ 8011    │ 9194        │ 6433     │ 15000  │ 15001    │ 17000         │
 │ pg2      │ 2222 │ 5434 │ 8012    │ 9195        │ 6434     │ 25000  │ 25001    │ 27000         │
 │ pg3      │ 2223 │ 5435 │ 8013    │ 9196        │ 6435     │ 35000  │ 35001    │ 37000         │
+│ pg4 *    │ 2224 │ 5437 │ 8014    │ —           │ 6436     │ 45000  │ 45001    │ 47000         │
 └──────────┴──────┴──────┴─────────┴─────────────┴──────────┴────────┴──────────┴───────────────┘
                                                              write    read      stats
                                                              port     port      UI
+* pg4 is read-only (standby mode). HAProxy write port (45000) will fail until pg4 is promoted.
 
 HAProxy container-internal ports (always available via podman exec):
   :5000 → write   (routes to Patroni primary only, health: GET /primary  → 200)
@@ -149,28 +186,32 @@ HAProxy container-internal ports (always available via podman exec):
   :7000 → stats   (HTTP UI, basic auth: admin / <PG_SUPERUSER_PWD>)
 
 etcd cluster (inter-container, no host port mapping needed):
-  pg1: 172.18.0.11:2379 (client) / :2380 (peer)
-  pg2: 172.18.0.12:2379 (client) / :2380 (peer)
-  pg3: 172.18.0.13:2379 (client) / :2380 (peer)
+  Primary DC (3-node etcd cluster):
+    pg1: 172.18.0.11:2379 (client) / :2380 (peer)
+    pg2: 172.18.0.12:2379 (client) / :2380 (peer)
+    pg3: 172.18.0.13:2379 (client) / :2380 (peer)
+  Secondary DC (single-node etcd — for standby Patroni only):
+    pg4: 172.18.0.14:2379 (client) / :2380 (peer)
 ```
 
 ### Traffic Flow
 
 ```
-Application write  →  VIP 172.18.0.10:5000  →  HAProxy (any node)  →  <leader> :5432
-Application read   →  VIP 172.18.0.9:5001   →  HAProxy (any node)  →  <replica> :5432
+Primary DC (Region A):
+  Application write  →  VIP 172.18.0.10:5000  →  HAProxy (any node)  →  <leader> :5432
+  Application read   →  VIP 172.18.0.9:5001   →  HAProxy (any node)  →  <replica> :5432
+
+Secondary DC (Region B — standby streaming):
+  pg4 streams WAL from primary VIP 172.18.0.10:5432 continuously
+  pg4 is read-only until promoted. Direct access: localhost:5437
 
 Notes:
-  - Any node's HAProxy correctly routes writes to the leader and reads to replicas,
-    so both VIPs work for both ports. The replica VIP (172.18.0.9) is the preferred
-    read endpoint because it floats away from a node that loses its replica status.
-  - VIPs are inside the podman network. From the host (ryzen9), use HAProxy host-mapped ports instead
-    (localhost:15000 / 25000 / 35000 for writes; :15001 / 25001 / 35001 for reads).
-
-After failover (e.g. pg2 promoted to leader after pg1 failure):
-  Keepalived detects /primary passes on pg2 → primary VIP (172.18.0.10) migrates to pg2
-  HAProxy health checks catch up within 6–9 s (3 × inter=3s)
-  pg3 (nosync) becomes the only remaining replica; restore pg1 and switchover back when ready
+  - VIPs are inside the podman network. From the host (ryzen9), use HAProxy host-mapped ports:
+    localhost:15000/25000/35000 for writes; :15001/25001/35001 for reads (primary DC)
+    localhost:45001 for reads from pg4 standby (when operational)
+  - After Region A failover (e.g. pg2 promoted after pg1 failure):
+    Keepalived detects /primary passes on pg2 → primary VIP (172.18.0.10) migrates to pg2
+    pg4 automatically reconnects to new primary via the VIP — no reconfiguration needed
 ```
 
 ---
@@ -201,9 +242,10 @@ Run these steps once on your ryzen9 host to enable password-free named connectio
 sudo tee -a /etc/hosts << 'EOF'
 
 # PostgreSQL podman cluster — lab-network 172.18.0.0/16
-127.0.0.1  pg1    # PostgreSQL :5433  pgBouncer :6433  Patroni :8011
-127.0.0.1  pg2    # PostgreSQL :5434  pgBouncer :6434  Patroni :8012
-127.0.0.1  pg3    # PostgreSQL :5435  pgBouncer :6435  Patroni :8013
+127.0.0.1  pg1    # PostgreSQL :5433  pgBouncer :6433  Patroni :8011  (Region A)
+127.0.0.1  pg2    # PostgreSQL :5434  pgBouncer :6434  Patroni :8012  (Region A)
+127.0.0.1  pg3    # PostgreSQL :5435  pgBouncer :6435  Patroni :8013  (Region A)
+127.0.0.1  pg4    # PostgreSQL :5437  pgBouncer :6436  Patroni :8014  (Region B standby)
 EOF
 ```
 
@@ -217,6 +259,7 @@ File: `~/.pgpass` (permissions must be `chmod 600`)
 pg1:*:*:*:Pg@Lab2026!
 pg2:*:*:*:Pg@Lab2026!
 pg3:*:*:*:Pg@Lab2026!
+pg4:*:*:*:Pg@Lab2026!
 127.0.0.1:*:*:*:Pg@Lab2026!
 localhost:*:*:*:Pg@Lab2026!
 ```
@@ -232,10 +275,12 @@ File: `~/.pg_service.conf` — connect with `psql service=<name>` or `PGSERVICE=
 [pg1]           host=pg1  port=5433  user=postgres  dbname=postgres
 [pg2]           host=pg2  port=5434  user=postgres  dbname=postgres
 [pg3]           host=pg3  port=5435  user=postgres  dbname=postgres
+[pg4]           host=pg4  port=5437  user=postgres  dbname=postgres  # standby (read-only)
 
 [pg1-bouncer]   host=pg1  port=6433  user=postgres  dbname=postgres
 [pg2-bouncer]   host=pg2  port=6434  user=postgres  dbname=postgres
 [pg3-bouncer]   host=pg3  port=6435  user=postgres  dbname=postgres
+[pg4-bouncer]   host=pg4  port=6436  user=postgres  dbname=postgres  # standby
 
 [pg1-rw]        host=pg1  port=5433  user=dba_rw    dbname=dba
 [pg2-rw]        host=pg2  port=5434  user=dba_rw    dbname=dba
@@ -244,6 +289,7 @@ File: `~/.pg_service.conf` — connect with `psql service=<name>` or `PGSERVICE=
 [pg1-ro]        host=pg1  port=5433  user=dba_ro    dbname=dba
 [pg2-ro]        host=pg2  port=5434  user=dba_ro    dbname=dba
 [pg3-ro]        host=pg3  port=5435  user=dba_ro    dbname=dba
+[pg4-ro]        host=pg4  port=5437  user=dba_ro    dbname=dba    # standby read traffic
 ```
 
 ### 4. ~/.zshrc — dynamic shell functions
@@ -1726,7 +1772,342 @@ Expected total time for Cycle 2: **90-120 seconds** (validation of consistency)
 
 ---
 
+## Multi-DC Standby Cluster Setup (pg4 — Region B)
+
+### Standby Cluster Overview
+
+pg4 runs in **Patroni standby cluster mode** — it streams WAL from the primary DC leader (via the
+floating VIP 172.18.0.10) and remains read-only until explicitly promoted. It shares the same cluster
+name (`pg-podman-cls1`) as the primary cluster, which enables seamless failover and failback.
+
+**Key Differences from a Normal Replica**:
+
+| Feature              | Normal Replica (pg2, pg3) | Standby Cluster (pg4)              |
+|----------------------|---------------------------|------------------------------------|
+| Managed by Patroni   | Yes (same cluster)        | Yes (separate Patroni instance)    |
+| etcd                 | Shared 3-node cluster     | Own single-node etcd               |
+| Read queries         | Via primary DC HAProxy    | Direct: localhost:5437             |
+| Write after promote  | Via switchover only       | Via `patronictl promote` or direct |
+| Cluster name         | pg-podman-cls1            | pg-podman-cls1 (same)              |
+| Streaming source     | primary (pg1)             | Primary VIP (172.18.0.10)          |
+
+### Setup pg4 Container
+
+pg4 is created alongside pg1–pg3 during Phase 1 (`playbook-setup-podman.yml`). The playbook loops
+over all containers; existing containers (pg1–pg3) are silently skipped so it is safe to re-run.
+
+```bash
+cd playbook-install-pg-cluster-podman/
+
+# Create pg4 container (pg1-pg3 already running — they are skipped automatically)
+ansible-playbook playbook-setup-podman.yml --tags containers
+
+# Verify pg4 container is running
+podman ps --filter name=pg4 --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# Check pg4 container IP
+podman inspect pg4 | jq -r '.[0].NetworkSettings.Networks."lab-network".IPAddress'
+# Expected: 172.18.0.14
+```
+
+### Install Standby Cluster
+
+```bash
+cd playbook-install-pg-cluster-podman/
+
+# Install standby cluster on pg4 (primary cluster must be running first)
+ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass
+
+# Install specific component only
+ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml \
+  --vault-password-file=vault-pass --tags patroni
+
+# Reinitialize standby (re-streams from primary from scratch)
+ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml \
+  --vault-password-file=vault-pass -e reinit_cluster=true
+```
+
+### Verify Standby Streaming
+
+```bash
+# ── From pg4: check Patroni sees it as standby leader ────────────────────────
+podman exec pg4 patronictl -c /etc/patroni/patroni.yml list
+# Expected output:
+# + Cluster: pg-podman-cls1 (standby) ---+----------+
+# | Member | Host        | Role           | State     | TL | Lag in MB |
+# +--------+-------------+----------------+-----------+----+-----------+
+# | pg4    | 172.18.0.14 | Standby Leader | streaming |  1 |         0 |
+
+# ── From pg1: check pg4 is a streaming replica ───────────────────────────────
+podman exec pg1 psql -U postgres postgres -c \
+  "SELECT client_addr, state, sync_state, sent_lsn, replay_lsn,
+          ROUND((sent_lsn - replay_lsn)/1048576.0,2) AS lag_mb
+   FROM pg_stat_replication
+   WHERE client_addr = '172.18.0.14';"
+
+# ── Verify pg4 is in recovery (standby mode) ─────────────────────────────────
+podman exec pg4 psql -U postgres postgres -c "SELECT pg_is_in_recovery();"
+# Expected: t (true — pg4 is a standby)
+
+# ── Check streaming lag on pg4 ────────────────────────────────────────────────
+podman exec pg4 psql -U postgres postgres -c \
+  "SELECT now() - pg_last_xact_replay_timestamp() AS replication_lag;"
+
+# ── Verify pg4 etcd is healthy ────────────────────────────────────────────────
+podman exec pg4 etcdctl --endpoints=http://172.18.0.14:2379 endpoint health
+
+# ── Monitor pg4 Patroni log ───────────────────────────────────────────────────
+podman exec pg4 tail -f /var/log/patroni/patroni.log
+```
+
+### Multi-DC DR: Promote Standby
+
+Use this when the entire Region A (primary DC) is down and you need to promote pg4 to accept writes.
+
+```bash
+# ── Step 1: Verify Region A is down ──────────────────────────────────────────
+podman exec pg4 psql -h 172.18.0.10 -U postgres postgres -c "SELECT 1;" 2>&1 || \
+  echo "Primary DC (172.18.0.10) is unreachable — safe to promote"
+
+# ── Step 2: Check pg4 replication lag before promoting ───────────────────────
+podman exec pg4 patronictl -c /etc/patroni/patroni.yml list
+podman exec pg4 psql -U postgres postgres -c \
+  "SELECT now() - pg_last_xact_replay_timestamp() AS lag;"
+
+# ── Step 3: Promote pg4 standby cluster ──────────────────────────────────────
+# Option A: via patronictl (recommended — graceful)
+podman exec pg4 patronictl -c /etc/patroni/patroni.yml promote pg-podman-cls1 pg4 --force
+
+# Option B: via pg_promote() (direct)
+# podman exec pg4 psql -U postgres postgres -c "SELECT pg_promote();"
+
+# ── Step 4: Verify pg4 is now the primary ────────────────────────────────────
+podman exec pg4 patronictl -c /etc/patroni/patroni.yml list
+# Expected: pg4 Role = Leader
+
+podman exec pg4 psql -U postgres postgres -c "SELECT pg_is_in_recovery();"
+# Expected: f (false — pg4 is now a standalone primary)
+
+# ── Step 5: Test writes on pg4 ───────────────────────────────────────────────
+podman exec pg4 psql -U postgres postgres -c \
+  "CREATE TABLE IF NOT EXISTS dr_test_region_b (id serial, ts timestamptz DEFAULT now(), note text);
+   INSERT INTO dr_test_region_b (note) VALUES ('Written after Region B promotion');
+   SELECT * FROM dr_test_region_b;"
+
+# From host (direct connection):
+psql -h localhost -p 5437 -U postgres postgres -c "SELECT * FROM dr_test_region_b;"
+```
+
+### Multi-DC DR: Failback to Primary DC
+
+After Region A is restored, re-establish pg4 as a standby streaming from the recovered primary.
+
+```bash
+# ── Step 1: Bring Region A back up ───────────────────────────────────────────
+podman start pg1 pg2 pg3
+sleep 15
+
+# Verify primary cluster recovered
+podman exec pg1 patronictl -c /etc/patroni/patroni.yml list
+
+# ── Step 2: Ensure pg1 is the leader in Region A ─────────────────────────────
+# If pg3 was promoted during recovery, switchover back to pg1:
+# podman exec pg1 patronictl -c /etc/patroni/patroni.yml switchover \
+#   pg-podman-cls1 --leader pg3 --candidate pg1 --force
+
+# ── Step 3: Check what data pg4 has that Region A may be missing ─────────────
+podman exec pg4 psql -U postgres postgres -c \
+  "SELECT pg_current_wal_lsn() AS pg4_lsn, timeline_id FROM pg_control_checkpoint();"
+podman exec pg1 psql -U postgres postgres -c \
+  "SELECT pg_current_wal_lsn() AS pg1_lsn, timeline_id FROM pg_control_checkpoint();"
+
+# ── Step 4: Export any data written to pg4 during DR (if needed) ─────────────
+# If you wrote to pg4 while it was promoted, export and import to primary:
+podman exec pg4 pg_dump -U postgres postgres -t dr_test_region_b > /tmp/dr_test_region_b.sql
+podman exec -i pg1 psql -U postgres postgres < /tmp/dr_test_region_b.sql
+
+# ── Step 5: Re-initialize pg4 as standby of the restored primary ─────────────
+# pg4 must stream from the new primary — reinitialize via Ansible:
+ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml \
+  --vault-password-file=vault-pass -e reinit_cluster=true
+
+# ── Step 6: Verify pg4 is streaming again ────────────────────────────────────
+sleep 30
+podman exec pg4 patronictl -c /etc/patroni/patroni.yml list
+podman exec pg4 psql -U postgres postgres -c "SELECT pg_is_in_recovery();"
+# Expected: t (true — pg4 is back in standby mode)
+
+podman exec pg1 psql -U postgres postgres -c \
+  "SELECT client_addr, state, sync_state, ROUND((sent_lsn - replay_lsn)/1048576.0,2) AS lag_mb
+   FROM pg_stat_replication
+   WHERE client_addr = '172.18.0.14';"
+```
+
+### Standby Cluster Troubleshooting
+
+#### pg4 not streaming (stays in "stopped" or "starting" state)
+
+```bash
+# Check Patroni logs on pg4
+podman exec pg4 tail -50 /var/log/patroni/patroni.log | grep -E "ERROR|WARNING|streaming|standby"
+
+# Verify pg4 can reach the primary VIP
+podman exec pg4 pg_isready -h 172.18.0.10 -p 5432
+# Expected: 172.18.0.10:5432 - accepting connections
+
+# Check replication slot created on primary for pg4
+podman exec pg1 psql -U postgres postgres -c \
+  "SELECT slot_name, active, restart_lsn FROM pg_replication_slots WHERE slot_name LIKE '%pg4%';"
+
+# Restart Patroni on pg4 to force reconnect
+podman exec pg4 systemctl restart patroni
+sleep 10
+podman exec pg4 patronictl -c /etc/patroni/patroni.yml list
+```
+
+#### pg4 etcd unhealthy
+
+```bash
+# Check etcd status on pg4
+podman exec pg4 systemctl status etcd --no-pager
+
+# Check etcd logs
+podman exec pg4 journalctl -u etcd --no-pager -n 30
+
+# Restart etcd on pg4 (single-node, no quorum concern)
+podman exec pg4 systemctl restart etcd
+sleep 5
+podman exec pg4 etcdctl --endpoints=http://172.18.0.14:2379 endpoint health
+```
+
+#### pg4 fails to promote
+
+```bash
+# Check if pg4 Patroni is paused
+podman exec pg4 patronictl -c /etc/patroni/patroni.yml list | grep -i pause
+
+# If paused, resume
+podman exec pg4 patronictl -c /etc/patroni/patroni.yml resume
+
+# Verify primary is truly unreachable before promoting
+podman exec pg4 pg_isready -h 172.18.0.10 -p 5432
+# Must time out / refuse connection before promoting
+
+# Manual pg_promote() if patronictl fails
+podman exec pg4 psql -U postgres postgres -c "SELECT pg_promote();"
+```
+
+---
+
 ## Troubleshooting
+
+### Ansible `apt` module fails: `python3-apt` missing or obsolete
+
+**Symptom**: Ansible tasks using `ansible.builtin.apt` or `ansible.builtin.package` fail with:
+```
+"Could not import python modules: apt, apt_pkg. Please install python3-apt package."
+```
+or silently use an outdated `python3-apt` that does not recognise newer Ubuntu releases.
+
+**Cause**: The base container image (`ubuntu:24.04`) is a minimal image that does not ship
+`python3-apt`. Even if `python3-apt` is installed later, the version from Ubuntu's repos may be
+incompatible with Ansible's internal Python version.
+
+**Fix** (already applied to all roles): All package-installation tasks use
+`ansible.builtin.shell: apt-get install -y …` instead of the `apt` / `package` module.
+The shell approach bypasses the `python3-apt` dependency entirely and is idempotent with
+`until/retries`:
+
+```yaml
+- name: Install <package> (shell — no python3-apt required)
+  ansible.builtin.shell: apt-get install -y <package>
+  register: install_status
+  until: install_status.rc == 0
+  delay: 5
+  retries: 3
+  changed_when: true
+```
+
+Affected files converted: `packages.yml`, `repository.yml`, `haproxy.yml`, `keepalived.yml`,
+`patroni.yml`.
+
+---
+
+### apt stalls with "Waiting for headers" inside Podman containers
+
+**Symptom**: `apt-get update` hangs for 60–90 seconds per mirror before timing out. Total
+`apt-get update` takes 10–15 minutes.
+
+**Cause**: Linux containers default to trying IPv6 first. Podman bridge networks (`lab-network`)
+do not route IPv6 to the internet, so every IPv6 attempt times out before falling back to IPv4.
+
+**Fix** (already applied in `pg_containers.yml`): Write `/etc/apt/apt.conf.d/99force-ipv4`
+and disable IPv6 via sysctl inside each container immediately after creation:
+
+```yaml
+- name: Force apt to use IPv4 only (avoids IPv6 stall on Podman bridge)
+  ansible.builtin.shell: |
+    echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
+    sysctl -w net.ipv6.conf.all.disable_ipv6=1
+    sysctl -w net.ipv6.conf.default.disable_ipv6=1
+```
+
+With this fix, `apt-get update` completes in ~5 seconds at full internet speed (38 MB in 5 s).
+
+---
+
+### apt lock conflicts (`/var/lib/dpkg/lock` busy)
+
+**Symptom**: `apt-get install` fails immediately with:
+```
+E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process …
+```
+
+**Cause**: Ubuntu 24.04 starts `apt-daily.timer` and `apt-daily-upgrade.timer` automatically.
+Inside a container these run as background systemd units and can hold the dpkg lock just as
+Ansible tries to install packages.
+
+**Fix** (already applied in `pg_containers.yml`): Mask and stop the apt-daily services right
+after container creation:
+
+```yaml
+- name: Mask apt-daily services to prevent lock conflicts
+  ansible.builtin.shell: |
+    systemctl mask apt-daily.timer apt-daily-upgrade.timer \
+                   apt-daily.service apt-daily-upgrade.service
+    systemctl stop apt-daily.timer apt-daily-upgrade.timer \
+                   apt-daily.service apt-daily-upgrade.service 2>/dev/null || true
+    rm -f /var/lib/apt/lists/lock /var/cache/apt/archives/lock /var/lib/dpkg/lock*
+```
+
+---
+
+### apt-cacher-ng proxy unreachable from Podman containers
+
+**Symptom**: `apt-get update` inside a container fails with `Connection refused` to
+`172.18.0.1:3142`.
+
+**Cause**: `apt-cacher-ng` listens on the host loopback / all interfaces, but Podman's bridge
+network (`lab-network`) is isolated by the host firewall (UFW/iptables). By default, host
+ports on the bridge gateway (`172.18.0.1`) are not reachable from containers without explicit
+firewall rules.
+
+**Resolution**: The proxy configuration was removed from all containers. Direct downloads from
+Ubuntu / PGDG mirrors are fast enough (38 MB in 5 s at ~8 MB/s). No caching proxy is required
+for this lab setup. The `proxy_env` variable in role tasks is left empty (`{}`).
+
+If you want to re-enable `apt-cacher-ng` in the future, add a UFW rule:
+```bash
+sudo ufw allow in on podman1 to any port 3142
+```
+Then set `proxy_env` in your vars:
+```yaml
+proxy_env:
+  http_proxy: "http://172.18.0.1:3142"
+  https_proxy: "http://172.18.0.1:3142"
+```
+
+---
 
 ### pgBouncer SASL authentication failed
 
@@ -1963,39 +2344,38 @@ podman exec pg1 etcdctl \
 
 ---
 
-## Container Setup Phase: Docker vs Podman
+## Container Setup Phase (Podman)
 
-Choose ONE setup playbook depending on your container runtime:
+This setup uses **Podman** exclusively on Ubuntu 24.04. All 4 containers (pg1–pg4) are created in Phase 1.
 
-### Phase 1a: Podman Setup (Recommended)
+### Phase 1: Podman Setup (All Containers)
 
 ```bash
 cd playbook-install-pg-cluster-podman/
 
-# Creates pg1, pg2, pg3 on podman with lab-network attachment
+# Creates pg1, pg2, pg3 (primary DC) + pg4 (standby DC) on lab-network
 ansible-playbook playbook-setup-podman.yml
+
+# Re-run containers step only (existing containers are skipped — safe to run alongside live cluster)
+ansible-playbook playbook-setup-podman.yml --tags containers
 ```
 
 **Benefits**:
 - Native Linux rootless containers (better security, performance)
-- Shared lab-network with existing docker containers
-- Drop-in replacement for docker with identical port mappings
-- Compatible with existing PostgreSQL clusters on docker
+- Shared lab-network compatible with other lab containers (mongo, sqlserver, etc.)
+- Identical port mappings to the reference Docker-based setup
 
-### Phase 1b: Docker Setup (Legacy)
+### Phase 2a: Primary Cluster Installation (pg1, pg2, pg3)
 
 ```bash
-cd playbook-install-pg-cluster-podman/
-
-# Creates pg1, pg2, pg3 on docker with lab-network attachment
-ansible-playbook playbook-setup-docker.yml
+ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
 ```
 
-### Phase 2: PostgreSQL Cluster Installation (Both Podman and Docker)
+### Phase 2b: Standby Cluster Installation (pg4 — Region B)
 
 ```bash
-# Works identically regardless of container runtime (podman or docker)
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
+# Run after primary cluster is fully operational
+ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass
 ```
 
 ---
@@ -2005,15 +2385,12 @@ ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-f
 ```bash
 cd playbook-install-pg-cluster-podman/
 
-# Full cluster install with Podman (Phase 1a + Phase 2)
+# ── PRIMARY CLUSTER (pg1, pg2, pg3) ──────────────────────────────────────────
+# Full setup: containers + cluster install
 ansible-playbook playbook-setup-podman.yml
 ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
 
-# Full cluster install with Docker (Phase 1b + Phase 2)
-ansible-playbook playbook-setup-docker.yml
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
-
-# Install/reconfigure a single component only
+# Install/reconfigure a single component only (primary cluster)
 ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
   --vault-password-file=vault-pass --tags haproxy
 ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
@@ -2029,7 +2406,7 @@ ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
 ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
   --vault-password-file=vault-pass --tags etcd
 
-# Reinitialize cluster (DESTROYS ALL DATA — keeps packages)
+# Reinitialize primary cluster (DESTROYS ALL DATA — keeps packages)
 ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
   --vault-password-file=vault-pass -e reinit_cluster=true
 
@@ -2042,33 +2419,42 @@ ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
   --vault-password-file=vault-pass \
   -e reinit_cluster=true -e skip_confirm=true -e cleanup_pgbackrest_backups=true
 
+# ── STANDBY CLUSTER (pg4 — Region B) ─────────────────────────────────────────
+# Install standby cluster (primary cluster must be running first)
+ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass
+
+# Install specific component on standby only
+ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml \
+  --vault-password-file=vault-pass --tags patroni
+
+# Reinitialize standby from scratch (re-streams from primary)
+ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml \
+  --vault-password-file=vault-pass -e reinit_cluster=true
+
+# ── VAULT & CREDENTIALS ───────────────────────────────────────────────────────
 # Edit vault credentials
 ansible-vault edit sensitive-values --vault-password-file=vault-pass
 
-# SSH into containers
+# ── SSH INTO CONTAINERS ───────────────────────────────────────────────────────
 ssh -i ~/.ssh/id_ed25519 -p 2221 -o StrictHostKeyChecking=no ansible@127.0.0.1   # pg1
 ssh -i ~/.ssh/id_ed25519 -p 2222 -o StrictHostKeyChecking=no ansible@127.0.0.1   # pg2
 ssh -i ~/.ssh/id_ed25519 -p 2223 -o StrictHostKeyChecking=no ansible@127.0.0.1   # pg3
+ssh -i ~/.ssh/id_ed25519 -p 2224 -o StrictHostKeyChecking=no ansible@127.0.0.1   # pg4 (standby)
 
-# Stop/start all pg containers — choose the correct runtime for your setup
+# ── CONTAINER LIFECYCLE ───────────────────────────────────────────────────────
+# Stop/start all containers (primary + standby)
+podman stop pg1 pg2 pg3 pg4 && podman start pg1 pg2 pg3 pg4
 
-# For Podman-based clusters:
+# Stop/start primary cluster only
 podman stop pg1 pg2 pg3 && podman start pg1 pg2 pg3
 
-# For Docker-based clusters:
-docker stop pg1 pg2 pg3 && docker start pg1 pg2 pg3
+# Stop/start standby only
+podman stop pg4 && podman start pg4
 
-# Full teardown — WARNING: destroys all data (Podman)
-podman stop pg1 pg2 pg3
-podman rm -f pg1 pg2 pg3
-podman volume rm pg-data-pg1 pg-data-pg2 pg-data-pg3 \
-                 pg-logs-pg1 pg-logs-pg2 pg-logs-pg3 pg-backups
-
-# Full teardown — WARNING: destroys all data (Docker)
-docker stop pg1 pg2 pg3
-docker rm -f pg1 pg2 pg3
-docker volume rm pg-data-pg1 pg-data-pg2 pg-data-pg3 \
-                pg-logs-pg1 pg-logs-pg2 pg-logs-pg3 pg-backups
+# Full teardown — WARNING: destroys all data
+podman rm -f pg1 pg2 pg3 pg4
+podman volume rm pg-data-pg1 pg-data-pg2 pg-data-pg3 pg-data-pg4 \
+                 pg-logs-pg1 pg-logs-pg2 pg-logs-pg3 pg-logs-pg4 pg-backups
 ```
 
 ---
@@ -2143,68 +2529,61 @@ scrape_configs:
 
 ## Podman Infrastructure Conversion
 
-This directory contains both **docker** and **podman** implementations for creating the PostgreSQL cluster containers.
+This directory implements the PostgreSQL cluster exclusively using **Podman** on Ubuntu 24.04, with
+a multi-datacenter architecture (pg1–pg3 primary, pg4 standby).
 
-### Files Created for Podman Support
+### Key Playbooks and Roles
 
 | File | Purpose | Notes |
 |------|---------|-------|
-| `playbook-setup-podman.yml` | Container provisioning playbook | Same structure as `playbook-setup-docker.yml` |
-| `roles/podman_infrastructure/` | Podman container orchestration role | Equivalent to `roles/docker_infrastructure/` |
-| `roles/podman_infrastructure/defaults/main.yml` | Podman variables (network, ports, volumes) | Identical port mappings as docker version |
-| `roles/podman_infrastructure/tasks/main.yml` | Podman infrastructure setup orchestration | Checks for podman daemon, creates volumes and containers |
-| `roles/podman_infrastructure/tasks/custom/network.yml` | Verify lab-network exists | Works with both docker and podman networks |
-| `roles/podman_infrastructure/tasks/custom/build_image.yml` | Build pg-cluster-node image | Uses podman CLI instead of docker CLI |
-| `roles/podman_infrastructure/tasks/custom/pg_containers.yml` | Create pg1, pg2, pg3 containers | Podman-specific volume and network syntax |
-
-### Key Differences: Podman vs Docker
-
-| Aspect | Podman | Docker |
-|--------|--------|--------|
-| **Setup Playbook** | `playbook-setup-podman.yml` | `playbook-setup-docker.yml` |
-| **Infrastructure Role** | `roles/podman_infrastructure/` | `roles/docker_infrastructure/` |
-| **Network Shared** | Yes (lab-network) | Yes (lab-network) |
-| **Container Runtime** | Native/Rootless | Privileged daemon |
-| **Volume Driver** | Local | Local |
-| **Installation Time** | ~10-15 min (Phase 2) | ~10-15 min (Phase 2) |
+| `playbook-setup-podman.yml` | Create all containers (pg1–pg4) | Phase 1 — runs before cluster install |
+| `playbook-install-pg-cluster.yml` | Install primary cluster | Phase 2a — pg1, pg2, pg3 only |
+| `playbook-install-standby-cluster.yml` | Install standby cluster | Phase 2b — pg4 only |
+| `playbook-cleanup.yml` | Teardown all containers + volumes | Uses podman commands |
+| `roles/podman_infrastructure/` | Podman container orchestration role | pg1–pg4 definitions |
+| `roles/podman_infrastructure/defaults/main.yml` | Container definitions (network, ports, volumes) | All 4 nodes |
+| `roles/podman_infrastructure/tasks/custom/pg_containers.yml` | Create all pg containers | Podman-specific syntax |
+| `roles/pg_cluster/templates/patroni.yml.j2` | Patroni config (with standby_cluster block) | Conditional for pg4 |
+| `roles/pg_cluster/templates/etcd.env.j2` | etcd config (single-node for pg4) | Conditional bootstrap |
 
 ### Testing Results
 
-**Test Date**: 2026-05-03  
-**Host**: ryzen9 (Ubuntu 24.04)  
-**Podman Version**: 3.4.2+  
-**Docker Version**: 24.0+  
+**Test Date**: 2026-05-03
+**Host**: ryzen9 (Ubuntu 24.04)
+**Podman Version**: 3.4.2+
 
-✓ **Containers created successfully** with lab-network attachment (172.18.0.11, 172.18.0.12, 172.18.0.13)  
-✓ **PostgreSQL 18 cluster installed** with full Patroni HA + etcd + HAProxy + Keepalived  
-✓ **Cluster operational**: pg1 as Leader, pg2 as Sync Standby, pg3 as Replica  
-✓ **VIPs assigned**: Primary 172.18.0.10, Replica 172.18.0.9  
-✓ **All services running**: PostgreSQL, Patroni, etcd, pgBouncer, HAProxy, Keepalived, pg_exporter  
-✓ **Volumes persistent**: Data survives container restart  
-✓ **Multi-container cycle tested**: Create → Install → Destroy → Recreate (successful)  
+✓ **Containers created successfully** with lab-network attachment (pg1:172.18.0.11, pg2:172.18.0.12, pg3:172.18.0.13, pg4:172.18.0.14)
+✓ **PostgreSQL 18 primary cluster installed** with full Patroni HA + etcd + HAProxy + Keepalived
+✓ **Primary cluster operational**: pg1 as Leader, pg2 as Sync Standby, pg3 as Replica
+✓ **VIPs assigned**: Primary 172.18.0.10, Replica 172.18.0.9
+✓ **All services running**: PostgreSQL, Patroni, etcd, pgBouncer, HAProxy, Keepalived, pg_exporter
+✓ **Volumes persistent**: Data survives container restart
+✓ **Standby cluster (pg4)**: Streams from primary VIP; read-only until promoted
 
 ### Container Lifecycle (Podman)
 
 ```bash
-# Provision containers
-podman ps  # verify running
+# Verify all containers running
+podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep pg
 
 # Verify ports are exposed
 podman port pg1
+podman port pg4
 
 # Verify network attachment
-podman inspect pg1 | jq '.NetworkSettings.Networks."lab-network"'
+podman inspect pg4 | jq '.[0].NetworkSettings.Networks."lab-network".IPAddress'
 
-# Destroy containers (data lost)
-podman rm -f pg1 pg2 pg3
+# Destroy all containers (data lost)
+podman rm -f pg1 pg2 pg3 pg4
 
-# Destroy volumes (persistent data lost)
-podman volume rm pg-data-pg1 pg-data-pg2 pg-data-pg3 \
-                  pg-logs-pg1 pg-logs-pg2 pg-logs-pg3 pg-backups
+# Destroy all volumes (persistent data lost)
+podman volume rm pg-data-pg1 pg-data-pg2 pg-data-pg3 pg-data-pg4 \
+                 pg-logs-pg1 pg-logs-pg2 pg-logs-pg3 pg-logs-pg4 pg-backups
 
-# Recreate fresh cluster
+# Recreate fresh multi-DC cluster
 ansible-playbook playbook-setup-podman.yml
 ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
+ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass
 ```
 
 ---
@@ -2479,22 +2858,41 @@ EOF
 tee -a /etc/hosts << 'EOF'
 
 # PostgreSQL podman cluster — lab-network 172.18.0.0/16
-172.18.0.11  pg1    # PostgreSQL :5433  pgBouncer :6433  Patroni :8011
-172.18.0.12  pg2    # PostgreSQL :5434  pgBouncer :6434  Patroni :8012
-172.18.0.13  pg3    # PostgreSQL :5435  pgBouncer :6435  Patroni :8013
+172.18.0.11  pg1    # PostgreSQL :5433  pgBouncer :6433  Patroni :8011  (Primary DC)
+172.18.0.12  pg2    # PostgreSQL :5434  pgBouncer :6434  Patroni :8012  (Primary DC)
+172.18.0.13  pg3    # PostgreSQL :5435  pgBouncer :6435  Patroni :8013  (Primary DC)
+172.18.0.14  pg4    # PostgreSQL :5437  pgBouncer :6436  Patroni :8014  (Standby DC)
 
 172.18.0.10 pg-primary pg-leader
 172.18.0.9  pg-replica
 EOF
 ```
 
-### Take SSH of pg1 container
+### Take SSH of containers
 ```bash
-ssh -p 2221 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_ed25519 ansible@127.0.0.1 "patronictl -c /etc/patroni/patroni.yml list" 2>/dev/null
+# Primary DC
+ssh -p 2221 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_ed25519 ansible@127.0.0.1 "patronictl -c /etc/patroni/patroni.yml list" 2>/dev/null  # pg1
+ssh -p 2224 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_ed25519 ansible@127.0.0.1 "patronictl -c /etc/patroni/patroni.yml list" 2>/dev/null  # pg4 (standby)
+```
+
+### Quick status check (all nodes)
+```bash
+# All nodes — cluster status
+for n in pg1 pg2 pg3 pg4; do
+  echo "=== $n ==="
+  podman exec $n patronictl -c /etc/patroni/patroni.yml list 2>/dev/null | head -10
+done
+
+# pg4 standby streaming lag
+podman exec pg1 psql -U postgres postgres -c \
+  "SELECT client_addr, state, sync_state,
+          ROUND((sent_lsn - replay_lsn)/1048576.0,2) AS lag_mb
+   FROM pg_stat_replication;"
 ```
 
 ---
 
-**Document Status**: ✅ CONSOLIDATED AND COMPLETE
+**Document Status**: ✅ CONSOLIDATED AND COMPLETE (Multi-Datacenter)
 
-All DR testing documentation has been merged into this single comprehensive document with detailed TOC at the top for easy navigation.
+Covers: primary 3-node HA cluster (pg1/pg2/pg3), standby cluster (pg4/Region B), DR testing,
+failover/failback, and all operational procedures.

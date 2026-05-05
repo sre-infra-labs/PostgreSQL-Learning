@@ -111,10 +111,13 @@
   ansible.builtin.systemd:
     daemon_reload: yes
 
-- name: Ensure locales package is installed
-  ansible.builtin.package:
-    name: locales
-    state: present
+- name: Ensure locales package is installed (shell — no python3-apt required)
+  ansible.builtin.shell: apt-get install -y locales
+  register: locales_install_status
+  until: locales_install_status.rc == 0
+  delay: 5
+  retries: 3
+  changed_when: true
 
 - name: Generate {{ postgresql_locale }} locale
   ansible.builtin.command: locale-gen {{ postgresql_locale }}

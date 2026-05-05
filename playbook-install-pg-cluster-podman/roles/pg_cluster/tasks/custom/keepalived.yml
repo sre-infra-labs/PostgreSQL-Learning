@@ -3,11 +3,13 @@
   ansible.builtin.debug:
     msg: "Installing Keepalived on {{ inventory_hostname }} — VIP: {{ keepalived_vip }} (VRID {{ keepalived_virtual_router_id }})"
 
-- name: Install Keepalived
-  ansible.builtin.package:
-    name: keepalived
-    state: present
-  environment: "{{ proxy_env | default({}) }}"
+- name: Install Keepalived (shell — no python3-apt required)
+  ansible.builtin.shell: apt-get install -y keepalived
+  register: keepalived_install_status
+  until: keepalived_install_status.rc == 0
+  delay: 5
+  retries: 3
+  changed_when: true
 
 - name: Allow binding to non-local IPs and preserve secondary addresses on primary removal
   ansible.builtin.copy:
