@@ -42,6 +42,11 @@
     restart_policy: unless-stopped
     privileged: true
     cgroupns_mode: host
+    # Docker bridge networks on macOS do not inherit the host DNS — set explicit resolvers
+    # so apt-get update and package installs can reach archive.ubuntu.com / apt.postgresql.org
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     tmpfs:
       - /run
       - /run/lock

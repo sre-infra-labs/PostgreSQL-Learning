@@ -19,6 +19,9 @@
     restart_policy: unless-stopped
     privileged: true
     cgroupns_mode: host
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     tmpfs:
       - /run
       - /run/lock
