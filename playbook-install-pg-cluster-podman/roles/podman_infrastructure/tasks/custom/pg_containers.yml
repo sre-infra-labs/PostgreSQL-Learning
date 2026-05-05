@@ -47,6 +47,8 @@
       --publish {{ item.haproxy_read_port }}:5001 \
       --publish {{ item.haproxy_stats_port }}:7000 \
       --restart=unless-stopped \
+      --dns 8.8.8.8 \
+      --dns 1.1.1.1 \
       {{ pg_node_image }}
   loop: "{{ pg_containers }}"
   register: container_create
@@ -58,6 +60,16 @@
     msg: "Container {{ item.item.name }} already exists or network attachment failed: {{ item.stdout }}"
   when: item.rc != 0
   loop: "{{ container_create.results }}"
+
+- name: Force apt to use IPv4 inside containers
+  # apt tries IPv6 (AAAA) first — if IPv6 has no route it waits for full timeout
+  # before falling back to IPv4, making apt update appear to hang/timeout.
+  ansible.builtin.shell: >
+    podman exec {{ item.name }}
+    bash -c 'echo "Acquire::ForceIPv4 \"true\";" > /etc/apt/apt.conf.d/99force-ipv4'
+  loop: "{{ pg_containers }}"
+  changed_when: true
+  failed_when: false
 
 - name: Inject SSH public key into containers
   ansible.builtin.shell: |
