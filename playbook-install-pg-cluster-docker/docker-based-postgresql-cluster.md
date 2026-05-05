@@ -1195,8 +1195,11 @@ docker start pg1 pg2 pg3
 # does NOT start automatically inside the container.
 # Start Patroni explicitly on each node; it will bring PostgreSQL up with it.
 for n in pg1 pg2 pg3; do
-  docker exec $n systemctl start patroni
+  docker exec $n systemctl restart patroni
 done
+
+# Bring patroni cluster out of maintenance mode
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml resume
 
 # Wait for services to initialise
 sleep 30
@@ -1281,7 +1284,7 @@ docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
 ```
 
 #### Step 6: Restore pg4 as Standby Cluster
-
+$$
 ```bash
 # Re-configure pg4 as a standby cluster following the primary leader via VIP
 docker exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 \
