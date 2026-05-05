@@ -1188,11 +1188,27 @@ Once pg1/pg2/pg3 are recovered (hardware fixed, network restored), follow these 
 #### Step 1: Bring Original Primary Cluster Back Online
 
 ```bash
-# Start pg1, pg2, pg3 after hardware/network is restored
+# Start the containers after hardware/network is restored
 docker start pg1 pg2 pg3
+
+# docker start only restarts the container process — Patroni (and therefore PostgreSQL)
+# does NOT start automatically inside the container.
+# Start Patroni explicitly on each node; it will bring PostgreSQL up with it.
+for n in pg1 pg2 pg3; do
+  docker exec $n systemctl start patroni
+done
+
+# Wait for services to initialise
 sleep 30
 
-# Check status from pg4's perspective
+# Verify Patroni and PostgreSQL are running inside each container
+for n in pg1 pg2 pg3; do
+  echo "=== $n ==="
+  docker exec $n systemctl is-active patroni
+  docker exec $n systemctl is-active postgresql
+done
+
+# Check cluster state from pg4's perspective
 docker exec pg4 patronictl -c /etc/patroni/patroni.yml list
 # pg1/pg2/pg3 will initially appear isolated — they still hold their old etcd state
 # They will NOT automatically follow pg4; manual conversion is required (Step 2)
