@@ -1183,152 +1183,125 @@ docker exec pg4 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.14 -p 5432 -U
 
 ### Failback: Restore Original Topology (Region A as Primary)
 
-Once pg1/pg2/pg3 are recovered (hardware fixed, network restored), follow these steps to return to the original topology.
+Failback is structurally **identical to failover** — only the direction changes. pg4 (current primary) is
+gracefully STONITH'd, pg1 cluster is promoted to primary, then pg4 is reconfigured as a standby cluster.
 
-#### Step 1: Bring Original Primary Cluster Back Online
+| Phase | pg4 (Region B) | pg1 cluster (Region A) |
+|---|---|---|
+| Start | Primary (Leader) | Standby cluster (streaming from pg4) |
+| After STONITH | Paused → stopped | Fully caught up, LAG = 0 |
+| After Promotion | Stopped | Primary (Leader) |
+| After Restore | Standby cluster (streaming from pg1) | Primary (Leader) |
+
+---
+
+#### Step 1: Pause pg4 Cluster (STONITH Phase 1 — Halt Writes)
 
 ```bash
-# Start the containers after hardware/network is restored
-docker start pg1 pg2 pg3
-
-# Check patroni service status
-for n in pg1 pg2 pg3; do
-  echo "=== $n ==="
-  docker exec $n systemctl status patroni | grep "Active:"
-done
-
-# If Patroni service is done, restart it
-for n in pg1 pg2 pg3; do
-  docker exec $n systemctl restart patroni
-done
-
-# Wait for services to initialise
-sleep 10
-
-# Check cluster state from pg4's perspective
-docker exec pg4 patronictl -c /etc/patroni/patroni.yml list
-
-# Check cluster state from pg1's perspective
-docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
-  # for graceful multidc failover, pg1 should be in maintenance mode
-  # for non-graceful multidc failover, pg1 should be in running mode
+# Pause pg4 with --wait — blocks until pg1 cluster has acknowledged all WAL from pg4
+# Guarantees zero data loss before stopping pg4
+docker exec pg4 patronictl -c /etc/patroni/patroni.yml pause --wait
 ```
 
-#### Step 2: Convert Recovered Cluster to Standby of pg4
+#### Step 2: Verify pg1 Cluster Has Caught Up (LAG = 0 MB)
 
 ```bash
-# Tell pg1/pg2/pg3 to follow pg4 as their upstream primary
-# Use the PRIMARY VIP (172.18.0.10) — floats to the current leader automatically
-docker exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 --force --set "standby_cluster={host: 172.18.0.10, port: 5432}"
-
-# Bring patroni cluster out of maintenance mode
-docker exec pg1 patronictl -c /etc/patroni/patroni.yml resume
-
-# Expected output:
-# Configuration changed
-# +   standby_cluster:
-# +     host: 172.18.0.10
-# +     port: 5432
-#
-# pg_rewind runs on pg1/pg2/pg3 to rewind their timeline to match pg4's
-# then they start streaming from pg4 as replicas
-
-# Why PRIMARY VIP (172.18.0.10) instead of pg4's node IP (172.18.0.14)?
-#   VIP floats to the current leader — if leadership changes, replication still works
-#   Hardcoded node IP breaks if leadership moves to another node
-
-# If Patroni service is done, restart it
-for n in pg1 pg2 pg3; do
-  docker exec $n systemctl restart patroni
-done
-
-# check pg1/pg4 cluster state
-docker exec pg4 patronictl -c /etc/patroni/patroni.yml list
-docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
-
-# Expected output:
-# % docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
-# + Cluster: pg-docker-cls1 (7636064797037994465) ----+----+-----------+--------------+
-# | Member | Host        | Role           | State     | TL | Lag in MB | Tags         |
-# +--------+-------------+----------------+-----------+----+-----------+--------------+
-# | pg1    | 172.18.0.11 | Replica        | streaming |  3 |         0 |              |
-# | pg2    | 172.18.0.12 | Standby Leader | streaming |  3 |           |              |
-# | pg3    | 172.18.0.13 | Replica        | streaming |  3 |         0 | nosync: true |
-# +--------+-------------+----------------+-----------+----+-----------+--------------+
-#
-# % docker exec pg4 patronictl -c /etc/patroni/patroni.yml list
-# + Cluster: pg-docker-cls1 (7636064797037994465) -----------+
-# | Member | Host        | Role   | State   | TL | Lag in MB |
-# +--------+-------------+--------+---------+----+-----------+
-# | pg4    | 172.18.0.14 | Leader | running |  3 |           |
-# +--------+-------------+--------+---------+----+-----------+
-
-# If new standby cluster TimeLine is lower than primary cluster TimeLine, but not matching with primary cluster TimeLine, then failover the standby cluster to another node on same side
-# If new standby cluster TimeLine is higher than primary cluster TimeLine, then failback the primary cluster to another node on same side
+# Watch pg1 cluster replication lag — wait until LAG = 0 MB on all nodes
+# Linux: watch -n 2 'docker exec pg1 patronictl ...'
+while true; do clear; docker exec pg1 patronictl -c /etc/patroni/patroni.yml list; sleep 2; done
+# Press Ctrl+C when LAG = 0 MB
 ```
 
-#### Step 3: Wait for Region A to Catch Up
+#### Step 3: Stop pg4 Cluster (STONITH Phase 2 — Guarantee No Concurrent Writes)
 
 ```bash
-# Wait until pg1/pg2/pg3 show LAG = 0 MB and are in streaming state
-watch -n 5 'docker exec pg4 patronictl -c /etc/patroni/patroni.yml list'
-
-# Expected after 1–5 minutes (depends on WAL volume accumulated during outage):
-# | pg1    | 172.18.0.11 | Replica | streaming | TL | 0 MB |
-# | pg2    | 172.18.0.12 | Replica | streaming | TL | 0 MB |
-# | pg3    | 172.18.0.13 | Replica | streaming | TL | 0 MB |
-# | pg4    | 172.18.0.14 | Leader  | running   | TL |      |
+# Stop pg4 — all WAL has been replicated, no split-brain risk
+docker stop pg4
+# ✅ pg4 is DOWN — safe to promote pg1 cluster
 ```
 
-#### Step 4: Verify Data Consistency
+#### Step 4: Promote pg1 Cluster to Primary
 
 ```bash
-# On pg4 (current primary) — check data written during DR mode
-docker exec pg4 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.14 -p 5432 -U postgres postgres \
-  -c "SELECT * FROM dr_test;"'
-
-# On pg1 (recovered replica) — verify same data was replicated from pg4
-docker exec pg1 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.11 -p 5432 -U postgres postgres \
-  -c "SELECT * FROM dr_test;"'
-# Both should return identical rows
+# Remove standby_cluster config — pg1 cluster stops streaming and becomes autonomous primary
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 \
+  --force --set standby_cluster=null
 ```
 
-#### Step 5: Switchover Back to pg1 (Failback)
+#### Step 5: Verify pg1 Cluster Health
 
 ```bash
-# Graceful switchover from pg4 back to pg1 as primary
-docker exec pg4 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 \
-  --leader pg4 --candidate pg1 --force
-
-sleep 10
-
-# Verify pg1 is primary again
+# One of pg1/pg2/pg3 should be elected Leader
 docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
 # Expected:
 # | pg1    | 172.18.0.11 | Leader       | running   | <new_TL> |
 # | pg2    | 172.18.0.12 | Sync Standby | streaming | <new_TL> |
 # | pg3    | 172.18.0.13 | Replica      | streaming | <new_TL> |
-# | pg4    | 172.18.0.14 | Standby      | streaming | <new_TL> |
+
+# Confirm pg1 cluster leader accepts writes
+docker exec pg1 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.11 -p 5432 -U postgres postgres \
+  -c "SELECT pg_is_in_recovery();"'
+# Expected: f (false)
 ```
 
-#### Step 6: Restore pg4 as Standby Cluster
-$$
+#### Step 6: Verify Leader VIP is Assigned on pg1 Cluster
+
 ```bash
-# Re-configure pg4 as a standby cluster following the primary leader via VIP
-docker exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 \
-  --force --set "standby_cluster={host: 172.18.0.10, port: 5432}"
+# Primary VIP (172.18.0.10) must now be held by whichever pg1/pg2/pg3 node is Leader
+for n in pg1 pg2 pg3; do
+  echo -n "$n VIPs: "
+  docker exec $n ip addr show eth0 | grep "inet " | awk '{print $2}' | tr '\n' ' '
+  echo
+done
+# Expected: one of pg1/pg2/pg3 holds 172.18.0.10 (primary VIP)
+#           one of pg1/pg2/pg3 holds 172.18.0.9  (replica VIP)
+```
+
+#### Step 7: Start pg4 Cluster and Validate Services
+
+```bash
+# Start the pg4 container
+docker start pg4
+
+# Patroni does not auto-start inside the container — start it explicitly
+docker exec pg4 systemctl start patroni
 
 sleep 10
 
-# Verify pg4 is back in standby mode and streaming from pg1
+# Verify Patroni is running on pg4
+docker exec pg4 systemctl is-active patroni
+# Expected: active
+```
+
+#### Step 8: Add standby_cluster Config on pg4 and Resume
+
+```bash
+# Configure pg4 to stream from pg1 cluster via the leader VIP
+# Use PRIMARY VIP (172.18.0.10) — floats to whichever pg1/pg2/pg3 node is Leader
+docker exec pg4 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 \
+  --force --set "standby_cluster={host: 172.18.0.10, port: 5432}"
+
+# Remove pg4 cluster from maintenance mode (it was paused in Step 1)
+docker exec pg4 patronictl -c /etc/patroni/patroni.yml resume
+```
+
+#### Step 9: Verify pg4 is Standby Leader Again
+
+```bash
+# pg4 should reconnect to pg1 cluster leader and become standby_leader
+docker exec pg4 patronictl -c /etc/patroni/patroni.yml list
+# Expected:
+# | pg4    | 172.18.0.14 | Standby Leader | streaming | <TL> |
+
+# Verify from pg1 cluster side — original topology fully restored
 docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
-# Expected final state (original topology restored):
+# Expected:
 # | pg1    | 172.18.0.11 | Leader       | running   | TL | — |
 # | pg2    | 172.18.0.12 | Sync Standby | streaming | TL | 0 |
 # | pg3    | 172.18.0.13 | Replica      | streaming | TL | 0 |
-# | pg4    | 172.18.0.14 | Standby      | streaming | TL | — |
+# pg4 streams from pg1 cluster leader via PRIMARY VIP (172.18.0.10)
 
-# ✅ Failback Complete — pg4 is DR standby again, tracking leader via VIP (172.18.0.10)
+# ✅ Failback Complete — pg1 cluster is primary again, pg4 is DR standby
 ```
 
 ---
