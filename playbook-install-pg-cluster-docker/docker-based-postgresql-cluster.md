@@ -1191,30 +1191,27 @@ Once pg1/pg2/pg3 are recovered (hardware fixed, network restored), follow these 
 # Start the containers after hardware/network is restored
 docker start pg1 pg2 pg3
 
-# docker start only restarts the container process — Patroni (and therefore PostgreSQL)
-# does NOT start automatically inside the container.
-# Start Patroni explicitly on each node; it will bring PostgreSQL up with it.
+# Check patroni service status
+for n in pg1 pg2 pg3; do
+  echo "=== $n ==="
+  docker exec $n systemctl status patroni | grep "Active:"
+done
+
+# If Patroni service is done, restart it
 for n in pg1 pg2 pg3; do
   docker exec $n systemctl restart patroni
 done
 
-# Bring patroni cluster out of maintenance mode
-docker exec pg1 patronictl -c /etc/patroni/patroni.yml resume
-
 # Wait for services to initialise
-sleep 30
-
-# Verify Patroni and PostgreSQL are running inside each container
-for n in pg1 pg2 pg3; do
-  echo "=== $n ==="
-  docker exec $n systemctl is-active patroni
-  docker exec $n systemctl is-active postgresql
-done
+sleep 10
 
 # Check cluster state from pg4's perspective
 docker exec pg4 patronictl -c /etc/patroni/patroni.yml list
-# pg1/pg2/pg3 will initially appear isolated — they still hold their old etcd state
-# They will NOT automatically follow pg4; manual conversion is required (Step 2)
+
+# Check cluster state from pg1's perspective
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
+  # for graceful multidc failover, pg1 should be in maintenance mode
+  # for non-graceful multidc failover, pg1 should be in running mode
 ```
 
 #### Step 2: Convert Recovered Cluster to Standby of pg4
@@ -1222,8 +1219,10 @@ docker exec pg4 patronictl -c /etc/patroni/patroni.yml list
 ```bash
 # Tell pg1/pg2/pg3 to follow pg4 as their upstream primary
 # Use the PRIMARY VIP (172.18.0.10) — floats to the current leader automatically
-docker exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 \
-  --force --set "standby_cluster={host: 172.18.0.10, port: 5432}"
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 --force --set "standby_cluster={host: 172.18.0.10, port: 5432}"
+
+# Bring patroni cluster out of maintenance mode
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml resume
 
 # Expected output:
 # Configuration changed
@@ -1237,6 +1236,35 @@ docker exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls
 # Why PRIMARY VIP (172.18.0.10) instead of pg4's node IP (172.18.0.14)?
 #   VIP floats to the current leader — if leadership changes, replication still works
 #   Hardcoded node IP breaks if leadership moves to another node
+
+# If Patroni service is done, restart it
+for n in pg1 pg2 pg3; do
+  docker exec $n systemctl restart patroni
+done
+
+# check pg1/pg4 cluster state
+docker exec pg4 patronictl -c /etc/patroni/patroni.yml list
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
+
+# Expected output:
+# % docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
+# + Cluster: pg-docker-cls1 (7636064797037994465) ----+----+-----------+--------------+
+# | Member | Host        | Role           | State     | TL | Lag in MB | Tags         |
+# +--------+-------------+----------------+-----------+----+-----------+--------------+
+# | pg1    | 172.18.0.11 | Replica        | streaming |  3 |         0 |              |
+# | pg2    | 172.18.0.12 | Standby Leader | streaming |  3 |           |              |
+# | pg3    | 172.18.0.13 | Replica        | streaming |  3 |         0 | nosync: true |
+# +--------+-------------+----------------+-----------+----+-----------+--------------+
+#
+# % docker exec pg4 patronictl -c /etc/patroni/patroni.yml list
+# + Cluster: pg-docker-cls1 (7636064797037994465) -----------+
+# | Member | Host        | Role   | State   | TL | Lag in MB |
+# +--------+-------------+--------+---------+----+-----------+
+# | pg4    | 172.18.0.14 | Leader | running |  3 |           |
+# +--------+-------------+--------+---------+----+-----------+
+
+# If new standby cluster TimeLine is lower than primary cluster TimeLine, but not matching with primary cluster TimeLine, then failover the standby cluster to another node on same side
+# If new standby cluster TimeLine is higher than primary cluster TimeLine, then failback the primary cluster to another node on same side
 ```
 
 #### Step 3: Wait for Region A to Catch Up
