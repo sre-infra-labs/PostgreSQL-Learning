@@ -5,7 +5,7 @@
 
 - name: Set system architecture fact
   ansible.builtin.set_fact:
-    system_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else ('arm64' if ansible_architecture == 'aarch64' else ansible_architecture) }}"
+    system_arch: "{{ 'amd64' if ansible_facts['architecture'] == 'x86_64' else ('arm64' if ansible_facts['architecture'] == 'aarch64' else ansible_facts['architecture']) }}"
 
 - name: Create apt keyrings directory
   ansible.builtin.file:
@@ -21,7 +21,7 @@
 
 - name: Add PGDG apt repository
   ansible.builtin.apt_repository:
-    repo: "deb [arch={{ system_arch }} signed-by=/etc/apt/keyrings/postgresql.asc] https://apt.postgresql.org/pub/repos/apt {{ ansible_distribution_release }}-pgdg main"
+    repo: "deb [arch={{ system_arch }} signed-by=/etc/apt/keyrings/postgresql.asc] https://apt.postgresql.org/pub/repos/apt {{ ansible_facts['distribution_release'] }}-pgdg main"
     filename: pgdg
     state: present
     update_cache: no

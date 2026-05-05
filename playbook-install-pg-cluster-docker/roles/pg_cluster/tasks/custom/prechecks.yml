@@ -43,6 +43,12 @@
     state: absent
   when: reinit_cluster is defined and reinit_cluster | bool
 
+- name: Remove etcd data directory (reinit mode)
+  ansible.builtin.file:
+    path: /var/lib/etcd
+    state: absent
+  when: reinit_cluster is defined and reinit_cluster | bool
+
 - name: Clear log and spool directories (reinit mode)
   ansible.builtin.shell: "rm -rf {{ item }}/*"
   loop:

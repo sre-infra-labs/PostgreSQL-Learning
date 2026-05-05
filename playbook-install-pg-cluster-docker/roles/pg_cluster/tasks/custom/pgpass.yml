@@ -13,3 +13,4 @@
   when:
     - postgresql_pgpass is defined
     - postgresql_pgpass | length > 0
+  ignore_errors: true

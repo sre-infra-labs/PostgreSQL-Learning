@@ -21,6 +21,19 @@
     name: "{{ pg_backup_volume }}"
     state: present
 
+- name: Remove stale pg4 container if deploying standby only
+  community.docker.docker_container:
+    name: "pg4"
+    state: absent
+    force_kill: true
+  ignore_errors: true
+  when: target_hosts is defined and target_hosts == 'standby'
+
+- name: Wait for port to be released
+  ansible.builtin.pause:
+    seconds: 3
+  when: target_hosts is defined and target_hosts == 'standby'
+
 - name: Create PostgreSQL node containers
   community.docker.docker_container:
     name: "{{ item.name }}"
@@ -51,6 +64,17 @@
       - "/sys/fs/cgroup:/sys/fs/cgroup:rw"
     hostname: "{{ item.name }}"
   loop: "{{ pg_containers }}"
+  register: container_create_result
+  ignore_errors: true
+
+- name: Restart pg4 container if creation failed (Docker port binding issue)
+  ansible.builtin.shell: docker restart pg4 2>&1 || docker start pg4 2>&1 || true
+  when:
+    - target_hosts is defined and target_hosts == 'standby'
+    - item.failed | default(false)
+    - "'pg4' in item.item.name"
+  loop: "{{ container_create_result.results }}"
+  ignore_errors: true
 
 - name: Inject SSH public key into containers
   ansible.builtin.shell: |

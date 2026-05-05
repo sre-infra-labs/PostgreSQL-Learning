@@ -123,17 +123,21 @@ All on same Docker network: lab-network (172.18.0.0/16)
 ### Port Mapping (host → container)
 
 ```
-┌──────────┬──────┬──────┬─────────┬─────────────┬──────────┬───────────────────────────────────┐
-│ Container│ SSH  │ PG   │ Patroni │ pg_exporter │ pgBouncer│ HAProxy (host ports — needs new    │
-│          │      │      │ REST    │             │          │  container creation to take effect) │
-├──────────┼──────┼──────┼─────────┼─────────────┼──────────┼────────┬──────────┬───────────────┤
-│ pg1      │ 2221 │ 5433 │ 8011    │ 9194        │ 6433     │ 15000  │ 15001    │ 17000         │
-│ pg2      │ 2222 │ 5434 │ 8012    │ 9195        │ 6434     │ 25000  │ 25001    │ 27000         │
-│ pg3      │ 2223 │ 5435 │ 8013    │ 9196        │ 6435     │ 35000  │ 35001    │ 37000         │
-│ pg4 (DR) │ 2224 │ 5436 │ 8014    │ 9197        │ 6436     │ 45000  │ 45001    │ 47000         │
-└──────────┴──────┴──────┴─────────┴─────────────┴──────────┴────────┴──────────┴───────────────┘
-                                                              write    read      stats
-                                                              port     port      UI
+┌────────────┬──────┬──────┬─────────┬─────────────┬──────────┬───────────────────────────────────┐
+│ Container  │ SSH  │ PG   │ Patroni │ pg_exporter │ pgBouncer│ HAProxy (host ports — needs new    │
+│            │      │      │ REST    │             │          │  container creation to take effect) │
+├────────────┼──────┼──────┼─────────┼─────────────┼──────────┼────────┬──────────┬───────────────┤
+│ pg1        │ 2221 │ 5433 │ 8011    │ 9194        │ 6433     │ 15000  │ 15001    │ 17000         │
+│ pg2        │ 2222 │ 5434 │ 8012    │ 9195        │ 6434     │ 25000  │ 25001    │ 27000         │
+│ pg3        │ 2223 │ 5435 │ 8013    │ 9196        │ 6435     │ 35000  │ 35001    │ 37000         │
+│ pg4 (DR)   │ 2224 │ 5437 │ 8014    │ 9197        │ 6436     │ 45000  │ 45001    │ 47000         │
+│ pg-bouncer │ 2225 │ 5436 │  —      │  —          │  —       │  —     │  —       │  —            │
+└────────────┴──────┴──────┴─────────┴─────────────┴──────────┴────────┴──────────┴───────────────┘
+                                                                write    read      stats
+                                                                port     port      UI
+
+pg-bouncer: dedicated pgBouncer container (172.18.0.20) that always routes to the current
+  Patroni leader. Clients connect on host port 5436; SSH on 2225. No Patroni/etcd/HAProxy.
 
 HAProxy container-internal ports (always available via docker exec):
   :5000 → write   (routes to Patroni primary only, health: GET /primary  → 200)
@@ -144,6 +148,7 @@ etcd cluster (inter-container, no host port mapping needed):
   pg1: 172.18.0.11:2379 (client) / :2380 (peer)
   pg2: 172.18.0.12:2379 (client) / :2380 (peer)
   pg3: 172.18.0.13:2379 (client) / :2380 (peer)
+  pg4: 172.18.0.14:2379 (client) — single-node etcd, standby cluster DCS only
 ```
 
 ### Traffic Flow

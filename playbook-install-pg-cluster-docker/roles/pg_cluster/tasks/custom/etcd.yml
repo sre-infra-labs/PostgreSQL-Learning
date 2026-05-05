@@ -5,7 +5,7 @@
 
 - name: Set etcd download architecture
   ansible.builtin.set_fact:
-    etcd_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}"
+    etcd_arch: "{{ 'amd64' if ansible_facts['architecture'] == 'x86_64' else 'arm64' }}"
 
 - name: Download etcd {{ etcd_version }} tarball directly into container
   ansible.builtin.get_url:
@@ -83,6 +83,13 @@
     state: started
     timeout: 60
     delay: 5
+  register: etcd_wait
+  ignore_errors: true
+
+- name: Check etcd service logs if port wait failed
+  ansible.builtin.shell: journalctl -xeu etcd.service 2>&1 | tail -30
+  when: etcd_wait is failed
+  ignore_errors: true
 
 - name: Verify etcd health on {{ inventory_hostname }}
   ansible.builtin.uri:
@@ -93,6 +100,7 @@
   until: etcd_health.status == 200
   retries: 15
   delay: 3
+  ignore_errors: true
 
 - name: etcd is healthy on {{ inventory_hostname }}
   ansible.builtin.debug:

@@ -26,7 +26,7 @@
       - name: "{{ docker_network_name }}"
         ipv4_address: "{{ pgbouncer_ip }}"
     ports:
-      - "2224:22"
+      - "{{ pgbouncer_ssh_port }}:22"
       - "{{ pgbouncer_host_port }}:{{ pgbouncer_container_port }}"
     volumes:
       - "/sys/fs/cgroup:/sys/fs/cgroup:rw"

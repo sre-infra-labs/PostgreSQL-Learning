@@ -60,7 +60,7 @@ pg_containers:
   - name: pg4
     ip: "172.18.0.14"
     ssh_port: 2224
-    pg_port: 5436
+    pg_port: 5437
     patroni_port: 8014
     pg_exporter_port: 9197
     pgbouncer_port: 6436
@@ -71,6 +71,7 @@ pg_containers:
 # pgBouncer routing container (always routes to the current Patroni leader)
 pgbouncer_container_name: "pg-bouncer"
 pgbouncer_ip: "172.18.0.20"
+pgbouncer_ssh_port: 2225      # SSH access (different from pg1-4 which use 2221-2224)
 pgbouncer_host_port: 5436      # clients connect here; routes to leader
 pgbouncer_container_port: 6432
 

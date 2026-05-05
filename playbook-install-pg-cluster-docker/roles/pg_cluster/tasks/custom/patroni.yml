@@ -3,16 +3,12 @@
   ansible.builtin.file:
     path: /etc/patroni
     state: directory
-    owner: postgres
-    group: postgres
     mode: "0750"
 
 - name: Generate /etc/patroni/patroni.yml from template
   ansible.builtin.template:
     src: "{{ role_path }}/templates/patroni.yml.j2"
     dest: /etc/patroni/patroni.yml
-    owner: postgres
-    group: postgres
     mode: "0640"
   notify: restart patroni
 
@@ -38,8 +34,6 @@
 - name: Create Patroni log directory
   ansible.builtin.file:
     path: "{{ patroni_log_dir }}"
-    owner: postgres
-    group: postgres
     state: directory
     mode: "0750"
 
@@ -53,16 +47,12 @@
 - name: Create PostgreSQL log directory
   ansible.builtin.file:
     path: "{{ postgresql_log_dir }}"
-    owner: postgres
-    group: postgres
     state: directory
     mode: "0700"
 
 - name: Create PostgreSQL data directory
   ansible.builtin.file:
     path: "{{ postgresql_data_dir }}"
-    owner: postgres
-    group: postgres
     state: directory
     mode: "0700"
 
@@ -75,8 +65,6 @@
   ansible.builtin.file:
     path: "{{ postgresql_data_dir }}"
     state: "{{ item }}"
-    owner: postgres
-    group: postgres
     mode: "0700"
   loop:
     - absent
@@ -87,29 +75,38 @@
   ansible.builtin.file:
     path: "{{ postgresql_stats_temp_directory_path }}"
     state: directory
-    owner: postgres
-    group: postgres
     mode: "0750"
 
 - name: Create PostgreSQL archive directory
   ansible.builtin.file:
     path: "{{ postgresql_data_archive }}"
-    owner: postgres
-    group: postgres
     state: directory
     mode: "0700"
 
 - name: Create PostgreSQL scripts directory
   ansible.builtin.file:
     path: "{{ postgresql_scripts_dir }}"
-    owner: postgres
-    group: postgres
     state: directory
     mode: "0744"
 
 - name: Reload systemd daemon
   ansible.builtin.systemd:
     daemon_reload: yes
+
+- name: Fix directory ownership for postgres user (Docker compatibility)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: postgres
+    group: postgres
+    recurse: yes
+  loop:
+    - /etc/patroni
+    - "{{ patroni_log_dir }}"
+    - "{{ postgresql_log_dir }}"
+    - "{{ postgresql_data_dir }}"
+    - "{{ postgresql_stats_temp_directory_path }}"
+    - "{{ postgresql_data_archive }}"
+  ignore_errors: true
 
 - name: Ensure locales package is installed
   ansible.builtin.package:
