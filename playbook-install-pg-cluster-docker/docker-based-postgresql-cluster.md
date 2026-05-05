@@ -1226,6 +1226,9 @@ docker stop pg4
 # Remove standby_cluster config — pg1 cluster stops streaming and becomes autonomous primary
 docker exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 \
   --force --set standby_cluster=null
+
+# Set pg1 node to be leader if required
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml switchover --force
 ```
 
 #### Step 5: Verify pg1 Cluster Health
@@ -1281,8 +1284,20 @@ docker exec pg4 systemctl is-active patroni
 docker exec pg4 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 \
   --force --set "standby_cluster={host: 172.18.0.10, port: 5432}"
 
+# Start Patroni on pg4 if goes down
+docker exec pg4 systemctl start patroni
+
 # Remove pg4 cluster from maintenance mode (it was paused in Step 1)
 docker exec pg4 patronictl -c /etc/patroni/patroni.yml resume
+
+# Wait for pg4 cluster state change drop running -> stop -> in archive recovery -> streaming
+sleep 30
+
+# Check if cluster nodes are healthy
+docker exec pg4 patronictl -c /etc/patroni/patroni.yml list
+
+# Restart Patroni on pg4 if goes down
+docker exec pg4 systemctl restart patroni
 ```
 
 #### Step 9: Verify pg4 is Standby Leader Again
