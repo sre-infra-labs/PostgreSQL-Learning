@@ -1,0 +1,84 @@
+---
+# =============================================================================
+# smb_mount.yml
+# Mount the CIFS/SMB shared folder on each node and persist via /etc/fstab.
+#
+# The ryzen9 hypervisor exposes share-stalestorage as a guest usershare
+# (guest_ok=y, usershare_acl=Everyone:F) — no credentials are required.
+#
+# RHEL note: cifs-utils is available in the standard BaseOS/AppStream repos
+# and is installed via dnf — no offline package workaround needed.
+#
+# Variables (defined in defaults/main.yml):
+#   pgbackrest_smb_server       – ryzen9 IP for this DC subnet (192.168.200.1)
+#   pgbackrest_smb_share_name   – "share-stalestorage"
+#   pgbackrest_smb_share_mount  – /stale-storage/share-stalestorage
+# =============================================================================
+
+- name: "[SMB mount] Check if cifs-utils is already installed"
+  ansible.builtin.command: rpm -q cifs-utils
+  register: cifs_installed
+  changed_when: false
+  failed_when: false
+
+- name: "[SMB mount] Install cifs-utils via dnf (requires internet access)"
+  ansible.builtin.package:
+    name: cifs-utils
+    state: present
+  when: cifs_installed.rc != 0
+  ignore_errors: true
+  register: cifs_pkg
+  environment: "{{ proxy_env | default({}) }}"
+
+- name: "[SMB mount] Create parent mount directory /stale-storage"
+  ansible.builtin.file:
+    path: /stale-storage
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: "[SMB mount] Create mount point {{ pgbackrest_smb_share_mount }}"
+  ansible.builtin.file:
+    path: "{{ pgbackrest_smb_share_mount }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: "[SMB mount] Resolve postgres UID"
+  ansible.builtin.command: id -u postgres
+  register: postgres_uid
+  changed_when: false
+
+- name: "[SMB mount] Resolve postgres GID"
+  ansible.builtin.command: id -g postgres
+  register: postgres_gid
+  changed_when: false
+
+- name: "[SMB mount] Mount SMB share (guest) and persist in /etc/fstab"
+  ansible.posix.mount:
+    src: "//{{ pgbackrest_smb_server }}/{{ pgbackrest_smb_share_name }}"
+    path: "{{ pgbackrest_smb_share_mount }}"
+    fstype: cifs
+    opts: "mfsymlinks,guest,uid={{ postgres_uid.stdout }},gid={{ postgres_gid.stdout }},file_mode=0640,dir_mode=0750,vers=3.0,_netdev,nofail"
+    state: mounted
+
+- name: "[SMB mount] Verify share is mounted and accessible"
+  ansible.builtin.shell: |
+    mountpoint -q "{{ pgbackrest_smb_share_mount }}" && \
+    ls "{{ pgbackrest_smb_share_mount }}" > /dev/null
+  changed_when: false
+  register: mount_verify
+
+- name: "[SMB mount] Fail if share did not mount"
+  ansible.builtin.fail:
+    msg: >
+      //{{ pgbackrest_smb_server }}/{{ pgbackrest_smb_share_name }} failed to
+      mount at {{ pgbackrest_smb_share_mount }} on {{ inventory_hostname }}.
+      Check network path and SMB server availability.
+  when: mount_verify.rc != 0
+
+- name: "[SMB mount] Confirm successful mount"
+  ansible.builtin.debug:
+    msg: "✅ //{{ pgbackrest_smb_server }}/{{ pgbackrest_smb_share_name }} mounted at {{ pgbackrest_smb_share_mount }} on {{ inventory_hostname }}"

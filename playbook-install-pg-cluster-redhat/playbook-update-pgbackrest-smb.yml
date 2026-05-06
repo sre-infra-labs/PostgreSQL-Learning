@@ -1,0 +1,221 @@
+---
+# =============================================================================
+# playbook-update-pgbackrest-smb.yml
+#
+# Purpose : Switch pgBackRest repository from AWS S3 to a CIFS/SMB shared
+#           folder on the currently running multi-DC RHEL cluster.
+#
+# Target  : All 6 nodes across dc1 (pg-cls2-prod*) and dc2 (pg-cls2-dr*)
+#
+# Usage   :
+#   ansible-playbook -i hosts__multi_datacenter.yml \
+#     playbook-update-pgbackrest-smb.yml \
+#     --vault-password-file=vault-pass
+#
+# What it does (in order):
+#   Phase 0 – Install cifs-utils via dnf, create mount point, mount the SMB
+#             share (guest, no credentials), persist in /etc/fstab.
+#   Phase 1 – Validate the share is writable by the postgres user.
+#   Phase 2 – Create pgbackrest_backups directory on the share.
+#   Phase 3 – Re-render /etc/pgbackrest/pgbackrest.conf (posix repo).
+#   Phase 4 – stanza-create (new repo) or stanza-upgrade (existing) on leaders.
+#
+# RHEL notes:
+#   - cifs-utils is available in standard BaseOS/AppStream — no offline install.
+#   - The share is guest_ok=y / Everyone:F — no credentials file required.
+#   - mfsymlinks mount option is required for pgBackRest's 'latest' symlink.
+# =============================================================================
+
+- name: Switch pgBackRest to SMB shared storage — all nodes
+  hosts: all
+  become: true
+  become_user: root
+  remote_user: ansible
+  gather_facts: true
+  vars_files:
+    - sensitive-values
+
+  vars:
+    # pgbackrest_smb_server comes from inventory group vars:
+    #   dc1 hosts → 192.168.100.1  (ryzen9, DC1 subnet)
+    #   dc2 hosts → 192.168.200.1  (ryzen9, DC2 subnet)
+    pgbackrest_smb_share_name: "share-stalestorage"
+    pgbackrest_smb_share_mount: /stale-storage/share-stalestorage
+    pgbackrest_repo1_type: posix
+    pgbackrest_repo1_path: /stale-storage/share-stalestorage/pgbackrest_backups
+    # Stanza and data-path — must match the running cluster config
+    pgbackrest_stanza_name: "pg-cls2"
+    pgbackrest_pg1_path: "/var/lib/pgsql/16/data"
+    # Used by the conf.j2 template for process-max
+    server_hardware:
+      cpu_count: 4
+
+  tasks:
+
+    # ------------------------------------------------------------------
+    # PHASE 0 — Install cifs-utils and mount the SMB share (guest, no creds)
+    # Cluster nodes have no internet access so we copy a pre-downloaded RPM
+    # from the controller and install it with rpm -i.
+    # Download source: mirror.stream.centos.org (CentOS Stream 9 BaseOS)
+    # ------------------------------------------------------------------
+    - name: "[Phase 0] Check if cifs-utils is already installed"
+      ansible.builtin.command: rpm -q cifs-utils
+      register: cifs_installed
+      changed_when: false
+      failed_when: false
+
+    - name: "[Phase 0] Copy cifs-utils RPM to node"
+      ansible.builtin.copy:
+        src: /tmp/cifs-rpms/cifs-utils-7.5-2.el9.x86_64.rpm
+        dest: /tmp/cifs-utils-7.5-2.el9.x86_64.rpm
+        mode: "0644"
+      when: cifs_installed.rc != 0
+
+    - name: "[Phase 0] Install cifs-utils from local RPM"
+      ansible.builtin.shell: rpm -i /tmp/cifs-utils-7.5-2.el9.x86_64.rpm
+      when: cifs_installed.rc != 0
+      register: rpm_install
+      changed_when: rpm_install.rc == 0
+
+    - name: "[Phase 0] Create parent mount directory /stale-storage"
+      ansible.builtin.file:
+        path: /stale-storage
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: "[Phase 0] Create mount point {{ pgbackrest_smb_share_mount }}"
+      ansible.builtin.file:
+        path: "{{ pgbackrest_smb_share_mount }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: "[Phase 0] Resolve postgres UID"
+      ansible.builtin.command: id -u postgres
+      register: postgres_uid
+      changed_when: false
+
+    - name: "[Phase 0] Resolve postgres GID"
+      ansible.builtin.command: id -g postgres
+      register: postgres_gid
+      changed_when: false
+
+    - name: "[Phase 0] Mount SMB share (guest) and persist in /etc/fstab"
+      ansible.posix.mount:
+        src: "//{{ pgbackrest_smb_server }}/{{ pgbackrest_smb_share_name }}"
+        path: "{{ pgbackrest_smb_share_mount }}"
+        fstype: cifs
+        opts: "mfsymlinks,guest,uid={{ postgres_uid.stdout }},gid={{ postgres_gid.stdout }},file_mode=0640,dir_mode=0750,vers=3.0,_netdev,nofail"
+        state: mounted
+
+    - name: "[Phase 0] Verify mount is active"
+      ansible.builtin.shell: mountpoint -q "{{ pgbackrest_smb_share_mount }}"
+      changed_when: false
+      register: phase0_mount_check
+
+    - name: "[Phase 0] Fail if share did not mount"
+      ansible.builtin.fail:
+        msg: >
+          //{{ pgbackrest_smb_server }}/{{ pgbackrest_smb_share_name }} could not
+          be mounted at {{ pgbackrest_smb_share_mount }} on {{ inventory_hostname }}.
+          Check SMB server reachability from this node.
+      when: phase0_mount_check.rc != 0
+
+    # ------------------------------------------------------------------
+    # PHASE 1 — Validate share is writable by postgres
+    # ------------------------------------------------------------------
+    - name: "[Phase 1] Test write access as postgres user"
+      ansible.builtin.shell: |
+        f="{{ pgbackrest_smb_share_mount }}/.write_test_{{ inventory_hostname }}"
+        touch "$f" && rm -f "$f"
+      become: true
+      become_user: postgres
+      changed_when: false
+      register: smb_write
+      failed_when: false
+
+    - name: "[Phase 1] Fail if postgres cannot write to SMB share"
+      ansible.builtin.fail:
+        msg: >
+          postgres user cannot write to '{{ pgbackrest_smb_share_mount }}' on
+          {{ inventory_hostname }}. Fix SMB share permissions or uid/gid mapping.
+      when: smb_write.rc != 0
+
+    # ------------------------------------------------------------------
+    # PHASE 2 — Create pgBackRest backup directory on the SMB share
+    # ------------------------------------------------------------------
+    - name: "[Phase 2] Create pgbackrest backup directory on SMB share"
+      ansible.builtin.file:
+        path: "{{ pgbackrest_repo1_path }}"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: "0750"
+
+    # ------------------------------------------------------------------
+    # PHASE 3 — Re-render pgbackrest.conf with posix repo settings
+    # ------------------------------------------------------------------
+    - name: "[Phase 3] Deploy updated pgbackrest.conf (posix / SMB)"
+      ansible.builtin.template:
+        src: "{{ 'primary_cluster' if 'dc1' in group_names else 'standby_cluster' }}/templates/pgbackrest.conf.j2"
+        dest: /etc/pgbackrest/pgbackrest.conf
+        owner: postgres
+        group: postgres
+        mode: "0640"
+      notify: refresh pgbackrest spool
+
+    # ------------------------------------------------------------------
+    # PHASE 4 — Stanza create / upgrade on each cluster leader only
+    # ------------------------------------------------------------------
+    - name: "[Phase 4] Check whether stanza backup directory already exists on new repo"
+      ansible.builtin.stat:
+        path: "{{ pgbackrest_repo1_path }}/backup/{{ pgbackrest_stanza_name }}"
+      register: stanza_dir
+      become: true
+      become_user: postgres
+      when: "'dc1_leader' in group_names or 'dc2_leader' in group_names"
+
+    - name: "[Phase 4] stanza-create on leader (fresh SMB repository)"
+      ansible.builtin.command: >
+        pgbackrest --stanza={{ pgbackrest_stanza_name }}
+        --log-level-console=info stanza-create
+      become: true
+      become_user: postgres
+      register: stanza_create_result
+      failed_when: false
+      when:
+        - "'dc1_leader' in group_names or 'dc2_leader' in group_names"
+        - stanza_dir is defined
+        - not stanza_dir.stat.exists
+
+    - name: "[Phase 4] stanza-upgrade on leader (re-using existing repository)"
+      ansible.builtin.command: >
+        pgbackrest --stanza={{ pgbackrest_stanza_name }}
+        --log-level-console=info stanza-upgrade
+      become: true
+      become_user: postgres
+      register: stanza_upgrade_result
+      failed_when: false
+      when:
+        - "'dc1_leader' in group_names or 'dc2_leader' in group_names"
+        - stanza_dir is defined
+        - stanza_dir.stat.exists
+
+    - name: "[Phase 4] Show stanza operation result"
+      ansible.builtin.debug:
+        msg: >
+          {{ stanza_create_result.stdout | default('') }}
+          {{ stanza_upgrade_result.stdout | default('') }}
+      when: "'dc1_leader' in group_names or 'dc2_leader' in group_names"
+
+  handlers:
+    - name: refresh pgbackrest spool
+      ansible.builtin.file:
+        path: /var/spool/pgbackrest
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: "0750"

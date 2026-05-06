@@ -68,6 +68,10 @@
 - name: Include install patroni
   include_tasks: custom/patroni.yml
 
+- name: Include custom/smb_mount.yml
+  include_tasks: custom/smb_mount.yml
+  when: pgbackrest_repo1_type | default('posix') == 'posix'
+
 - name: Include custom/pgbackrest.yml
   include_tasks: custom/pgbackrest.yml
 
