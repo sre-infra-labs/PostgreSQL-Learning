@@ -280,13 +280,26 @@ patroni_remove_data_directory_on_diverged_timelines: true  # or 'true'
 # https://patroni.readthedocs.io/en/latest/replica_bootstrap.html#bootstrap
 patroni_cluster_bootstrap_method: "initdb"  # or "wal-g", "pgbackrest", "pg_probackup"
 
-pgbackrest_repo1_type: s3
-pgbackrest_repo1_s3_endpoint: "{{ creds.PG_BACKREST_REPO1_S3_ENDPOINT }}"
-pgbackrest_repo1_s3_region: "{{ creds.PG_BACKREST_REPO1_S3_REGION }}"
-pgbackrest_repo1_s3_bucket: "{{ creds.PG_BACKREST_REPO1_S3_BUCKET }}"
-pgbackrest_repo1_s3_path: "{{ creds.PG_BACKREST_REPO1_S3_PATH }}"
-pgbackrest_repo1_s3_key: "{{ creds.PG_BACKREST_REPO1_S3_KEY }}"
-pgbackrest_repo1_s3_key_secret: "{{ creds.PG_BACKREST_REPO1_S3_KEY_SECRET }}"
+# --- SMB / Shared-Folder backup repository (active) ---
+# ryzen9 exposes share-stalestorage as a guest usershare (guest_ok=y, Everyone:F).
+# No credentials are required — the mount uses the 'guest' CIFS option.
+# uid/gid are resolved at run-time from the postgres OS user.
+pgbackrest_smb_server: "192.168.200.1"               # ryzen9 hypervisor — DC2 subnet (192.168.200.0/24)
+pgbackrest_smb_share_name: "share-stalestorage"
+pgbackrest_smb_share_mount: /stale-storage/share-stalestorage
+
+pgbackrest_repo1_type: posix
+pgbackrest_repo1_path: /stale-storage/share-stalestorage/pgbackrest_backups
+
+# --- AWS S3 backup repository (commented out / backed-up) ---
+# Uncomment and set pgbackrest_repo1_type: s3 to switch back to S3.
+#pgbackrest_repo1_type: s3
+#pgbackrest_repo1_s3_endpoint: "{{ creds.PG_BACKREST_REPO1_S3_ENDPOINT }}"
+#pgbackrest_repo1_s3_region: "{{ creds.PG_BACKREST_REPO1_S3_REGION }}"
+#pgbackrest_repo1_s3_bucket: "{{ creds.PG_BACKREST_REPO1_S3_BUCKET }}"
+#pgbackrest_repo1_s3_path: "{{ creds.PG_BACKREST_REPO1_S3_PATH }}"
+#pgbackrest_repo1_s3_key: "{{ creds.PG_BACKREST_REPO1_S3_KEY }}"
+#pgbackrest_repo1_s3_key_secret: "{{ creds.PG_BACKREST_REPO1_S3_KEY_SECRET }}"
 
 # pgbackrest_stanza_name: "{{ patroni_cluster_name }}"
 pgbackrest_pg1_path: "{{ postgresql_data_dir }}"

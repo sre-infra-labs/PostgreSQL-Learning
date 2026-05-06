@@ -1,10 +1,15 @@
+# --- AWS S3 pgBackRest credentials (inactive — kept for reference) ---
 PG_BACKREST_REPO1_S3_ENDPOINT: s3.ap-south-1.amazonaws.com
 PG_BACKREST_REPO1_S3_REGION: ap-south-1
-
 PG_BACKREST_REPO1_S3_BUCKET: my-sample-backup-bucket
 PG_BACKREST_REPO1_S3_PATH: /pg-backups
 PG_BACKREST_REPO1_S3_KEY: SAMPLEAWSACCESSKEY123
 PG_BACKREST_REPO1_S3_KEY_SECRET: SAMPLEAWSSECRETKEY456
+
+# --- SMB / CIFS shared-folder credentials (active) ---
+# Used to mount /stale-storage/share-stalestorage on all PG nodes.
+SMB_USERNAME: smb_svc_account
+SMB_PASSWORD: ChangeMe_StrongSMBPassword!
 
 PG_SUPERUSER_PWD: StrongPassword123!
 DB_USER_RW_PASSWORD: RWUserPass@2025
