@@ -1,9 +1,0 @@
-# DO NOT MODIFY
-# This file maps sensitive-values file keys into the 'creds' namespace.
-# Secrets are loaded from the ansible-vault encrypted 'sensitive-values' file.
-
-creds:
-  PG_SUPERUSER_PWD:    "{{ PG_SUPERUSER_PWD }}"
-  DB_USER_RW_PASSWORD: "{{ DB_USER_RW_PASSWORD }}"
-  DB_USER_RO_PASSWORD: "{{ DB_USER_RO_PASSWORD }}"
-  PGBACKREST_REPO1_PATH: "{{ PGBACKREST_REPO1_PATH | default('/var/lib/pgbackrest') }}"

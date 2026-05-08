@@ -94,6 +94,15 @@ Host (macOS)
 Roles are dynamic — Patroni may promote any node on failover. The designed topology is restored via
 `patronictl switchover` after recovery.
 
+> ⚠️ **WARNING — Synchronous Replication Costs**
+>
+> When using synchronous replication (like pg2 as Sync Standby):
+>
+> - **The cost of synchronous replication: increased latency and reduced throughput on writes.**
+> - **If followers become inaccessible from the leader, the leader effectively becomes read-only.**
+>
+> See [Patroni Replication Modes Documentation](https://patroni.readthedocs.io/en/latest/replication_modes.html) for details.
+
 ### Multi-Region Setup (Standby Cluster — Region B)
 
 For Disaster Recovery (DR), deploy a single-node standby cluster **pg4** in Region B that streams
@@ -1049,46 +1058,87 @@ DATA LOSS — unrecoverable             STOPPED pg1/pg2/pg3 → PROMOTED ✅
 
 **When to use**: Planned DR drill, data center maintenance, or network partition where primary is still reachable.
 
+**Goal**: Achieve zero data loss (RPO = 0) by switching pg4 to synchronous replication before promotion.
+
+> ⚠️ **Key concept**: pg4 is the standby cluster leader. It streams WAL from the primary cluster
+> **asynchronously** by default. Before DR, we temporarily make it synchronous by setting
+> `synchronous_standby_names` directly on PostgreSQL via `ALTER SYSTEM`.
+>
+> **Why not `patronictl edit-config`?** When `synchronous_mode: true`, Patroni manages
+> `synchronous_standby_names` itself on every HA loop (every 10s) and only considers its own cluster
+> members (pg2, pg3). Any value set via `edit-config` for this parameter is overwritten immediately.
+> `ALTER SYSTEM` bypasses Patroni's management and sticks — so we pause Patroni first.
+
+---
+
 #### Step 1: Verify Both Clusters are Healthy
 
 ```bash
 # Check primary cluster (Region A)
 docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
-# Expected: pg1 Leader, pg2 Sync Standby, pg3 Replica — all streaming
+# Expected: pg1 Leader, pg2 Sync Standby, pg3 Replica — all streaming, LAG = 0 MB
 
-# Check standby cluster (Region B)
+# Check standby cluster (Region B) — pg4 not in primary patronictl list; check its own cluster
 docker exec pg4 patronictl -c /etc/patroni/patroni.yml list
-# Expected: pg4 Standby Leader, streaming state, LAG close to 0 MB
+# Expected: pg4 Standby Leader, streaming state, LAG should be close to 0 MB
+
+# Verify pg4 is connected to primary at PostgreSQL streaming level
+docker exec pg1 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.11 -p 5432 -U postgres postgres \
+  -c "SELECT application_name, client_addr, state, sync_state, write_lag, flush_lag, replay_lag FROM pg_stat_replication;"'
+# Expected: pg2 → sync, pg4 → async (this is normal — pg4 starts async)
 ```
 
-#### Step 2: Pause Primary Cluster with --wait (STONITH Phase 1)
+---
+
+#### Step 2: Pause Primary Cluster (Stops Patroni HA Loop)
 
 ```bash
-# Pause with --wait — blocks until the synchronous replica (pg2) acknowledges all WAL
-# This guarantees: no uncommitted transaction is lost before we stop the cluster
-docker exec pg1 patronictl -c /etc/patroni/patroni.yml pause --wait
+# Pause Patroni — this stops automatic failover AND stops Patroni from overwriting
+# synchronous_standby_names on each HA loop iteration
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml pause --wait pg-docker-cls1
 
-# Why --wait?
-#   pause alone   → stops automatic failover, writes may still continue briefly
-#   pause --wait  → stops automatic failover AND waits for sync replica to catch up fully
-#                   Returns only after pg2 has acknowledged all WAL — RPO = 0 guaranteed
+# Verify paused state
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
+# Expected: Cluster shows "paused" in the header
 ```
 
-#### Step 3: Confirm pg4 Has Caught Up (LAG = 0 MB)
+---
+
+#### Step 3: Switch pg4 to Synchronous Replication
 
 ```bash
-# Watch pg4's replication lag — wait until LAG column shows 0 MB
-watch -n 2 'docker exec pg4 patronictl -c /etc/patroni/patroni.yml list'
-# Press Ctrl+C when LAG = 0 MB
+# Set synchronous_standby_names directly on PostgreSQL — bypasses Patroni's sync mode management
+# pg4 is a PostgreSQL streaming replica of pg1 (visible in pg_stat_replication as 'pg4')
+docker exec pg1 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.11 -p 5432 -U postgres postgres \
+  -c "ALTER SYSTEM SET synchronous_standby_names = '\''ANY 2 (pg2, pg4)'\''" \
+  -c "SELECT pg_reload_conf();"'
+# Wait for pg4 to appear as synchronous and all lags to reach 0
+docker exec pg1 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.11 -p 5432 -U postgres postgres \
+  -c "SELECT application_name, sync_state, write_lag, flush_lag, replay_lag FROM pg_stat_replication;"'
+# Expected:
+#  application_name | sync_state | write_lag | flush_lag | replay_lag
+#  pg2              | quorum     |           |           |            ← synchronous ✅
+#  pg4              | quorum     |           |           |            ← synchronous ✅
+#  pg3              | async      |           |           |
+#
+# Note: ANY N syntax produces sync_state = 'quorum', not 'sync' — both mean synchronous.
+#       NULL lags are normal when no WAL has been written since connection; lag is effectively 0.
 ```
 
-#### Step 4: Stop Primary Cluster (STONITH Phase 2)
+---
+
+#### Step 4: Stop Primary Cluster (STONITH — Point of No Return)
 
 ```bash
-# Stop all primary nodes — safe now because all WAL has been replicated to pg2 and pg4
+# All WAL is now synchronously replicated to pg4 — safe to stop primary cluster
 docker stop pg1 pg2 pg3
-# ✅ Source cluster is DOWN — split-brain is impossible
+
+# Verify they are stopped — split-brain is now IMPOSSIBLE
+docker ps | grep "pg[123]"
+# Expected: (no output — containers are stopped)
 ```
+
+---
 
 #### Step 5: Promote pg4 to Primary
 
@@ -1096,12 +1146,8 @@ docker stop pg1 pg2 pg3
 # Remove standby_cluster config — pg4 stops streaming and becomes an autonomous primary
 docker exec pg4 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 \
   --force --set standby_cluster=null
-```
 
-#### Step 6: Verify pg4 is New Primary
-
-```bash
-# Check role — should change from "Standby Leader" to "Leader"
+# Verify pg4 promoted to Leader
 docker exec pg4 patronictl -c /etc/patroni/patroni.yml list
 # Expected: | pg4 | 172.18.0.14 | Leader | running | <new_TL> |
 
@@ -1112,8 +1158,167 @@ docker exec pg4 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.14 -p 5432 -U
 
 # Test write access
 docker exec pg4 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.14 -p 5432 -U postgres postgres \
-  -c "CREATE TABLE dr_test (id int, ts timestamptz default now()); INSERT INTO dr_test (id) VALUES (1);"'
+  -c "CREATE TABLE dr_test (id int, ts timestamptz default now()); INSERT INTO dr_test VALUES (1); SELECT * FROM dr_test; DROP TABLE dr_test;"'
+# Expected: Table created, 1 row inserted, row returned, table dropped
 ```
+
+---
+
+#### Step 6: Bring Old Primary Cluster Back as Standby (Region A → Standby)
+
+pg4 is now the primary. pg1/pg2/pg3 must rejoin as a standby cluster streaming from pg4.
+
+**6a: Update `hosts.yml` — swap standby_cluster config to point at pg4**
+
+In `playbook-install-pg-cluster-docker-etcd/hosts.yml`, move `patroni_standby_cluster` from pg4 to pg1/pg2/pg3:
+
+```yaml
+# Before DR (original):
+#   primary: pg1, pg2, pg3   (no standby_cluster)
+#   standby: pg4              (patroni_standby_cluster: host: 172.18.0.10)
+
+# After DR — swap:
+primary:
+  hosts:
+    pg1:
+      ...
+      patroni_standby_cluster:
+        host: "172.18.0.14"   # pg4's IP — new primary (no VIP in DR mode; pg4 is single node)
+        port: 5432
+    pg2:
+      ...
+      patroni_standby_cluster:
+        host: "172.18.0.14"
+        port: 5432
+    pg3:
+      ...
+      patroni_standby_cluster:
+        host: "172.18.0.14"
+        port: 5432
+
+standby:
+  hosts:
+    pg4:
+      ...
+      # remove patroni_standby_cluster — pg4 is now primary
+```
+
+**6b: Start pg1/pg2/pg3 containers**
+
+```bash
+docker start pg1 pg2 pg3
+
+# Verify containers are up
+docker ps | grep "pg[123]"
+```
+
+**6c: Update Patroni DCS config on old primary cluster to add standby_cluster**
+
+```bash
+# Set standby_cluster on the old primary cluster — point it to pg4 (new primary)
+# Run from any node in the old cluster (pg1, pg2, or pg3)
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 \
+  --force --set "standby_cluster.host=172.18.0.14" \
+  --set "standby_cluster.port=5432"
+
+# Resume Patroni on the old primary cluster — it was paused in Step 2
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml resume --wait pg-docker-cls1
+
+# Restart etcd first (DCS must be healthy before Patroni starts)
+for node in pg1 pg2 pg3; do
+  echo "Restarting etcd on $node..."
+  docker exec $node systemctl restart etcd
+done
+
+# Wait for etcd cluster to form
+sleep 10
+docker exec pg1 etcdctl --endpoints=http://172.18.0.11:2379,http://172.18.0.12:2379,http://172.18.0.13:2379 \
+  endpoint health
+# Expected: all three endpoints → "is healthy"
+
+# Restart Patroni on all three nodes
+for node in pg1 pg2 pg3; do
+  echo "Restarting patroni on $node..."
+  docker exec $node systemctl restart patroni
+done
+
+# Check cluster state
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
+```
+
+**Troubleshooting: node shows `start failed`**
+
+The original Leader (pg1) may show `start failed` on first attempt. Patroni will automatically
+run `pg_rewind` to reconcile the timeline divergence — simply restarting Patroni on that node
+is enough for pg_rewind to kick in and bring it up as a Replica.
+
+```bash
+# Restart Patroni on the failed node — pg_rewind runs automatically and brings it up as Replica
+docker exec pg1 systemctl restart patroni
+
+# Watch until pg1 comes up as Replica streaming
+watch -n 3 'docker exec pg1 patronictl -c /etc/patroni/patroni.yml list'
+```
+
+If pg1 still shows `start failed` after the restart (pg_rewind failed for any reason), fall back
+to `reinit` — Patroni clones the node fresh from the Standby Leader:
+
+```bash
+# Last resort: re-initialize pg1 from the Standby Leader (safe — no impact on pg2/pg3/pg4)
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml reinit pg-docker-cls1 pg1 --force
+
+# Watch until pg1 comes up as Replica streaming (may take 1-2 minutes for basebackup)
+watch -n 3 'docker exec pg1 patronictl -c /etc/patroni/patroni.yml list'
+```
+
+**Troubleshooting: nodes show `Pending restart`**
+
+If pg2/pg3 show `Pending restart` due to parameter changes (e.g., `max_connections: 200->100`),
+do a rolling restart — replicas first, then Standby Leader:
+
+```bash
+# Restart replicas first (safe — Standby Leader remains up)
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml restart pg-docker-cls1 pg3 --force
+
+# Then restart Standby Leader (brief interruption, another node takes over temporarily)
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml restart pg-docker-cls1 pg2 --force
+```
+
+**Final verification — all nodes healthy:**
+
+```bash
+# All three nodes should be streaming with no pending restart
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
+# Expected:
+# + Cluster: pg-docker-cls1 ----+----+-----------+-----------------+
+# | Member | Host        | Role           | State     | TL | Lag in MB | Pending restart |
+# +--------+-------------+----------------+-----------+----+-----------+-----------------+
+# | pg1    | 172.18.0.11 | Replica        | streaming |  9 |         0 |                 |
+# | pg2    | 172.18.0.12 | Standby Leader | streaming |  9 |         0 |                 |
+# | pg3    | 172.18.0.13 | Replica        | streaming |  9 |         0 |                 |
+
+# Verify the Standby Leader is streaming from pg4
+docker exec pg4 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.14 -p 5432 -U postgres postgres \
+  -c "SELECT application_name, client_addr, state, sync_state, write_lag FROM pg_stat_replication;"'
+# Expected: one of pg1/pg2/pg3 (whichever is Standby Leader) shows state = streaming
+```
+
+---
+
+### Graceful Failover Complete ✅
+
+**Summary of what happened:**
+1. ✅ Paused primary cluster (stopped Patroni HA loop overwriting sync config)
+2. ✅ Switched pg4 to synchronous via `ALTER SYSTEM` (RPO = 0 guaranteed)
+3. ✅ Stopped primary cluster (STONITH — split-brain prevention)
+4. ✅ Promoted pg4 to primary
+5. ✅ **Zero data loss achieved (RPO = 0)**
+6. ✅ Old primary cluster (pg1/pg2/pg3) rejoined as standby cluster streaming from pg4
+
+**Status:**
+- Region A (pg1/pg2/pg3): STANDBY CLUSTER — streaming from pg4
+- Region B (pg4): PRIMARY — accepting writes and reads
+- **DR Mode is ACTIVE**
 
 ---
 
@@ -1137,16 +1342,65 @@ docker exec pg4 curl -s --max-time 3 http://172.18.0.13:8008/primary \
 # All three must show "DOWN" before proceeding
 ```
 
-#### Step 2: Assess pg4 Replication Status (Data Loss Scope)
+#### Step 2: Enable Physical Replication Slot on Primary (BEFORE Failover)
+
+**To avoid data loss during failover, set up a replication slot so pg4 can't fall behind.**
 
 ```bash
-# Check pg4's last received WAL position — this is the maximum data pg4 has
-docker exec pg4 patronictl -c /etc/patroni/patroni.yml list
-# Note the LAG value at time of failure — if LAG > 0, some transactions may be lost
+# Create replication slot on primary (pg1) for pg4 standby
+docker exec pg1 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.11 -p 5432 -U postgres postgres \
+  -c "SELECT * FROM pg_create_physical_replication_slot('\''pg4_standby_slot'\'', true);"'
 
-# Check pg4 LSN for more detail
+# Verify slot was created and is active
+docker exec pg1 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.11 -p 5432 -U postgres postgres \
+  -c "SELECT slot_name, slot_type, active, restart_lsn FROM pg_replication_slots;"'
+# Expected: pg4_standby_slot | physical | t | 0/XXXXXXX
+```
+
+#### Step 2b: Configure pg4 to Use the Replication Slot (REALTIME)
+
+```bash
+# Update pg4's Patroni config to use the slot
+docker exec pg4 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 \
+  --force --set "standby_cluster={host: 172.18.0.10, port: 5432, primary_slot_name: pg4_standby_slot}"
+
+# Verify the config was applied
+docker exec pg4 patronictl -c /etc/patroni/patroni.yml show-config | grep -A 5 "standby_cluster:"
+# Expected:
+# standby_cluster:
+#   host: 172.18.0.10
+#   port: 5432
+#   primary_slot_name: pg4_standby_slot
+```
+
+#### Step 2c: Assess pg4 Replication Status (Data Loss Scope)
+
+```bash
+# Monitor replication lag — with slot enabled, WAL won't be purged
+while true; do clear; echo "=== pg4 Replication Status ===" && \
+docker exec pg1 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.11 -p 5432 -U postgres postgres \
+  -c "SELECT client_addr, client_hostname, state, sync_state, COALESCE(write_lag, '\''0 sec'\''::interval) as write_lag, COALESCE(flush_lag, '\''0 sec'\''::interval) as flush_lag, COALESCE(replay_lag, '\''0 sec'\''::interval) as replay_lag FROM pg_stat_replication;"' && \
+echo "" && echo "=== Replication Slot Status ===" && \
+docker exec pg1 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.11 -p 5432 -U postgres postgres \
+  -c "SELECT slot_name, active, restart_lsn, confirmed_flush_lsn FROM pg_replication_slots;"' && \
+echo "" && echo "=== pg4 Patroni Status ===" && \
+docker exec pg4 patronictl -c /etc/patroni/patroni.yml list; sleep 3; done
+
+# Press Ctrl+C when write_lag, flush_lag, replay_lag are all < 100ms (fully synchronized)
+```
+
+#### Step 2d: Check pg4's Last Received LSN (Verify Synchronization)
+
+```bash
+# From pg4: check what WAL position pg4 has received and replayed
 docker exec pg4 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.14 -p 5432 -U postgres postgres \
-  -c "SELECT pg_last_wal_receive_lsn(), pg_last_wal_replay_lsn(), now();"'
+  -c "SELECT pg_last_wal_receive_lsn() as received_lsn, pg_last_wal_replay_lsn() as replayed_lsn, now();"'
+
+# From pg1: check what pg1's current LSN is
+docker exec pg1 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.11 -p 5432 -U postgres postgres \
+  -c "SELECT pg_current_wal_lsn() as current_lsn, now();"'
+
+# If received_lsn ≈ current_lsn, pg4 is synchronized (minimal data loss risk)
 ```
 
 #### Step 3: Promote pg4 to Primary
