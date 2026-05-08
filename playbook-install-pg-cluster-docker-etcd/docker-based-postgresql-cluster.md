@@ -1273,8 +1273,12 @@ watch -n 3 'docker exec pg1 patronictl -c /etc/patroni/patroni.yml list'
 
 **Troubleshooting: nodes show `Pending restart`**
 
-If pg2/pg3 show `Pending restart` due to parameter changes (e.g., `max_connections: 200->100`),
-do a rolling restart — replicas first, then Standby Leader:
+If nodes show `Pending restart` due to parameter changes, first identify the root cause before restarting.
+
+**Case A — DCS value differs from what nodes are running (e.g., `max_connections: 200->100`)**
+
+The DCS was updated (possibly when another node was promoted and pushed its bootstrap config).
+A rolling restart applies the DCS value to all nodes:
 
 ```bash
 # Restart replicas first (safe — Standby Leader remains up)
@@ -1283,6 +1287,36 @@ docker exec pg1 patronictl -c /etc/patroni/patroni.yml restart pg-docker-cls1 pg
 # Then restart Standby Leader (brief interruption, another node takes over temporarily)
 docker exec pg1 patronictl -c /etc/patroni/patroni.yml restart pg-docker-cls1 pg2 --force
 ```
+
+**Case B — Pending restart persists even after `patronictl restart` (e.g., `max_worker_processes: 8->2`)**
+
+If restarting doesn't clear it, the node's `postgresql.conf` has a hardcoded value that wins at runtime
+over what Patroni writes from the DCS. Fix by updating the DCS to match the actual running value:
+
+```bash
+# 1. Check what value is actually running in postgresql.conf
+docker exec pg4 grep max_worker_processes /var/lib/postgresql/18/main/postgresql.conf
+# e.g. output: max_worker_processes = '8'
+
+# 2. Check what the DCS currently says
+docker exec pg4 patronictl -c /etc/patroni/patroni.yml show-config | grep max_worker_processes
+# e.g. output: max_worker_processes: '2'   <-- mismatch
+
+# 3. Patch the DCS to match the actual running value via Patroni REST API
+#    (replace 172.18.0.14 and the value with your node IP and actual value)
+docker exec pg4 curl -s -X PATCH http://172.18.0.14:8008/config \
+  -H 'Content-Type: application/json' \
+  -d '{"postgresql": {"parameters": {"max_worker_processes": "8"}}}'
+
+# 4. Verify pending restart is gone (Patroni picks up the DCS change within one loop_wait)
+docker exec pg4 patronictl -c /etc/patroni/patroni.yml list
+# Expected: no '*' in Pending restart column
+```
+
+> **Why this happens:** During a DR failover, the promoted node may push its own bootstrap config
+> to the DCS, overwriting parameters with values from its local `patroni.yml`. The actual
+> `postgresql.conf` on disk still has the original values. Since `postgresql.conf` wins at runtime,
+> `patronictl restart` never resolves the mismatch — the fix is to align the DCS to match the disk.
 
 **Final verification — all nodes healthy:**
 
