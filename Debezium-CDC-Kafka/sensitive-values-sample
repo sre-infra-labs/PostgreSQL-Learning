@@ -1,0 +1,32 @@
+# Sensitive Values Sample - Copy to 'sensitive-values' and encrypt with Ansible Vault
+# Command to encrypt: ansible-vault encrypt sensitive-values --vault-password-file=vault-pass
+# Command to view: ansible-vault view sensitive-values --vault-password-file=vault-pass
+# Vault Password: Pa$$w0rd (set in vault-pass)
+
+# ============================================================================
+# PostgreSQL Passwords (Using Pa$$w0rd as per system standard)
+# ============================================================================
+PG_SUPERUSER_PASSWORD: "Pa$$w0rd"
+PG_REPLICATION_PASSWORD: "Pa$$w0rd"
+PG_APP_USER_PASSWORD: "Pa$$w0rd"
+
+# ============================================================================
+# pgAdmin Credentials
+# ============================================================================
+PGADMIN_DEFAULT_EMAIL: "admin@cdc-learning.local"
+PGADMIN_DEFAULT_PASSWORD: "Pa$$w0rd"
+
+# ============================================================================
+# Debezium & Kafka Credentials (if authentication enabled)
+# ============================================================================
+KAFKA_BROKER_USERNAME: "kafka_user"
+KAFKA_BROKER_PASSWORD: "Pa$$w0rd"
+DEBEZIUM_CONNECTOR_USERNAME: "debezium_user"
+DEBEZIUM_CONNECTOR_PASSWORD: "Pa$$w0rd"
+
+# ============================================================================
+# SSH/Host Access
+# ============================================================================
+ANSIBLE_BECOME_PASSWORD: "Pa$$w0rd"
+ANSIBLE_SSH_KEY_PATH: "~/.ssh/id_ed25519"
+ANSIBLE_SSH_USER: "ansible"

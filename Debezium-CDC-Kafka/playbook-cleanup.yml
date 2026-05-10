@@ -1,0 +1,73 @@
+---
+# Cleanup Debezium CDC Infrastructure
+#
+# Usage:
+#   # Cleanup containers only (keep volumes):
+#   ansible-playbook -i hosts.yml playbook-cleanup.yml --vault-password-file=vault-pass
+#
+#   # Cleanup containers and volumes:
+#   ansible-playbook -i hosts.yml playbook-cleanup.yml --vault-password-file=vault-pass -e cleanup_volumes=true
+#
+#   # Cleanup network only:
+#   ansible-playbook -i hosts.yml playbook-cleanup.yml --vault-password-file=vault-pass -e cleanup_network=true
+#
+
+- name: Cleanup Debezium CDC Infrastructure
+  hosts: localhost
+  gather_facts: true
+  vars_files:
+    - vars/main.yml
+
+  vars:
+    containers:
+      - "kafka-ui-cdc"
+      - "pgadmin4-cdc"
+      - "debezium-connect"
+      - "postgres-cdc"
+      - "kafka-cdc"
+      - "zk-cdc"
+    cleanup_volumes: false
+    cleanup_network: false
+
+  pre_tasks:
+    - name: Display cleanup start message
+      ansible.builtin.debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════════╗
+          ║                   Cleanup Started                              ║
+          ║  cleanup_volumes: {{ cleanup_volumes }}                       ║
+          ║  cleanup_network: {{ cleanup_network }}                       ║
+          ╚════════════════════════════════════════════════════════════════╝
+
+  tasks:
+    - name: Stop and remove containers
+      shell: docker rm -f "{{ item }}"
+      loop: "{{ containers }}"
+      failed_when: false
+      changed_when: false
+
+    - name: Remove volumes
+      shell: rm -rf "{{ docker_volumes_root }}"
+      when: cleanup_volumes | bool
+      changed_when: false
+
+    - name: Remove Docker network
+      shell: docker network rm "{{ docker_network_name }}"
+      when: cleanup_network | bool
+      failed_when: false
+      changed_when: false
+
+  post_tasks:
+    - name: Display cleanup completion message
+      ansible.builtin.debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════════╗
+          ║     ✓ Cleanup completed                                        ║
+          ║                                                                ║
+          ║  Removed:                                                      ║
+          ║  • Containers: all CDC services                               ║
+          ║  • Volumes: {{ 'yes' if cleanup_volumes else 'no' }}         ║
+          ║  • Network: {{ 'yes' if cleanup_network else 'no' }}         ║
+          ║                                                                ║
+          ║  To redeploy: playbook-deploy-all.yml                         ║
+          ╚════════════════════════════════════════════════════════════════╝

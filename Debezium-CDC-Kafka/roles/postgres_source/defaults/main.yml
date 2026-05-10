@@ -1,0 +1,36 @@
+# PostgreSQL Source Database Role Defaults
+
+pg_version: "15"
+pg_container_name: "postgres-cdc"
+pg_container_ip: "172.20.0.4"
+pg_listen_port: 5432
+pg_host_mapping_port: 5433
+
+# PostgreSQL configuration
+pg_max_connections: 200
+pg_shared_buffers: "256MB"
+pg_effective_cache_size: "1GB"
+pg_maintenance_work_mem: "64MB"
+pg_checkpoint_completion_target: 0.9
+pg_wal_buffers: "16MB"
+
+# WAL configuration (required for CDC)
+pg_wal_level: "logical"
+pg_max_wal_senders: 10
+pg_wal_keep_size: "1GB"
+pg_hot_standby: "off"
+
+# Database and users
+pg_database: "cdc_db"
+pg_replication_user: "replication"
+pg_app_user: "cdc_app"
+pg_admin_user: "postgres"
+
+# Vault variables (must be provided from sensitive-values)
+PG_SUPERUSER_PASSWORD: "{{ lookup('env', 'PG_SUPERUSER_PASSWORD') }}"
+PG_REPLICATION_PASSWORD: "{{ lookup('env', 'PG_REPLICATION_PASSWORD') }}"
+PG_APP_USER_PASSWORD: "{{ lookup('env', 'PG_APP_USER_PASSWORD') }}"
+
+docker_network_name: "cdc-network"
+docker_volumes_root: "{{ ansible_env.HOME }}/cdc-volumes"
+debug: false

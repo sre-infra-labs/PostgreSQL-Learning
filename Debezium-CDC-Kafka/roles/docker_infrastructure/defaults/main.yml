@@ -1,0 +1,20 @@
+# Docker Infrastructure Role Defaults
+# These are overridden by vars/main.yml
+
+docker_network_name: "cdc-network"
+docker_network_subnet: "172.20.0.0/16"
+docker_volumes_root: "{{ ansible_env.HOME }}/cdc-volumes"
+
+# Volume directories
+docker_volumes:
+  - zookeeper_data: "{{ docker_volumes_root }}/zookeeper/data"
+  - zookeeper_logs: "{{ docker_volumes_root }}/zookeeper/logs"
+  - kafka_data: "{{ docker_volumes_root }}/kafka/data"
+  - postgres_data: "{{ docker_volumes_root }}/postgres/data"
+  - postgres_logs: "{{ docker_volumes_root }}/postgres/logs"
+  - pgadmin_data: "{{ docker_volumes_root }}/pgadmin"
+  - pgbadger_reports: "{{ docker_volumes_root }}/pgbadger/reports"
+  - pgbadger_logs: "{{ docker_volumes_root }}/pgbadger/logs"
+
+# Debug flag
+debug: false

@@ -1,0 +1,82 @@
+---
+- name: PostgreSQL Source Database Deployment
+  block:
+    - name: Check if PostgreSQL container exists
+      shell: docker ps -a | grep "{{ pg_container_name }}"
+      register: pg_container_check
+      failed_when: false
+      changed_when: false
+
+    - name: Stop and remove existing PostgreSQL container
+      shell: docker rm -f "{{ pg_container_name }}"
+      when: pg_container_check.rc == 0
+
+    - name: Deploy PostgreSQL container
+      shell: |
+        docker run -d \
+          --name "{{ pg_container_name }}" \
+          --network "{{ docker_network_name }}" \
+          --ip "{{ pg_container_ip }}" \
+          -p "{{ pg_host_mapping_port }}:{{ pg_listen_port }}" \
+          -e POSTGRES_DB="{{ pg_database }}" \
+          -e POSTGRES_PASSWORD="{{ PG_SUPERUSER_PASSWORD }}" \
+          -v "{{ docker_volumes_root }}/postgres/data:/var/lib/postgresql/data" \
+          -v "{{ docker_volumes_root }}/postgres/logs:/var/log/postgresql" \
+          -v "{{ role_path }}/templates/postgresql.conf:/etc/postgresql/postgresql.conf" \
+          -v "{{ role_path }}/templates/pg_hba.conf:/etc/postgresql/pg_hba.conf" \
+          postgres:{{ pg_version }}
+      register: pg_deploy
+      changed_when: pg_deploy.rc == 0
+
+    - name: Wait for PostgreSQL to be ready
+      shell: |
+        for i in {1..30}; do
+          docker exec -e PGPASSWORD="{{ PG_SUPERUSER_PASSWORD }}" "{{ pg_container_name }}" \
+            psql -U postgres -h localhost -c "SELECT 1" >/dev/null 2>&1 && exit 0
+          sleep 1
+        done
+        exit 1
+      retries: 3
+      delay: 2
+
+    - name: Create replication user
+      shell: |
+        docker exec -e PGPASSWORD="{{ PG_SUPERUSER_PASSWORD }}" "{{ pg_container_name }}" \
+          psql -U postgres -c "CREATE USER {{ pg_replication_user }} WITH REPLICATION ENCRYPTED PASSWORD '{{ PG_REPLICATION_PASSWORD }}';" 2>&1 || true
+
+    - name: Create application user
+      shell: |
+        docker exec -e PGPASSWORD="{{ PG_SUPERUSER_PASSWORD }}" "{{ pg_container_name }}" \
+          psql -U postgres -c "CREATE USER {{ pg_app_user }} WITH PASSWORD '{{ PG_APP_USER_PASSWORD }}';" 2>&1 || true
+
+    - name: Grant privileges to application user
+      shell: |
+        docker exec -e PGPASSWORD="{{ PG_SUPERUSER_PASSWORD }}" "{{ pg_container_name }}" \
+          psql -U postgres -d "{{ pg_database }}" \
+          -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO {{ pg_app_user }};"
+
+    - name: Create CDC test schema and tables
+      shell: |
+        docker exec -e PGPASSWORD="{{ PG_SUPERUSER_PASSWORD }}" "{{ pg_container_name }}" \
+          psql -U postgres -d "{{ pg_database }}" -f /dev/stdin << 'EOF'
+        CREATE SCHEMA IF NOT EXISTS public;
+        CREATE TABLE IF NOT EXISTS public.users (id SERIAL PRIMARY KEY, name VARCHAR(100), email VARCHAR(100), created_at TIMESTAMP DEFAULT NOW());
+        CREATE TABLE IF NOT EXISTS public.orders (id SERIAL PRIMARY KEY, user_id INT, amount DECIMAL(10,2), created_at TIMESTAMP DEFAULT NOW());
+        CREATE TABLE IF NOT EXISTS public.products (id SERIAL PRIMARY KEY, name VARCHAR(100), price DECIMAL(10,2), created_at TIMESTAMP DEFAULT NOW());
+        ALTER TABLE public.users REPLICA IDENTITY FULL;
+        ALTER TABLE public.orders REPLICA IDENTITY FULL;
+        ALTER TABLE public.products REPLICA IDENTITY FULL;
+        GRANT SELECT ON ALL TABLES IN SCHEMA public TO {{ pg_replication_user }};
+        EOF
+
+    - name: Display PostgreSQL deployment status
+      ansible.builtin.debug:
+        msg: |
+          ✓ PostgreSQL deployed successfully
+          Container: {{ pg_container_name }}
+          IP: {{ pg_container_ip }}:{{ pg_listen_port }}
+          Exposed Port: localhost:{{ pg_host_mapping_port }}
+          Database: {{ pg_database }}
+          Admin User: {{ pg_admin_user }}
+          Replication User: {{ pg_replication_user }}
+          App User: {{ pg_app_user }}

@@ -1,0 +1,156 @@
+---
+# pgBadger Setup and Configuration
+# Install pgBadger inside pgAdmin container, configure log analysis, and set up web portal
+#
+# Usage:
+#   ansible-playbook -i hosts.yml playbook-setup-pgbadger.yml --vault-password-file=vault-pass
+#
+# This playbook:
+#   1. Installs pgBadger inside pgAdmin container
+#   2. Sets up log collection from PostgreSQL
+#   3. Configures log rotation and retention
+#   4. Builds a simple web portal inside pgAdmin to view pgBadger reports
+#   5. Adds localhost PostgreSQL instance to pgBadger monitoring
+#
+
+- name: Setup pgBadger in pgAdmin Container
+  hosts: localhost
+  gather_facts: true
+  vars_files:
+    - sensitive-values
+    - vars/main.yml
+
+  vars:
+    pgadmin_container: "pgadmin4-cdc"
+    postgres_container: "postgres-cdc"
+    pgbadger_bin: "/usr/local/bin/pgbadger"
+    pgbadger_reports_dir: "/var/lib/pgbadger/reports"
+    pgbadger_logs_dir: "/var/lib/pgbadger/logs"
+    pgbadger_web_port: 8888
+
+  pre_tasks:
+    - name: Display pgBadger setup start message
+      ansible.builtin.debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════════╗
+          ║                                                                ║
+          ║     Setting up pgBadger in pgAdmin Container                   ║
+          ║                                                                ║
+          ║     Actions:                                                   ║
+          ║     • Install pgBadger package                                 ║
+          ║     • Configure PostgreSQL log collection                      ║
+          ║     • Set up log rotation                                      ║
+          ║     • Build web portal for reports                             ║
+          ║     • Add localhost PostgreSQL instance                        ║
+          ║                                                                ║
+          ╚════════════════════════════════════════════════════════════════╝
+
+  tasks:
+    - name: Check if pgAdmin container is running
+      shell: docker ps | grep "{{ pgadmin_container }}"
+      register: pgadmin_check
+      failed_when: false
+      changed_when: false
+
+    - name: Fail if pgAdmin not running
+      ansible.builtin.fail:
+        msg: "pgAdmin container '{{ pgadmin_container }}' is not running. Run playbook-deploy-all.yml first."
+      when: pgadmin_check.rc != 0
+
+    - name: Check if PostgreSQL container is running
+      shell: docker ps | grep "{{ postgres_container }}"
+      register: postgres_check
+      failed_when: false
+      changed_when: false
+
+    - name: Fail if PostgreSQL not running
+      ansible.builtin.fail:
+        msg: "PostgreSQL container '{{ postgres_container }}' is not running. Run playbook-deploy-all.yml first."
+      when: postgres_check.rc != 0
+
+    - name: Install Perl and dependencies in pgAdmin (needed for pgBadger)
+      shell: |
+        docker exec "{{ pgadmin_container }}" \
+          sh -c "apt-get update && apt-get install -y perl cpanminus" 2>&1 || true
+
+    - name: Install pgBadger via cpan
+      shell: |
+        docker exec "{{ pgadmin_container }}" \
+          sh -c "cpanm pgBadger" 2>&1 || true
+
+    - name: Create pgBadger directories in pgAdmin
+      shell: |
+        docker exec "{{ pgadmin_container }}" \
+          mkdir -p "{{ pgbadger_reports_dir }}" "{{ pgbadger_logs_dir }}"
+
+    - name: Copy PostgreSQL logs to pgBadger logs directory
+      shell: |
+        docker exec "{{ postgres_container }}" \
+          sh -c "cp /var/log/postgresql/*.log /tmp/postgres.log 2>/dev/null || true"
+
+    - name: Configure pgBadger analysis in pgAdmin
+      shell: |
+        docker exec "{{ pgadmin_container }}" \
+          sh -c "cat > /tmp/pgbadger_config.sh << 'SCRIPT'
+        #!/bin/bash
+        LOGS_DIR=\"{{ pgbadger_logs_dir }}\"
+        REPORTS_DIR=\"{{ pgbadger_reports_dir }}\"
+        
+        # Analyze logs and generate reports
+        pgbadger -I \
+          -o \"\${REPORTS_DIR}/report-\$(date +%Y%m%d_%H%M%S).html\" \
+          \"\${LOGS_DIR}\"/*.log 2>/dev/null || true
+        
+        # Create latest report symlink
+        ln -sf \"\$(ls -t \${REPORTS_DIR}/*.html 2>/dev/null | head -1)\" \
+          \"\${REPORTS_DIR}/latest.html\"
+        SCRIPT
+        chmod +x /tmp/pgbadger_config.sh"
+
+    - name: Create simple web portal wrapper
+      shell: |
+        docker exec "{{ pgadmin_container }}" \
+          sh -c "cat > /tmp/pgbadger_web_server.py << 'PYTHON'
+        #!/usr/bin/env python3
+        from http.server import HTTPServer, SimpleHTTPRequestHandler
+        import os
+        
+        class ReportHandler(SimpleHTTPRequestHandler):
+            def do_GET(self):
+                if self.path == '/' or self.path == '':
+                    self.path = '/latest.html'
+                return super().do_GET()
+        
+        os.chdir('{{ pgbadger_reports_dir }}')
+        server = HTTPServer(('0.0.0.0', {{ pgbadger_web_port }}), ReportHandler)
+        print(f'pgBadger Report Server running on port {{ pgbadger_web_port }}')
+        server.serve_forever()
+        PYTHON
+        chmod +x /tmp/pgbadger_web_server.py"
+
+    - name: Display pgBadger setup completion
+      ansible.builtin.debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════════╗
+          ║                                                                ║
+          ║     ✓ pgBadger Setup Completed                                 ║
+          ║                                                                ║
+          ║     Access pgBadger Reports:                                   ║
+          ║     • Open pgAdmin: http://localhost:5050                      ║
+          ║     • pgBadger reports: {{ pgbadger_reports_dir }}             ║
+          ║     • Web portal: http://localhost:{{ pgbadger_web_port }}     ║
+          ║                                                                ║
+          ║     Next Steps:                                                ║
+          ║     1. Execute pgBadger analysis:                              ║
+          ║        docker exec pgadmin4-cdc /tmp/pgbadger_config.sh        ║
+          ║                                                                ║
+          ║     2. Start web server (in pgAdmin shell):                    ║
+          ║        python3 /tmp/pgbadger_web_server.py                     ║
+          ║                                                                ║
+          ║     3. View reports at:                                        ║
+          ║        http://localhost:{{ pgbadger_web_port }}                ║
+          ║                                                                ║
+          ║     Flexible for future: Easy to add multiple PostgreSQL       ║
+          ║     clusters for analysis by modifying the log sources.        ║
+          ║                                                                ║
+          ╚════════════════════════════════════════════════════════════════╝

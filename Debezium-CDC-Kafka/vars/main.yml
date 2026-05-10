@@ -1,0 +1,118 @@
+# Debezium CDC Learning Infrastructure - Main Configuration
+# All variables are configurable here. DO NOT hardcode credentials - use vault!
+# Vault password: Pa$$w0rd (in vault-pass file)
+
+# ============================================================================
+# DOCKER NETWORK & INFRASTRUCTURE
+# ============================================================================
+docker_network_name: "cdc-network"
+docker_network_subnet: "172.20.0.0/16"
+docker_volumes_root: "{{ ansible_env.HOME }}/cdc-volumes"
+
+# ============================================================================
+# KAFKA-ECOSYSTEM UNIFIED CONTAINER
+# (Zookeeper + Kafka + Debezium + Kafka UI in single container)
+# ============================================================================
+kafka_ecosystem_version: "3.7.0"
+kafka_ecosystem_container_name: "kafka-ecosystem-cdc"
+kafka_ecosystem_container_ip: "172.20.0.2"
+
+# Zookeeper ports (internal)
+zk_listen_port: 2181
+zk_server_port: 2888
+zk_election_port: 3888
+zk_host_mapping_port: 2181  # Exposed to localhost
+
+# Kafka ports (internal)
+kafka_broker_id: 1
+kafka_advertised_host: "kafka-ecosystem-cdc"
+kafka_advertised_port: 9092
+kafka_host_mapping_port: 29092  # Exposed to localhost
+
+# Debezium Connect REST API (internal)
+debezium_listen_port: 8083
+debezium_host_mapping_port: 8083  # Exposed to localhost
+
+# Kafka UI Web Interface (internal)
+kafka_ui_listen_port: 8080
+kafka_ui_host_mapping_port: 8080  # Exposed to localhost
+
+# Kafka topics to create
+kafka_topics:
+  - name: "postgres.public.users"
+    partitions: 1
+    replication_factor: 1
+  - name: "postgres.public.orders"
+    partitions: 1
+    replication_factor: 1
+  - name: "postgres.public.products"
+    partitions: 1
+    replication_factor: 1
+
+# Debezium PostgreSQL connector configuration
+debezium_connector_name: "postgres-cdc-connector"
+debezium_connector_database_server_name: "postgres-cdc"
+debezium_slot_name: "debezium"
+debezium_publication_name: "dbz_publication"
+
+# ============================================================================
+# POSTGRESQL SOURCE DATABASE (CDC Source)
+# ============================================================================
+pg_version: "15"
+pg_container_name: "postgres-cdc"
+pg_container_ip: "172.20.0.3"
+pg_listen_port: 5432
+pg_host_mapping_port: 5433  # Exposed to localhost (avoid conflict)
+pg_max_connections: 200
+pg_shared_buffers: "256MB"
+pg_effective_cache_size: "1GB"
+pg_maintenance_work_mem: "64MB"
+pg_checkpoint_completion_target: 0.9
+pg_wal_buffers: "16MB"
+
+# WAL configuration (CRITICAL for CDC)
+pg_wal_level: "logical"     # MUST be 'logical' for Debezium CDC
+pg_max_wal_senders: 10
+pg_wal_keep_size: "1GB"
+pg_hot_standby: "off"
+
+# PostgreSQL database and users
+pg_database: "cdc_db"
+pg_replication_user: "replication"
+pg_app_user: "cdc_app"
+pg_admin_user: "postgres"
+
+# ============================================================================
+# PGADMIN CONFIGURATION
+# ============================================================================
+pgadmin_version: "8.5"
+pgadmin_container_name: "pgadmin4-cdc"
+pgadmin_container_ip: "172.20.0.4"
+pgadmin_listen_port: 80
+pgadmin_host_mapping_port: 5050  # Exposed to localhost
+pgadmin_maintenance_db: "pgadmin4"
+
+# ============================================================================
+# PGBADGER CONFIGURATION
+# ============================================================================
+pgbadger_version: "12.4"
+pgbadger_web_port: 8888  # Web portal inside pgadmin container
+pgbadger_reports_dir: "/var/lib/pgbadger/reports"
+pgbadger_logs_dir: "/var/lib/pgbadger/logs"
+pgbadger_enable: true
+
+# ============================================================================
+# DEPLOYMENT OPTIONS
+# ============================================================================
+deploy_docker_infra: true
+deploy_kafka_ecosystem: true
+deploy_postgres: true
+deploy_pgadmin: true
+deploy_pgbadger: true
+
+# ============================================================================
+# DEBUG & LOGGING
+# ============================================================================
+debug: false
+enable_container_logs: true
+log_level: "INFO"

@@ -1,0 +1,42 @@
+---
+- name: Kafka Ecosystem Deployment
+  block:
+    - name: Generate docker-compose file from template
+      template:
+        src: docker-compose.yml.j2
+        dest: /tmp/kafka-ecosystem-compose.yml
+        mode: '0644'
+
+    - name: Deploy Kafka Ecosystem services using docker-compose
+      shell: |
+        cd /tmp
+        docker-compose -f kafka-ecosystem-compose.yml up -d
+      register: ecosystem_deploy
+      retries: 2
+      delay: 5
+
+    - name: Wait for services to start
+      pause:
+        seconds: 20
+
+    - name: Create Kafka topics
+      shell: |
+        docker exec -i kafka kafka-topics.sh --create \
+          --bootstrap-server localhost:9092 \
+          --topic "{{ item.name }}" \
+          --partitions {{ item.partitions }} \
+          --replication-factor {{ item.replication_factor }} \
+          --if-not-exists 2>&1 || true
+      loop: "{{ kafka_topics }}"
+
+    - name: Display Kafka Ecosystem deployment success
+      debug:
+        msg: |
+          ✓ Kafka Ecosystem deployed successfully
+          Services running: Zookeeper, Kafka, Debezium, Kafka UI
+
+          Access URLs:
+          • Kafka UI:       http://localhost:{{ kafka_ui_host_mapping_port }}
+          • Debezium REST:  http://localhost:{{ debezium_host_mapping_port }}/connectors
+          • Kafka Broker:   localhost:{{ kafka_host_mapping_port }}
+          • Zookeeper:      localhost:{{ zk_host_mapping_port }}

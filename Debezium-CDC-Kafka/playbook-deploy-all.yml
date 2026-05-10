@@ -1,0 +1,69 @@
+---
+# Debezium CDC Learning Infrastructure - Full Stack Deployment
+# Simplified: Zookeeper + Kafka + Debezium + Kafka UI in coordinated setup
+# PostgreSQL + pgAdmin as separate containers
+#
+# Usage:
+#   ansible-playbook -i hosts.yml playbook-deploy-all.yml --vault-password-file=vault-pass
+#
+# Deploy specific component:
+#   ansible-playbook -i hosts.yml playbook-deploy-all.yml --vault-password-file=vault-pass --tags docker_infra
+#   ansible-playbook -i hosts.yml playbook-deploy-all.yml --vault-password-file=vault-pass --tags kafka_ecosystem
+#   ansible-playbook -i hosts.yml playbook-deploy-all.yml --vault-password-file=vault-pass --tags postgres
+#   ansible-playbook -i hosts.yml playbook-deploy-all.yml --vault-password-file=vault-pass --tags pgadmin
+#
+
+- name: Deploy Full Debezium CDC Stack (Simplified Architecture)
+  hosts: localhost
+  gather_facts: true
+  vars_files:
+    - sensitive-values
+    - vars/main.yml
+
+  pre_tasks:
+    - name: Display deployment start message
+      ansible.builtin.debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════════╗
+          ║                                                                ║
+          ║     Deploying Debezium CDC Learning Infrastructure             ║
+          ║     Simplified: Kafka Ecosystem + PostgreSQL + pgAdmin         ║
+          ║                                                                ║
+          ╚════════════════════════════════════════════════════════════════╝
+
+  roles:
+    - role: roles/docker_infrastructure
+      tags: docker_infra
+      when: deploy_docker_infra | default(true)
+
+    - role: roles/kafka_ecosystem
+      tags: kafka_ecosystem
+      when: deploy_kafka_ecosystem | default(true)
+
+    - role: roles/postgres_source
+      tags: postgres
+      when: deploy_postgres | default(true)
+
+    - role: roles/pgadmin
+      tags: pgadmin
+      when: deploy_pgadmin | default(true)
+
+  post_tasks:
+    - name: Display deployment completion message
+      ansible.builtin.debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════════╗
+          ║                                                                ║
+          ║     ✓ Debezium CDC Infrastructure Deployed Successfully!       ║
+          ║                                                                ║
+          ║     Access Points:                                             ║
+          ║     • pgAdmin:        http://localhost:5050                    ║
+          ║     • Kafka UI:       http://localhost:8080                    ║
+          ║     • Debezium REST:  http://localhost:8083/connectors         ║
+          ║     • PostgreSQL:     localhost:5433                           ║
+          ║     • Kafka:          localhost:29092                          ║
+          ║     • Zookeeper:      localhost:2181                           ║
+          ║                                                                ║
+          ║     Kafka Ecosystem:  kafka-ecosystem-cdc (single coordinated)  ║
+          ║                                                                ║
+          ╚════════════════════════════════════════════════════════════════╝

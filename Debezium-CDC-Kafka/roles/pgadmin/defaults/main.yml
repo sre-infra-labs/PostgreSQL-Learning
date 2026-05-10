@@ -1,0 +1,30 @@
+# pgAdmin Role Defaults
+
+pgadmin_version: "8.5"
+pgadmin_container_name: "pgadmin4-cdc"
+pgadmin_container_ip: "172.20.0.6"
+pgadmin_listen_port: 80
+pgadmin_host_mapping_port: 5050
+pgadmin_maintenance_db: "pgadmin4"
+
+# pgBadger configuration
+pgbadger_version: "12.4"
+pgbadger_web_port: 8888
+pgbadger_reports_dir: "/var/lib/pgbadger/reports"
+pgbadger_logs_dir: "/var/lib/pgbadger/logs"
+pgbadger_enable: true
+
+# PostgreSQL source connection
+pg_container_ip: "172.20.0.4"
+pg_listen_port: 5432
+pg_database: "cdc_db"
+pg_app_user: "cdc_app"
+
+# Vault variables
+PGADMIN_DEFAULT_EMAIL: "{{ lookup('env', 'PGADMIN_DEFAULT_EMAIL') }}"
+PGADMIN_DEFAULT_PASSWORD: "{{ lookup('env', 'PGADMIN_DEFAULT_PASSWORD') }}"
+PG_APP_USER_PASSWORD: "{{ lookup('env', 'PG_APP_USER_PASSWORD') }}"
+
+docker_network_name: "cdc-network"
+docker_volumes_root: "{{ ansible_env.HOME }}/cdc-volumes"
+debug: false
