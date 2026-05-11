@@ -1,20 +1,18 @@
 ---
 - name: pgAdmin Deployment
   block:
-    - name: Check if pgAdmin container exists
-      shell: docker ps -a | grep "{{ pgadmin_container_name }}"
-      register: pgadmin_container_check
+    - name: Check pgAdmin container state
+      shell: |
+        docker inspect --format='{{ "{{" }}.State.Status{{ "}}" }}' "{{ pgadmin_container_name }}" 2>/dev/null || echo "missing"
+      register: pgadmin_state
       failed_when: false
       changed_when: false
 
-    - name: Stop and remove existing pgAdmin container
-      shell: docker rm -f "{{ pgadmin_container_name }}"
-      when: pgadmin_container_check.rc == 0
-
-    - name: Deploy pgAdmin container
+    - name: Deploy pgAdmin container (if missing)
       shell: |
         docker run -d \
           --name "{{ pgadmin_container_name }}" \
+          --restart unless-stopped \
           --network "{{ docker_network_name }}" \
           --ip "{{ pgadmin_container_ip }}" \
           -p "{{ pgadmin_host_mapping_port }}:{{ pgadmin_listen_port }}" \
@@ -22,12 +20,15 @@
           -e PGADMIN_DEFAULT_PASSWORD="{{ PGADMIN_DEFAULT_PASSWORD }}" \
           -v "{{ docker_volumes_root }}/pgadmin:/var/lib/pgadmin" \
           dpage/pgadmin4:{{ pgadmin_version }}
-      register: pgadmin_deploy
-      changed_when: pgadmin_deploy.rc == 0
+      when: pgadmin_state.stdout | trim == 'missing'
+
+    - name: Start stopped pgAdmin container (if exited)
+      shell: docker start "{{ pgadmin_container_name }}"
+      when: pgadmin_state.stdout | trim in ['exited', 'created', 'paused']
 
     - name: Wait for pgAdmin container to be running
       pause:
-        seconds: 15
+        seconds: 10
 
     - name: Display pgAdmin deployment status
       ansible.builtin.debug:

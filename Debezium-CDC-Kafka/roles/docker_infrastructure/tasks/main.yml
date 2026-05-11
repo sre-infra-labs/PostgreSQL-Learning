@@ -23,10 +23,11 @@
         mode: '0755'
       loop:
         - "{{ docker_volumes_root }}/zookeeper/data"
-        - "{{ docker_volumes_root }}/zookeeper/logs"
+        - "{{ docker_volumes_root }}/zookeeper/log"
         - "{{ docker_volumes_root }}/kafka/data"
         - "{{ docker_volumes_root }}/postgres/data"
         - "{{ docker_volumes_root }}/postgres/logs"
+        - "{{ docker_volumes_root }}/postgres/config"
         - "{{ docker_volumes_root }}/pgadmin"
         - "{{ docker_volumes_root }}/pgbadger/reports"
         - "{{ docker_volumes_root }}/pgbadger/logs"

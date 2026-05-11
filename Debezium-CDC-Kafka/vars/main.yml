@@ -1,6 +1,5 @@
 # Debezium CDC Learning Infrastructure - Main Configuration
 # All variables are configurable here. DO NOT hardcode credentials - use vault!
-# Vault password: Pa$$w0rd (in vault-pass file)
 
 # ============================================================================
 # DOCKER NETWORK & INFRASTRUCTURE
@@ -25,7 +24,7 @@ zk_host_mapping_port: 2181  # Exposed to localhost
 
 # Kafka ports (internal)
 kafka_broker_id: 1
-kafka_advertised_host: "kafka-ecosystem-cdc"
+kafka_advertised_host: "kafka"
 kafka_advertised_port: 9092
 kafka_host_mapping_port: 29092  # Exposed to localhost
 
@@ -37,22 +36,23 @@ debezium_host_mapping_port: 8083  # Exposed to localhost
 kafka_ui_listen_port: 8080
 kafka_ui_host_mapping_port: 8080  # Exposed to localhost
 
-# Kafka topics to create
+# Kafka topics to pre-create (Debezium also auto-creates these via KAFKA_AUTO_CREATE_TOPICS_ENABLE)
+# Topic naming: {topic.prefix}.{schema}.{table} where topic.prefix = debezium_connector_database_server_name
 kafka_topics:
-  - name: "postgres.public.users"
+  - name: "postgres-cdc.public.users"
     partitions: 1
     replication_factor: 1
-  - name: "postgres.public.orders"
+  - name: "postgres-cdc.public.orders"
     partitions: 1
     replication_factor: 1
-  - name: "postgres.public.products"
+  - name: "postgres-cdc.public.products"
     partitions: 1
     replication_factor: 1
 
 # Debezium PostgreSQL connector configuration
 debezium_connector_name: "postgres-cdc-connector"
 debezium_connector_database_server_name: "postgres-cdc"
-debezium_slot_name: "debezium"
+debezium_slot_name: "debezium_slot"
 debezium_publication_name: "dbz_publication"
 
 # ============================================================================
@@ -87,7 +87,7 @@ pg_admin_user: "postgres"
 # ============================================================================
 pgadmin_version: "8.5"
 pgadmin_container_name: "pgadmin4-cdc"
-pgadmin_container_ip: "172.20.0.4"
+pgadmin_container_ip: "172.20.0.7"
 pgadmin_listen_port: 80
 pgadmin_host_mapping_port: 5050  # Exposed to localhost
 pgadmin_maintenance_db: "pgadmin4"

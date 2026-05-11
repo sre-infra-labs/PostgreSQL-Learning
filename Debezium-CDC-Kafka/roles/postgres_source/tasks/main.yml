@@ -1,20 +1,38 @@
 ---
 - name: PostgreSQL Source Database Deployment
   block:
-    - name: Check if PostgreSQL container exists
-      shell: docker ps -a | grep "{{ pg_container_name }}"
-      register: pg_container_check
+    - name: Ensure PostgreSQL config directory exists (persistent volume path)
+      file:
+        path: "{{ docker_volumes_root }}/postgres/config"
+        state: directory
+        mode: '0755'
+
+    - name: Render postgresql.conf template to persistent volume path
+      template:
+        src: postgresql.conf
+        dest: "{{ docker_volumes_root }}/postgres/config/postgresql.conf"
+        mode: '0644'
+      register: pg_conf_changed
+
+    - name: Render pg_hba.conf to persistent volume path
+      template:
+        src: pg_hba.conf
+        dest: "{{ docker_volumes_root }}/postgres/config/pg_hba.conf"
+        mode: '0644'
+      register: pg_hba_changed
+
+    - name: Check PostgreSQL container state
+      shell: |
+        docker inspect --format='{{ "{{" }}.State.Status{{ "}}" }}' "{{ pg_container_name }}" 2>/dev/null || echo "missing"
+      register: pg_state
       failed_when: false
       changed_when: false
 
-    - name: Stop and remove existing PostgreSQL container
-      shell: docker rm -f "{{ pg_container_name }}"
-      when: pg_container_check.rc == 0
-
-    - name: Deploy PostgreSQL container
+    - name: Deploy PostgreSQL container (if missing)
       shell: |
         docker run -d \
           --name "{{ pg_container_name }}" \
+          --restart unless-stopped \
           --network "{{ docker_network_name }}" \
           --ip "{{ pg_container_ip }}" \
           -p "{{ pg_host_mapping_port }}:{{ pg_listen_port }}" \
@@ -22,11 +40,17 @@
           -e POSTGRES_PASSWORD="{{ PG_SUPERUSER_PASSWORD }}" \
           -v "{{ docker_volumes_root }}/postgres/data:/var/lib/postgresql/data" \
           -v "{{ docker_volumes_root }}/postgres/logs:/var/log/postgresql" \
-          -v "{{ role_path }}/templates/postgresql.conf:/etc/postgresql/postgresql.conf" \
-          -v "{{ role_path }}/templates/pg_hba.conf:/etc/postgresql/pg_hba.conf" \
-          postgres:{{ pg_version }}
-      register: pg_deploy
-      changed_when: pg_deploy.rc == 0
+          -v "{{ docker_volumes_root }}/postgres/config/postgresql.conf:/etc/postgresql/postgresql.conf:ro" \
+          -v "{{ docker_volumes_root }}/postgres/config/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro" \
+          postgres:{{ pg_version }} \
+          postgres \
+            -c config_file=/etc/postgresql/postgresql.conf \
+            -c hba_file=/etc/postgresql/pg_hba.conf
+      when: pg_state.stdout | trim == 'missing'
+
+    - name: Start stopped PostgreSQL container (if exited)
+      shell: docker start "{{ pg_container_name }}"
+      when: pg_state.stdout | trim in ['exited', 'created', 'paused']
 
     - name: Wait for PostgreSQL to be ready
       shell: |
@@ -39,15 +63,39 @@
       retries: 3
       delay: 2
 
-    - name: Create replication user
+    - name: Reload PostgreSQL config if config files changed (running container)
       shell: |
         docker exec -e PGPASSWORD="{{ PG_SUPERUSER_PASSWORD }}" "{{ pg_container_name }}" \
-          psql -U postgres -c "CREATE USER {{ pg_replication_user }} WITH REPLICATION ENCRYPTED PASSWORD '{{ PG_REPLICATION_PASSWORD }}';" 2>&1 || true
+          psql -U postgres -c "SELECT pg_reload_conf();"
+      when: pg_state.stdout | trim == 'running' and (pg_conf_changed.changed or pg_hba_changed.changed)
 
-    - name: Create application user
+    - name: Create or update replication user
       shell: |
         docker exec -e PGPASSWORD="{{ PG_SUPERUSER_PASSWORD }}" "{{ pg_container_name }}" \
-          psql -U postgres -c "CREATE USER {{ pg_app_user }} WITH PASSWORD '{{ PG_APP_USER_PASSWORD }}';" 2>&1 || true
+          psql -U postgres -c "
+            DO \$\$
+            BEGIN
+              IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{{ pg_replication_user }}') THEN
+                CREATE USER {{ pg_replication_user }} WITH REPLICATION ENCRYPTED PASSWORD '{{ PG_REPLICATION_PASSWORD }}';
+              ELSE
+                ALTER USER {{ pg_replication_user }} WITH REPLICATION ENCRYPTED PASSWORD '{{ PG_REPLICATION_PASSWORD }}';
+              END IF;
+            END;
+            \$\$;" 2>&1
+
+    - name: Create or update application user
+      shell: |
+        docker exec -e PGPASSWORD="{{ PG_SUPERUSER_PASSWORD }}" "{{ pg_container_name }}" \
+          psql -U postgres -c "
+            DO \$\$
+            BEGIN
+              IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{{ pg_app_user }}') THEN
+                CREATE USER {{ pg_app_user }} WITH PASSWORD '{{ PG_APP_USER_PASSWORD }}';
+              ELSE
+                ALTER USER {{ pg_app_user }} WITH PASSWORD '{{ PG_APP_USER_PASSWORD }}';
+              END IF;
+            END;
+            \$\$;" 2>&1
 
     - name: Grant privileges to application user
       shell: |
@@ -55,19 +103,76 @@
           psql -U postgres -d "{{ pg_database }}" \
           -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO {{ pg_app_user }};"
 
-    - name: Create CDC test schema and tables
+    - name: Create CDC test schema and tables (idempotent with schema migration)
       shell: |
         docker exec -e PGPASSWORD="{{ PG_SUPERUSER_PASSWORD }}" "{{ pg_container_name }}" \
-          psql -U postgres -d "{{ pg_database }}" -f /dev/stdin << 'EOF'
-        CREATE SCHEMA IF NOT EXISTS public;
-        CREATE TABLE IF NOT EXISTS public.users (id SERIAL PRIMARY KEY, name VARCHAR(100), email VARCHAR(100), created_at TIMESTAMP DEFAULT NOW());
-        CREATE TABLE IF NOT EXISTS public.orders (id SERIAL PRIMARY KEY, user_id INT, amount DECIMAL(10,2), created_at TIMESTAMP DEFAULT NOW());
-        CREATE TABLE IF NOT EXISTS public.products (id SERIAL PRIMARY KEY, name VARCHAR(100), price DECIMAL(10,2), created_at TIMESTAMP DEFAULT NOW());
-        ALTER TABLE public.users REPLICA IDENTITY FULL;
-        ALTER TABLE public.orders REPLICA IDENTITY FULL;
-        ALTER TABLE public.products REPLICA IDENTITY FULL;
-        GRANT SELECT ON ALL TABLES IN SCHEMA public TO {{ pg_replication_user }};
-        EOF
+          psql -U postgres -d "{{ pg_database }}" -c "
+            CREATE SCHEMA IF NOT EXISTS public;
+            CREATE TABLE IF NOT EXISTS public.users (
+              id SERIAL PRIMARY KEY, name VARCHAR(100), email VARCHAR(100), created_at TIMESTAMP DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS public.orders (
+              id SERIAL PRIMARY KEY, user_id INT, amount DECIMAL(10,2), created_at TIMESTAMP DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS public.products (
+              id SERIAL PRIMARY KEY, name VARCHAR(100), price DECIMAL(10,2), created_at TIMESTAMP DEFAULT NOW()
+            );
+            ALTER TABLE public.users ADD COLUMN IF NOT EXISTS email VARCHAR(100);
+            ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
+            ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
+            ALTER TABLE public.products ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
+            DO \$seq_fix\$
+            BEGIN
+              IF NOT EXISTS (SELECT 1 FROM pg_sequences WHERE sequencename = 'users_id_seq') THEN
+                CREATE SEQUENCE users_id_seq;
+                ALTER TABLE public.users ALTER COLUMN id SET DEFAULT nextval('users_id_seq');
+                PERFORM setval('users_id_seq', COALESCE((SELECT MAX(id) FROM public.users), 0) + 1, false);
+              END IF;
+              IF NOT EXISTS (SELECT 1 FROM pg_sequences WHERE sequencename = 'orders_id_seq') THEN
+                CREATE SEQUENCE orders_id_seq;
+                ALTER TABLE public.orders ALTER COLUMN id SET DEFAULT nextval('orders_id_seq');
+                PERFORM setval('orders_id_seq', COALESCE((SELECT MAX(id) FROM public.orders), 0) + 1, false);
+              END IF;
+              IF NOT EXISTS (SELECT 1 FROM pg_sequences WHERE sequencename = 'products_id_seq') THEN
+                CREATE SEQUENCE products_id_seq;
+                ALTER TABLE public.products ALTER COLUMN id SET DEFAULT nextval('products_id_seq');
+                PERFORM setval('products_id_seq', COALESCE((SELECT MAX(id) FROM public.products), 0) + 1, false);
+              END IF;
+            END;
+            \$seq_fix\$;
+            ALTER TABLE public.users REPLICA IDENTITY FULL;
+            ALTER TABLE public.orders REPLICA IDENTITY FULL;
+            ALTER TABLE public.products REPLICA IDENTITY FULL;
+            GRANT SELECT ON ALL TABLES IN SCHEMA public TO {{ pg_replication_user }};
+          " 2>&1
+
+    - name: Grant replication user CONNECT on the CDC database
+      shell: |
+        docker exec -e PGPASSWORD="{{ PG_SUPERUSER_PASSWORD }}" "{{ pg_container_name }}" \
+          psql -U postgres -c "GRANT CONNECT ON DATABASE {{ pg_database }} TO {{ pg_replication_user }};" 2>&1 || true
+
+    - name: Create logical replication publication (idempotent)
+      shell: |
+        docker exec -e PGPASSWORD="{{ PG_SUPERUSER_PASSWORD }}" "{{ pg_container_name }}" \
+          psql -U postgres -d "{{ pg_database }}" -c "
+            DO \$\$
+            BEGIN
+              IF NOT EXISTS (
+                SELECT 1 FROM pg_publication WHERE pubname = '{{ debezium_publication_name }}'
+              ) THEN
+                EXECUTE 'CREATE PUBLICATION {{ debezium_publication_name }} FOR ALL TABLES';
+              END IF;
+            END;
+            \$\$;" 2>&1
+
+    - name: Create logical replication slot for Debezium (idempotent)
+      shell: |
+        docker exec -e PGPASSWORD="{{ PG_SUPERUSER_PASSWORD }}" "{{ pg_container_name }}" \
+          psql -U postgres -d "{{ pg_database }}" -c "
+            SELECT pg_create_logical_replication_slot('{{ debezium_slot_name }}', 'pgoutput')
+            WHERE NOT EXISTS (
+              SELECT 1 FROM pg_replication_slots WHERE slot_name = '{{ debezium_slot_name }}'
+            );" 2>&1
 
     - name: Display PostgreSQL deployment status
       ansible.builtin.debug:

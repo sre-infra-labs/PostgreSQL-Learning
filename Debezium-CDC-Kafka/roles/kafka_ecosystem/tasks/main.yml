@@ -15,19 +15,35 @@
       retries: 2
       delay: 5
 
-    - name: Wait for services to start
-      pause:
-        seconds: 20
+    - name: Wait for Kafka broker to be ready
+      shell: |
+        for i in $(seq 1 30); do
+          docker exec tmp-kafka-1 kafka-topics --bootstrap-server localhost:9092 --list >/dev/null 2>&1 && exit 0
+          sleep 2
+        done
+        exit 1
+      retries: 2
+      delay: 5
 
     - name: Create Kafka topics
       shell: |
-        docker exec -i kafka kafka-topics.sh --create \
+        docker exec tmp-kafka-1 kafka-topics --create \
           --bootstrap-server localhost:9092 \
           --topic "{{ item.name }}" \
           --partitions {{ item.partitions }} \
           --replication-factor {{ item.replication_factor }} \
           --if-not-exists 2>&1 || true
       loop: "{{ kafka_topics }}"
+
+    - name: Wait for Debezium Connect REST API to be ready
+      shell: |
+        for i in $(seq 1 30); do
+          curl -sf http://localhost:{{ debezium_host_mapping_port }}/ >/dev/null 2>&1 && exit 0
+          sleep 2
+        done
+        exit 1
+      retries: 2
+      delay: 5
 
     - name: Display Kafka Ecosystem deployment success
       debug:

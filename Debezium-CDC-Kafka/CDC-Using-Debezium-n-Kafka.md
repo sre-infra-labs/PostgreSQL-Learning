@@ -6,7 +6,7 @@
 
 Change Data Capture (CDC) is a design pattern that captures data changes at the source and propagates them to downstream systems in real-time. This document explains the CDC architecture using Debezium and Kafka with PostgreSQL as the source database.
 
-**Updated**: 2026-05-10 (Complete working deployment with step-by-step instructions)
+**Updated**: 2026-05-11
 
 ## Architecture
 
@@ -44,8 +44,8 @@ wal_level = logical
 -- Create publication (what to capture)
 CREATE PUBLICATION dbz_publication FOR ALL TABLES;
 
--- Create replication slot (where to capture from)
-SELECT * FROM pg_create_logical_replication_slot('debezium', 'pgoutput');
+-- Create replication slot (where to capture from; name must match connector slot.name)
+SELECT * FROM pg_create_logical_replication_slot('debezium_slot', 'pgoutput');
 
 -- Set REPLICA IDENTITY on tables (needed for updates/deletes)
 ALTER TABLE table_name REPLICA IDENTITY FULL;
@@ -78,22 +78,24 @@ Debezium is a distributed platform that captures changes from databases.
 4. Converts database events to Kafka messages
 5. Publishes to Kafka topics (one per table)
 
-**Connector Configuration:**
+**Connector Configuration (actual values used in this project):**
 ```json
 {
   "name": "postgres-cdc-connector",
   "config": {
     "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
-    "database.server.name": "postgres-cdc",
     "database.hostname": "postgres-cdc",
-    "database.port": 5432,
+    "database.port": "5432",
     "database.user": "replication",
     "database.password": "***",
     "database.dbname": "cdc_db",
+    "database.server.name": "postgres-cdc",
+    "topic.prefix": "postgres-cdc",
     "plugin.name": "pgoutput",
     "publication.name": "dbz_publication",
-    "slot.name": "debezium",
-    "topic.prefix": "postgres-cdc"
+    "slot.name": "debezium_slot",
+    "table.include.list": "public.users,public.orders,public.products",
+    "snapshot.mode": "initial"
   }
 }
 ```
@@ -106,10 +108,15 @@ Kafka acts as the **message broker** that:
 - Allows multiple consumers to read independently
 - Provides event history and replay capability
 
-**Topics Created:**
-- `postgres.public.users` - Changes to users table
-- `postgres.public.orders` - Changes to orders table
-- `postgres.public.products` - Changes to products table
+**Topics Created (format: `{topic.prefix}.{schema}.{table}`):**
+- `postgres-cdc.public.users` - Changes to users table
+- `postgres-cdc.public.orders` - Changes to orders table
+- `postgres-cdc.public.products` - Changes to products table
+
+**Internal Debezium topics (bookkeeping, not CDC data):**
+- `my_connect_configs` - Connector configuration storage
+- `my_connect_offsets` - Tracks which WAL positions have been consumed
+- `my_connect_statuses` - Connector/task status information
 
 Each topic stores 3 types of messages:
 - **INSERT** - New row created
@@ -207,18 +214,30 @@ services:
 
 ### Credentials
 
+Passwords are stored in the Ansible Vault. Fetch them with:
+
+```bash
+# View all credentials
+ansible-vault view sensitive-values --vault-password-file=vault-pass
+
+# Extract individual passwords into shell variables
+export PG_SUPERUSER_PASSWORD=$(ansible-vault view sensitive-values --vault-password-file=vault-pass | grep PG_SUPERUSER_PASSWORD | awk '{print $2}' | tr -d '"')
+export PG_REPLICATION_PASSWORD=$(ansible-vault view sensitive-values --vault-password-file=vault-pass | grep PG_REPLICATION_PASSWORD | awk '{print $2}' | tr -d '"')
+export PGADMIN_DEFAULT_PASSWORD=$(ansible-vault view sensitive-values --vault-password-file=vault-pass | grep PGADMIN_DEFAULT_PASSWORD | awk '{print $2}' | tr -d '"')
+```
+
 ```
 PostgreSQL:
   - Host: localhost, Port: 5433
-  - Admin User: postgres, Password: MyHighlySecurePassword
+  - Admin User: postgres, Password: $PG_SUPERUSER_PASSWORD
   - Database: cdc_db
-  - Replication User: replication, Password: MyHighlySecurePassword
-  - App User: cdc_app, Password: MyHighlySecurePassword
+  - Replication User: replication, Password: $PG_REPLICATION_PASSWORD
+  - App User: cdc_app, Password: $PG_APP_USER_PASSWORD
 
 pgAdmin:
   - URL: http://localhost:5050
   - Email: admin@cdc-learning.local
-  - Password: MyHighlySecurePassword
+  - Password: $PGADMIN_DEFAULT_PASSWORD
 ```
 
 ## Step-by-Step: Deploy Everything
@@ -341,48 +360,54 @@ EOF
 
 ### Step 7: Create Debezium PostgreSQL Connector (CRITICAL - Enables CDC)
 
-**This is the key step that connects Debezium to PostgreSQL and enables CDC:**
+**This is the key step that connects Debezium to PostgreSQL and enables CDC.**
+
+> **Note**: The Ansible playbook (`playbook-deploy-all.yml`) registers this connector automatically in its `post_tasks` block. Run the manual command below only if you need to re-register it after deletion.
 
 ```bash
-# Save this to a file for easy reuse
-cat > /tmp/debezium-postgres-connector.json << 'EOF'
-{
-  "name": "postgres-cdc-connector",
-  "config": {
-    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
-    "database.hostname": "postgres-cdc",
-    "database.port": "5432",
-    "database.user": "replication",
-    "database.password": "MyHighlySecurePassword",
-    "database.dbname": "cdc_db",
-    "database.server.name": "postgres",
-    "plugin.name": "pgoutput",
-    "publication.name": "dbz_publication",
-    "slot.name": "debezium_slot",
-    "table.include.list": "public.users,public.orders,public.products",
-    "topic.prefix": "postgres",
-    "snapshot.mode": "initial",
-    "transforms": "route",
-    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
-    "transforms.route.regex": "([^.]+)\\.([^.]+)\\.([^.]+)",
-    "transforms.route.replacement": "$1.$2.$3"
-  }
-}
-EOF
+# Fetch replication password from vault at runtime (never hardcode!)
+PG_REPLICATION_PASSWORD=$(ansible-vault view sensitive-values --vault-password-file=vault-pass \
+  | grep PG_REPLICATION_PASSWORD | awk '{print $2}' | tr -d '"')
 
-# Create the connector
+# Delete existing connector if present (so re-runs apply fresh config)
+curl -sf -X DELETE http://localhost:8083/connectors/postgres-cdc-connector 2>/dev/null || true
+sleep 2
+
+# Register the connector
 curl -X POST http://localhost:8083/connectors \
-  -H "Content-Type: application/json" \
-  -d @/tmp/debezium-postgres-connector.json
+  -H 'Content-Type: application/json' \
+  -d "{
+    \"name\": \"postgres-cdc-connector\",
+    \"config\": {
+      \"connector.class\": \"io.debezium.connector.postgresql.PostgresConnector\",
+      \"database.hostname\": \"postgres-cdc\",
+      \"database.port\": \"5432\",
+      \"database.user\": \"replication\",
+      \"database.password\": \"${PG_REPLICATION_PASSWORD}\",
+      \"database.dbname\": \"cdc_db\",
+      \"database.server.name\": \"postgres-cdc\",
+      \"topic.prefix\": \"postgres-cdc\",
+      \"plugin.name\": \"pgoutput\",
+      \"publication.name\": \"dbz_publication\",
+      \"slot.name\": \"debezium_slot\",
+      \"table.include.list\": \"public.users,public.orders,public.products\",
+      \"snapshot.mode\": \"initial\"
+    }
+  }"
 
-# Expected response:
-# {
-#   "name": "postgres-cdc-connector",
-#   "config": { ... },
-#   "tasks": [],
-#   "type": "source"
-# }
+# Expected response: JSON with "type":"source" and "tasks":[]
+# The connector goes RUNNING within ~5 seconds
 ```
+
+**Key configuration values explained:**
+| Key | Value | Why |
+|-----|-------|-----|
+| `database.hostname` | `postgres-cdc` | Docker container name (resolves via Docker DNS) |
+| `topic.prefix` | `postgres-cdc` | Prefixes all CDC topic names: `postgres-cdc.public.users` |
+| `plugin.name` | `pgoutput` | Built-in PostgreSQL logical decoding plugin (no extra install needed) |
+| `slot.name` | `debezium_slot` | Name of the replication slot that tracks WAL position |
+| `publication.name` | `dbz_publication` | PostgreSQL publication listing which tables to capture |
+| `snapshot.mode` | `initial` | Reads all existing rows first, then switches to streaming changes |
 
 ### Step 8: Verify Connector Was Created Successfully
 
@@ -404,15 +429,22 @@ curl -s http://localhost:8083/connectors/postgres-cdc-connector/tasks | jq .
 ### Step 9: Verify Kafka Topics Were Created
 
 ```bash
-# Using docker command
-docker exec tmp-kafka-1 bash -c \
-  'ls /opt/kafka/bin/kafka-topics.sh && /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server localhost:9092'
+# List all Kafka topics
+docker exec tmp-kafka-1 kafka-topics --list --bootstrap-server localhost:9092
 
-# Expected topics:
-# postgres.public.users
-# postgres.public.orders
-# postgres.public.products
-# (plus internal Debezium topics: connect-*, _schemas, etc.)
+# Expected topics (6 total):
+# __consumer_offsets        ← internal Kafka bookkeeping
+# my_connect_configs        ← Debezium stores connector configs here
+# my_connect_offsets        ← Debezium tracks WAL read position here
+# my_connect_statuses       ← Debezium connector/task health here
+# postgres-cdc.public.users     ← CDC events for the users table
+# postgres-cdc.public.orders    ← CDC events for the orders table
+# postgres-cdc.public.products  ← CDC events for the products table
+
+# Check message count in each CDC topic (should be > 0 after snapshot)
+docker exec tmp-kafka-1 kafka-run-class kafka.tools.GetOffsetShell \
+  --broker-list localhost:9092 --topic postgres-cdc.public.users --time -1
+# Expected: postgres-cdc.public.users:0:<N>  where N = number of rows snapshotted
 ```
 
 ### Step 10: Insert Test Data into PostgreSQL
@@ -420,33 +452,33 @@ docker exec tmp-kafka-1 bash -c \
 Now insert data and watch it flow through CDC:
 
 ```bash
-# Connect to PostgreSQL and insert test data
-docker exec postgres-cdc psql -U postgres -d cdc_db << 'EOF'
+# Table schemas (id SERIAL auto-generates; email/created_at have defaults):
+# users    : id (auto), name VARCHAR(100), email VARCHAR(100), created_at TIMESTAMP
+# orders   : id (auto), user_id INT, amount DECIMAL(10,2), created_at TIMESTAMP
+# products : id (auto), name VARCHAR(100), price DECIMAL(10,2), created_at TIMESTAMP
 
--- Insert test users
-INSERT INTO public.users (name, email) VALUES
-  ('John Doe', 'john@example.com'),
-  ('Jane Smith', 'jane@example.com'),
-  ('Bob Johnson', 'bob@example.com');
+# Insert test users
+docker exec postgres-cdc psql -U postgres -d cdc_db \
+  -c "INSERT INTO public.users (name, email) VALUES
+        ('John Doe', 'john@example.com'),
+        ('Jane Smith', 'jane@example.com'),
+        ('Bob Johnson', 'bob@example.com');"
 
--- Insert test orders
-INSERT INTO public.orders (user_id, amount) VALUES
-  (1, 99.99),
-  (2, 149.50),
-  (1, 75.25);
+# Insert test products
+docker exec postgres-cdc psql -U postgres -d cdc_db \
+  -c "INSERT INTO public.products (name, price) VALUES
+        ('Laptop', 999.99), ('Mouse', 29.99), ('Keyboard', 79.99);"
 
--- Insert test products
-INSERT INTO public.products (name, price) VALUES
-  ('Laptop', 999.99),
-  ('Mouse', 29.99),
-  ('Keyboard', 79.99);
+# Insert test orders (user_id references users.id)
+docker exec postgres-cdc psql -U postgres -d cdc_db \
+  -c "INSERT INTO public.orders (user_id, amount) VALUES
+        (1, 99.99), (2, 149.50), (1, 75.25);"
 
--- Verify data was inserted
-SELECT COUNT(*) as user_count FROM public.users;
-SELECT COUNT(*) as order_count FROM public.orders;
-SELECT COUNT(*) as product_count FROM public.products;
-
-EOF
+# Verify row counts
+docker exec postgres-cdc psql -U postgres -d cdc_db \
+  -c "SELECT 'users' AS tbl, COUNT(*) FROM public.users
+      UNION ALL SELECT 'orders', COUNT(*) FROM public.orders
+      UNION ALL SELECT 'products', COUNT(*) FROM public.products;"
 ```
 
 ### Step 11: View CDC Events in Kafka (Real-time Data Capture)
@@ -459,93 +491,214 @@ open http://localhost:8080
 
 # In the UI:
 # 1. Click on "Topics" in left menu
-# 2. Select "postgres.public.users"
-# 3. Click on partition "0"
+# 2. Select "postgres-cdc.public.users"
+# 3. Click "Messages" tab at the top
 # 4. Scroll through messages to see CDC events
 #
-# Each message contains:
-# - "op": "c" (create/insert), "u" (update), "d" (delete)
-# - "before": Previous row values (for update/delete)
-# - "after": New row values (for insert/update)
-# - "source": PostgreSQL metadata (LSN, transaction ID, etc.)
+# Each message key = row primary key (JSON)
+# Each message value = CDC envelope with:
+# - "op": "r" (read/snapshot), "c" (create), "u" (update), "d" (delete)
+# - "before": Previous row values (for update/delete; null for insert)
+# - "after": New row values (for insert/update; null for delete)
+# - "source": PostgreSQL metadata (table, LSN, transaction ID, timestamp)
 ```
 
 **Option B: Using Command Line**
 
 ```bash
-# View messages from users topic (from the beginning)
-docker exec tmp-kafka-1 bash -c \
-  '/opt/kafka/bin/kafka-console-consumer.sh \
-    --bootstrap-server localhost:9092 \
-    --topic postgres.public.users \
-    --from-beginning \
-    --property print.key=true \
-    --property print.value=true \
-    --property print.timestamp=true \
-    --max-messages 10'
+# View messages from users topic (from the beginning, max 5 messages)
+docker exec tmp-kafka-1 kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic postgres-cdc.public.users \
+  --from-beginning \
+  --max-messages 5
 
-# View messages from orders topic
-docker exec tmp-kafka-1 bash -c \
-  '/opt/kafka/bin/kafka-console-consumer.sh \
-    --bootstrap-server localhost:9092 \
-    --topic postgres.public.orders \
-    --from-beginning \
-    --property print.key=true \
-    --max-messages 10'
-
-# View messages from products topic
-docker exec tmp-kafka-1 bash -c \
-  '/opt/kafka/bin/kafka-console-consumer.sh \
-    --bootstrap-server localhost:9092 \
-    --topic postgres.public.products \
-    --from-beginning \
-    --max-messages 10'
+# Check message count without reading content
+docker exec tmp-kafka-1 kafka-run-class kafka.tools.GetOffsetShell \
+  --broker-list localhost:9092 --topic postgres-cdc.public.users --time -1
+# Output: postgres-cdc.public.users:0:<count>
 ```
 
 ### Step 12: Test Real-Time CDC - Insert New Data and Watch It Flow
 
 ```bash
-# Terminal 1: Start a Kafka consumer watching for new messages
-docker exec tmp-kafka-1 bash -c \
-  '/opt/kafka/bin/kafka-console-consumer.sh \
-    --bootstrap-server localhost:9092 \
-    --topic postgres.public.users \
-    --property print.key=true \
-    --property print.timestamp=true'
+# Terminal 1: Start a Kafka consumer watching for new messages (leave running)
+docker exec tmp-kafka-1 kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic postgres-cdc.public.users
 
 # Terminal 2: Insert new data into PostgreSQL
-# The Kafka consumer in Terminal 1 will show the CDC event in real-time!
+# The Kafka consumer in Terminal 1 will show the CDC event within ~1 second!
 docker exec postgres-cdc psql -U postgres -d cdc_db \
   -c "INSERT INTO public.users (name, email) VALUES ('New User', 'newuser@example.com');"
 
 # You should see a new message appear in Terminal 1 with:
-# - Operation: "c" (create)
-# - After: {"id": 4, "name": "New User", "email": "newuser@example.com", ...}
+# - "op": "c"  (create)
+# - "after": {"id": <N>, "name": "New User", "email": "newuser@example.com", ...}
+# - "before": null  (nothing existed before)
 ```
 
 ### Step 13: Test UPDATE and DELETE Operations
 
 ```bash
-# Update a user record
-docker exec postgres-cdc psql -U postgres -d cdc_db << 'EOF'
-UPDATE public.users SET email = 'newemail@example.com' WHERE id = 1;
-EOF
+# UPDATE: change a user's email
+docker exec postgres-cdc psql -U postgres -d cdc_db \
+  -c "UPDATE public.users SET email = 'newemail@example.com' WHERE name = 'John Doe';"
 
-# You'll see a message in Kafka with:
-# - Operation: "u" (update)
-# - Before: {"id": 1, "name": "John Doe", "email": "john@example.com", ...}
-# - After: {"id": 1, "name": "John Doe", "email": "newemail@example.com", ...}
+# In Kafka Terminal, you'll see a message with:
+# - "op": "u"  (update)
+# - "before": {"name": "John Doe", "email": "john@example.com", ...}
+# - "after":  {"name": "John Doe", "email": "newemail@example.com", ...}
+# Note: "before" is populated because REPLICA IDENTITY FULL is set on the table
 
-# Delete a user record
-docker exec postgres-cdc psql -U postgres -d cdc_db << 'EOF'
-DELETE FROM public.users WHERE id = 4;
-EOF
+# DELETE: remove a user
+docker exec postgres-cdc psql -U postgres -d cdc_db \
+  -c "DELETE FROM public.users WHERE name = 'New User';"
 
-# You'll see a message in Kafka with:
-# - Operation: "d" (delete)
-# - Before: {"id": 4, "name": "New User", "email": "newuser@example.com", ...}
-# - After: null
+# In Kafka Terminal:
+# - "op": "d"  (delete)
+# - "before": {"name": "New User", "email": "newuser@example.com", ...}
+# - "after": null  (row no longer exists)
 ```
+
+## Steps to Explore CDC (Hands-on Walkthrough)
+
+This section guides you through the live CDC experience step by step. You will do an action in PostgreSQL, then see it immediately appear in Kafka — that is CDC in action.
+
+### Explore Step 1 — Open the GUI Tools
+
+Open these three URLs in your browser:
+
+| Tool | URL | What You See |
+|------|-----|-------------|
+| **Kafka UI** | http://localhost:8080 | Topic list, message browser, consumer groups |
+| **pgAdmin** | http://localhost:5050 | Database browser, query editor, replication status |
+| **Debezium REST** | http://localhost:8083/connectors | Returns `["postgres-cdc-connector"]` |
+
+In **Kafka UI** → click **Topics** in the left menu. You should see 7 topics including `postgres-cdc.public.users`, `postgres-cdc.public.orders`, `postgres-cdc.public.products`.
+
+### Explore Step 2 — Inspect an Existing CDC Message
+
+In **Kafka UI**:
+1. Click `postgres-cdc.public.users` → **Messages** tab
+2. You'll see JSON messages already there from the initial snapshot (the rows that existed when Debezium first connected)
+3. Each message key = `{"schema":...,"payload":{"id":<N>}}` (the primary key)
+4. Each message value contains a `payload` object with:
+   - `"op": "r"` = read (initial snapshot)
+   - `"before": null` (snapshot has no "before")
+   - `"after": {"id":1, "name":"...", "email":"...", ...}` (current row data)
+   - `"source": {"table":"users", "lsn":12345, ...}` (where in WAL this came from)
+
+### Explore Step 3 — Trigger a Live INSERT
+
+Open **two terminals** side by side:
+
+**Terminal 1** (watch Kafka in real-time):
+```bash
+docker exec tmp-kafka-1 kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic postgres-cdc.public.users
+```
+Leave this running.
+
+**Terminal 2** (insert into PostgreSQL):
+```bash
+docker exec postgres-cdc psql -U postgres -d cdc_db \
+  -c "INSERT INTO public.users (name, email) VALUES ('Charlie Brown', 'charlie@example.com');"
+```
+
+Within ~1 second, Terminal 1 shows a JSON message. Look for `"op":"c"` (create). The `"after"` field has the new row. `"before"` is `null`.
+
+### Explore Step 4 — Trigger an UPDATE and See Before/After
+
+In **Terminal 2**:
+```bash
+docker exec postgres-cdc psql -U postgres -d cdc_db \
+  -c "UPDATE public.users SET email = 'charlie.updated@example.com' WHERE name = 'Charlie Brown';"
+```
+
+Terminal 1 now shows `"op":"u"` (update):
+- `"before"` → the OLD email `charlie@example.com`
+- `"after"` → the NEW email `charlie.updated@example.com`
+
+> **Why do we see "before"?** Because `ALTER TABLE public.users REPLICA IDENTITY FULL` was set. Without this, `"before"` would be null on UPDATE.
+
+### Explore Step 5 — Trigger a DELETE
+
+```bash
+docker exec postgres-cdc psql -U postgres -d cdc_db \
+  -c "DELETE FROM public.users WHERE name = 'Charlie Brown';"
+```
+
+Terminal 1 shows `"op":"d"` (delete):
+- `"before"` → the deleted row's data
+- `"after"` → `null` (it's gone)
+
+### Explore Step 6 — Verify the Replication Slot Advances
+
+Each time Debezium reads WAL changes and commits them to Kafka, the replication slot position advances. You can watch this:
+
+```bash
+docker exec postgres-cdc psql -U postgres -d cdc_db \
+  -c "SELECT slot_name, active, confirmed_flush_lsn, restart_lsn
+      FROM pg_replication_slots;"
+```
+
+`confirmed_flush_lsn` increases after each batch of changes. A stuck LSN means Debezium stopped consuming.
+
+### Explore Step 7 — Check Message Count from CLI
+
+```bash
+# How many messages are in the users topic?
+docker exec tmp-kafka-1 kafka-run-class kafka.tools.GetOffsetShell \
+  --broker-list localhost:9092 --topic postgres-cdc.public.users --time -1
+# Output: postgres-cdc.public.users:0:<count>
+
+# Read the last 5 messages in raw JSON
+docker exec tmp-kafka-1 kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic postgres-cdc.public.users \
+  --from-beginning --max-messages 5
+```
+
+### Explore Step 8 — Check Debezium Consumer Group Lag
+
+Debezium is a Kafka consumer itself (it writes to Kafka, but also reads internal topics). Check its lag:
+
+```bash
+# List consumer groups
+docker exec tmp-kafka-1 kafka-consumer-groups \
+  --bootstrap-server localhost:9092 --list
+
+# Describe the main connect group (lag should be 0 = fully caught up)
+docker exec tmp-kafka-1 kafka-consumer-groups \
+  --bootstrap-server localhost:9092 \
+  --describe --group connect-cluster
+```
+
+A `LAG` of `0` means Debezium has processed all changes. A growing `LAG` means Debezium is falling behind.
+
+### Explore Step 9 — Add a New Table and Watch it Get Captured Automatically
+
+The connector uses `publication.name: dbz_publication` which was created as `FOR ALL TABLES`. This means **any new table automatically gets captured** — no connector restart needed.
+
+```bash
+# Create a new table in PostgreSQL
+docker exec postgres-cdc psql -U postgres -d cdc_db -c "
+  CREATE TABLE IF NOT EXISTS public.inventory (
+    id SERIAL PRIMARY KEY,
+    item VARCHAR(100),
+    qty INT,
+    updated_at TIMESTAMP DEFAULT NOW()
+  );
+  ALTER TABLE public.inventory REPLICA IDENTITY FULL;
+  INSERT INTO public.inventory (item, qty) VALUES ('Pencil', 100), ('Notebook', 50);
+"
+```
+
+In **Kafka UI** → Topics → refresh. You'll see `postgres-cdc.public.inventory` appear automatically with 2 messages. No configuration change was needed.
+
+---
 
 ## Key Concepts
 
@@ -669,21 +822,33 @@ curl -X POST http://localhost:8083/connectors/postgres-cdc-connector/restart
 
 ```bash
 # List all topics
-docker exec tmp-kafka-1 bash -c '/opt/kafka/bin/kafka-topics.sh --list --bootstrap-server localhost:9092'
+docker exec tmp-kafka-1 kafka-topics --list --bootstrap-server localhost:9092
 
-# Describe a topic
-docker exec tmp-kafka-1 bash -c '/opt/kafka/bin/kafka-topics.sh --describe --bootstrap-server localhost:9092 --topic postgres.public.users'
+# Describe a topic (partition count, replication, leader)
+docker exec tmp-kafka-1 kafka-topics --describe \
+  --bootstrap-server localhost:9092 --topic postgres-cdc.public.users
 
-# View message count
-docker exec tmp-kafka-1 bash -c '/opt/kafka/bin/kafka-run-class.sh kafka.tools.JmxTool --object-name kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions'
+# Check message count for each CDC topic
+docker exec tmp-kafka-1 kafka-run-class kafka.tools.GetOffsetShell \
+  --broker-list localhost:9092 --topic postgres-cdc.public.users --time -1
+docker exec tmp-kafka-1 kafka-run-class kafka.tools.GetOffsetShell \
+  --broker-list localhost:9092 --topic postgres-cdc.public.products --time -1
 
-# Consume messages from a topic (first 10 messages)
-docker exec tmp-kafka-1 bash -c \
-  '/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic postgres.public.users --from-beginning --max-messages 10'
+# Consume messages from beginning (max 10)
+docker exec tmp-kafka-1 kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic postgres-cdc.public.users \
+  --from-beginning \
+  --max-messages 10
 
-# Consume only new messages (follow mode)
-docker exec tmp-kafka-1 bash -c \
-  '/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic postgres.public.users'
+# Consume only NEW messages (live follow mode; Ctrl+C to stop)
+docker exec tmp-kafka-1 kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic postgres-cdc.public.users
+
+# Check consumer group lag
+docker exec tmp-kafka-1 kafka-consumer-groups \
+  --bootstrap-server localhost:9092 --describe --group connect-cluster
 ```
 
 ## Troubleshooting Guide
@@ -778,13 +943,39 @@ docker exec postgres-cdc psql -U postgres -d cdc_db -c \
 docker stats tmp-debezium-connect-1
 
 # 4. Check Kafka broker lag
-docker exec tmp-kafka-1 bash -c \
-  '/opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group connect-cluster'
+docker exec tmp-kafka-1 kafka-consumer-groups \
+  --bootstrap-server localhost:9092 --describe --group connect-cluster
 
 # 5. Reduce connector task count or increase batch size (modify connector config)
 curl -X PATCH http://localhost:8083/connectors/postgres-cdc-connector/config \
   -H "Content-Type: application/json" \
   -d '{"snapshot.isolation.mode": "read_uncommitted"}'
+```
+
+### Debezium Can't Connect to Kafka (TimeoutException / NodeExistsException)
+
+**Symptom**: `Failed to connect to and describe Kafka cluster` or Kafka exits with `NodeExistsException`
+
+This happens when containers are restarted individually out of order. Zookeeper retains a stale broker registration from the previous Kafka run.
+
+**Fix - restart in correct order**:
+```bash
+# Step 1: Restart Zookeeper first (clears stale broker registration)
+docker restart tmp-zookeeper-1
+
+# Step 2: Wait for Zookeeper to be healthy, then start Kafka
+sleep 10
+docker start tmp-kafka-1
+
+# Step 3: Wait for Kafka to be healthy, then start Debezium
+sleep 15
+docker start tmp-debezium-connect-1
+
+# Verify all are up
+docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "zookeeper|kafka|debezium"
+
+# Verify Debezium connected successfully (look for "Herder started")
+docker logs --tail 20 tmp-debezium-connect-1 | grep -E "ERROR|Herder started|group coordinator"
 ```
 
 ### Network Connectivity Issues
@@ -833,8 +1024,8 @@ curl -s http://localhost:8083/connectors/postgres-cdc-connector/tasks/0/status |
   jq '.task_state.millis_behind_source'
 
 # Check Kafka consumer group lag
-docker exec tmp-kafka-1 bash -c \
-  '/opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group connect-cluster'
+docker exec tmp-kafka-1 kafka-consumer-groups \
+  --bootstrap-server localhost:9092 --describe --group connect-cluster
 
 # Monitor PostgreSQL WAL size
 docker exec postgres-cdc psql -U postgres -d cdc_db -c \
@@ -844,7 +1035,8 @@ docker exec postgres-cdc psql -U postgres -d cdc_db -c \
 ## Security Considerations
 
 **Current Setup (Development)**:
-- Credentials stored in Ansible Vault (encrypted with MyHighlySecurePassword)
+- Credentials stored in Ansible Vault (`sensitive-values`, encrypted with vault-pass)
+- View with: `ansible-vault view sensitive-values --vault-password-file=vault-pass`
 - Replication user has minimal required permissions
 - All ports bound to localhost (not exposed to network)
 - Network isolation via Docker network (cdc-network)
@@ -884,7 +1076,7 @@ Kafka Producer (sends to broker)
         ↓
 Kafka Broker (9092 internal, 29092 external)
         ↓
-Kafka Topics (postgres.public.users, orders, products)
+Kafka Topics (postgres-cdc.public.users, orders, products)
         ↓
 Kafka Consumers (applications, Kafka UI)
         ↓
@@ -920,52 +1112,52 @@ Downstream Systems (Analytics, Cache, Data Warehouse, etc.)
 ### Quick Start Summary
 
 ```bash
-# 1. Deploy everything
+# 1. Deploy everything (connector is registered automatically at the end)
 cd ~/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka
 ansible-playbook -i hosts.yml playbook-deploy-all.yml --vault-password-file=vault-pass
 
-# 2. Create Debezium connector
-curl -X POST http://localhost:8083/connectors \
-  -H "Content-Type: application/json" \
-  -d @/tmp/debezium-postgres-connector.json
+# 2. Verify connector is RUNNING
+curl -s http://localhost:8083/connectors/postgres-cdc-connector/status | python3 -m json.tool
 
 # 3. Insert test data
-docker exec postgres-cdc psql -U postgres -d cdc_db << 'EOF'
-INSERT INTO public.users (name, email) VALUES ('Test User', 'test@example.com');
-EOF
-
-# 4. View CDC events
-open http://localhost:8080  # Kafka UI
-# OR
-docker exec tmp-kafka-1 bash -c \
-  '/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic postgres.public.users --from-beginning'
-
-# 5. Test real-time CDC
-# In terminal 1, watch for messages:
-docker exec tmp-kafka-1 bash -c \
-  '/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic postgres.public.users'
-
-# In terminal 2, insert new data:
 docker exec postgres-cdc psql -U postgres -d cdc_db \
-  -c "INSERT INTO public.users (name, email) VALUES ('Another User', 'another@example.com');"
+  -c "INSERT INTO public.users (name, email) VALUES ('Test User', 'test@example.com');"
 
-# You'll see the CDC event appear in terminal 1 in real-time!
+# 4. View CDC events in browser
+open http://localhost:8080  # Kafka UI → Topics → postgres-cdc.public.users → Messages
+
+# 5. View CDC events from CLI
+docker exec tmp-kafka-1 kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic postgres-cdc.public.users \
+  --from-beginning --max-messages 5
+
+# 6. Live real-time demo (two terminals)
+# Terminal 1 - watch:
+docker exec tmp-kafka-1 kafka-console-consumer \
+  --bootstrap-server localhost:9092 --topic postgres-cdc.public.users
+
+# Terminal 2 - trigger:
+docker exec postgres-cdc psql -U postgres -d cdc_db \
+  -c "INSERT INTO public.users (name, email) VALUES ('Live User', 'live@example.com');"
+# → CDC event appears in Terminal 1 within ~1 second!
 ```
 
 ## Success Criteria
 
 You've successfully set up Debezium CDC when:
 
-✅ All 6 containers are running
-✅ Debezium connector shows "RUNNING" status
-✅ Kafka topics are created (postgres.public.users, orders, products)
-✅ Test data inserted appears in Kafka topics
-✅ Updates to PostgreSQL are reflected in Kafka in real-time
-✅ Kafka UI shows messages flowing through topics
-✅ No errors in Debezium, Kafka, or PostgreSQL logs
+✅ All 6 containers are running (`docker ps` shows postgres-cdc, tmp-kafka-1, tmp-zookeeper-1, tmp-debezium-connect-1, tmp-kafka-ui-1, pgadmin4-cdc)
+✅ Debezium connector shows `"state":"RUNNING"` (`curl http://localhost:8083/connectors/postgres-cdc-connector/status`)
+✅ Kafka topics exist: `postgres-cdc.public.users`, `postgres-cdc.public.orders`, `postgres-cdc.public.products`
+✅ Message count in topics is > 0 after initial snapshot
+✅ Inserting a row into PostgreSQL produces a new message in Kafka within ~1 second
+✅ UPDATE shows `"op":"u"` with both `"before"` and `"after"` populated
+✅ DELETE shows `"op":"d"` with `"before"` populated and `"after": null`
+✅ No errors in Debezium logs (`docker logs tmp-debezium-connect-1 | grep ERROR`)
 
 ---
 
-**Last Updated**: 2026-05-10 (Complete working deployment with all commands)
-**Status**: Production-Ready CDC Learning Infrastructure
-**Version**: 1.0 - Full Stack Deployment
+**Last Updated**: 2026-05-11 (Idempotent deployment, persistent volumes, full CDC exploration guide)
+**Status**: Working CDC Learning Infrastructure
+**Version**: 1.1 - Persistence, Idempotency, and Steps to Explore
