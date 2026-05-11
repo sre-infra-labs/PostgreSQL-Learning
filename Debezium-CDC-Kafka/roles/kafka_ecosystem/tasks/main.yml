@@ -7,6 +7,17 @@
         dest: /tmp/kafka-ecosystem-compose.yml
         mode: '0644'
 
+    - name: Remove old tmp-* containers if present (renamed to cdc-*)
+      shell: |
+        for c in tmp-zookeeper-1 tmp-kafka-1 tmp-debezium-connect-1 tmp-kafka-ui-1; do
+          if docker inspect "$c" >/dev/null 2>&1; then
+            docker stop "$c" 2>/dev/null || true
+            docker rm "$c"
+            echo "Removed $c"
+          fi
+        done
+      changed_when: false
+
     - name: Deploy Kafka Ecosystem services using docker-compose
       shell: |
         cd /tmp
@@ -18,7 +29,7 @@
     - name: Wait for Kafka broker to be ready
       shell: |
         for i in $(seq 1 30); do
-          docker exec tmp-kafka-1 kafka-topics --bootstrap-server localhost:9092 --list >/dev/null 2>&1 && exit 0
+          docker exec cdc-kafka kafka-topics --bootstrap-server localhost:9092 --list >/dev/null 2>&1 && exit 0
           sleep 2
         done
         exit 1
@@ -27,7 +38,7 @@
 
     - name: Create Kafka topics
       shell: |
-        docker exec tmp-kafka-1 kafka-topics --create \
+        docker exec cdc-kafka kafka-topics --create \
           --bootstrap-server localhost:9092 \
           --topic "{{ item.name }}" \
           --partitions {{ item.partitions }} \

@@ -1,6 +1,36 @@
 ---
 - name: pgAdmin Deployment
   block:
+    - name: Remove old pgadmin4-cdc container if present (renamed to {{ pgadmin_container_name }})
+      shell: |
+        OLD="pgadmin4-cdc"
+        if [ "{{ pgadmin_container_name }}" != "$OLD" ] && docker inspect "$OLD" >/dev/null 2>&1; then
+          docker stop "$OLD" 2>/dev/null || true
+          docker rm "$OLD"
+          echo "Removed $OLD"
+        fi
+      changed_when: false
+
+    - name: Remove pgAdmin container if it is on the wrong network
+      shell: |
+        STATE=$(docker inspect --format='{{ "{{" }}.State.Status{{ "}}" }}' "{{ pgadmin_container_name }}" 2>/dev/null || echo "missing")
+        if [ "$STATE" = "missing" ]; then
+          echo "missing"
+          exit 0
+        fi
+        ON_NET=$(docker inspect "{{ pgadmin_container_name }}" 2>/dev/null | \
+          python3 -c "import json,sys; d=json.load(sys.stdin)[0]; print('yes' if '{{ docker_network_name }}' in d['NetworkSettings']['Networks'] else 'no')")
+        if [ "$ON_NET" = "no" ]; then
+          docker stop "{{ pgadmin_container_name }}" 2>/dev/null || true
+          docker rm "{{ pgadmin_container_name }}"
+          echo "removed_for_network_migration"
+        else
+          echo "network_ok"
+        fi
+      register: pgadmin_network_check
+      failed_when: false
+      changed_when: "'removed_for_network_migration' in pgadmin_network_check.stdout"
+
     - name: Check pgAdmin container state
       shell: |
         docker inspect --format='{{ "{{" }}.State.Status{{ "}}" }}' "{{ pgadmin_container_name }}" 2>/dev/null || echo "missing"

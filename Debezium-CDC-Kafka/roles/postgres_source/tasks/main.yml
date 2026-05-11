@@ -21,6 +21,36 @@
         mode: '0644'
       register: pg_hba_changed
 
+    - name: Remove old postgres-cdc container if present (renamed to {{ pg_container_name }})
+      shell: |
+        OLD="postgres-cdc"
+        if [ "{{ pg_container_name }}" != "$OLD" ] && docker inspect "$OLD" >/dev/null 2>&1; then
+          docker stop "$OLD" 2>/dev/null || true
+          docker rm "$OLD"
+          echo "Removed $OLD"
+        fi
+      changed_when: false
+
+    - name: Remove PostgreSQL container if it is on the wrong network
+      shell: |
+        STATE=$(docker inspect --format='{{ "{{" }}.State.Status{{ "}}" }}' "{{ pg_container_name }}" 2>/dev/null || echo "missing")
+        if [ "$STATE" = "missing" ]; then
+          echo "missing"
+          exit 0
+        fi
+        ON_NET=$(docker inspect "{{ pg_container_name }}" 2>/dev/null | \
+          python3 -c "import json,sys; d=json.load(sys.stdin)[0]; print('yes' if '{{ docker_network_name }}' in d['NetworkSettings']['Networks'] else 'no')")
+        if [ "$ON_NET" = "no" ]; then
+          docker stop "{{ pg_container_name }}" 2>/dev/null || true
+          docker rm "{{ pg_container_name }}"
+          echo "removed_for_network_migration"
+        else
+          echo "network_ok"
+        fi
+      register: pg_network_check
+      failed_when: false
+      changed_when: "'removed_for_network_migration' in pg_network_check.stdout"
+
     - name: Check PostgreSQL container state
       shell: |
         docker inspect --format='{{ "{{" }}.State.Status{{ "}}" }}' "{{ pg_container_name }}" 2>/dev/null || echo "missing"

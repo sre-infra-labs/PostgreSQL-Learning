@@ -3,6 +3,7 @@ version: '3.8'
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
+    container_name: cdc-zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: {{ zk_listen_port }}
       ZOOKEEPER_TICK_TIME: 2000
@@ -23,6 +24,7 @@ services:
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
+    container_name: cdc-kafka
     depends_on:
       zookeeper:
         condition: service_started
@@ -46,6 +48,7 @@ services:
 
   debezium-connect:
     image: debezium/connect:2.4
+    container_name: cdc-debezium
     depends_on:
       - kafka
     environment:
@@ -61,6 +64,7 @@ services:
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
+    container_name: cdc-kafka-ui
     depends_on:
       - kafka
     environment:

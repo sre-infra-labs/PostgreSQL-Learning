@@ -58,7 +58,7 @@ ALTER TABLE table_name REPLICA IDENTITY FULL;
 ansible-vault view sensitive-values --vault-password-file=vault-pass
 
 # connect to postgresql using docker
-docker exec -it postgres-cdc bash
+docker exec -it cdc-postgres bash
 su - postgres
 psql
 
@@ -85,7 +85,7 @@ Debezium is a distributed platform that captures changes from databases.
   "name": "postgres-cdc-connector",
   "config": {
     "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
-    "database.hostname": "postgres-cdc",
+    "database.hostname": "cdc-postgres",
     "database.port": "5432",
     "database.user": "replication",
     "database.password": "***",
@@ -271,12 +271,12 @@ This deploys:
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 # Should show:
-# pgadmin4-cdc        Up ... 0.0.0.0:5050->80/tcp
-# postgres-cdc        Up ... 0.0.0.0:5433->5432/tcp
-# tmp-debezium-connect-1  Up ... 0.0.0.0:8083->8083/tcp
-# tmp-kafka-ui-1      Up ... 0.0.0.0:8080->8080/tcp
-# tmp-kafka-1         Up ... 0.0.0.0:29092->9092/tcp
-# tmp-zookeeper-1     Up ... 0.0.0.0:2181->2181/tcp
+# cdc-pgadmin         Up ... 0.0.0.0:5050->80/tcp
+# cdc-postgres        Up ... 0.0.0.0:5433->5432/tcp
+# cdc-debezium        Up ... 0.0.0.0:8083->8083/tcp
+# cdc-kafka-ui        Up ... 0.0.0.0:8080->8080/tcp
+# cdc-kafka           Up ... 0.0.0.0:29092->9092/tcp
+# cdc-zookeeper       Up ... 0.0.0.0:2181->2181/tcp
 ```
 
 ## Step-by-Step: Connect Debezium to PostgreSQL (Complete CDC Setup)
@@ -285,14 +285,14 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 ```bash
 # Test PostgreSQL connectivity
-docker exec postgres-cdc psql -U postgres -d cdc_db \
+docker exec cdc-postgres psql -U postgres -d cdc_db \
   -c "SELECT version();"
 
 # Expected output:
 # PostgreSQL 15.17 (Debian 15.17-1.pgdg13+1) ...
 
 # Verify logical replication is enabled
-docker exec postgres-cdc psql -U postgres -d cdc_db \
+docker exec cdc-postgres psql -U postgres -d cdc_db \
   -c "SHOW wal_level;"
 
 # Expected output: logical
@@ -302,11 +302,11 @@ docker exec postgres-cdc psql -U postgres -d cdc_db \
 
 ```bash
 # View replication user
-docker exec postgres-cdc psql -U postgres -d cdc_db \
+docker exec cdc-postgres psql -U postgres -d cdc_db \
   -c "SELECT usename, usecanlogin, usereplication FROM pg_user WHERE usename='replication';"
 
 # View test tables
-docker exec postgres-cdc psql -U postgres -d cdc_db \
+docker exec cdc-postgres psql -U postgres -d cdc_db \
   -c "SELECT table_name FROM information_schema.tables WHERE table_schema='public';"
 
 # Expected tables:
@@ -333,7 +333,7 @@ curl -s http://localhost:8083/connectors | jq .
 
 ```bash
 # Connect to PostgreSQL
-docker exec postgres-cdc psql -U postgres -d cdc_db << 'EOF'
+docker exec cdc-postgres psql -U postgres -d cdc_db << 'EOF'
 
 -- Create publication (defines what to replicate)
 CREATE PUBLICATION dbz_publication FOR ALL TABLES;
@@ -381,7 +381,7 @@ curl -X POST http://localhost:8083/connectors \
     \"name\": \"postgres-cdc-connector\",
     \"config\": {
       \"connector.class\": \"io.debezium.connector.postgresql.PostgresConnector\",
-      \"database.hostname\": \"postgres-cdc\",
+      \"database.hostname\": \"cdc-postgres\",
       \"database.port\": \"5432\",
       \"database.user\": \"replication\",
       \"database.password\": \"${PG_REPLICATION_PASSWORD}\",
@@ -403,7 +403,7 @@ curl -X POST http://localhost:8083/connectors \
 **Key configuration values explained:**
 | Key | Value | Why |
 |-----|-------|-----|
-| `database.hostname` | `postgres-cdc` | Docker container name (resolves via Docker DNS) |
+| `database.hostname` | `cdc-postgres` | Docker container name (resolves via Docker DNS) |
 | `topic.prefix` | `postgres-cdc` | Prefixes all CDC topic names: `postgres-cdc.public.users` |
 | `plugin.name` | `pgoutput` | Built-in PostgreSQL logical decoding plugin (no extra install needed) |
 | `slot.name` | `debezium_slot` | Name of the replication slot that tracks WAL position |
@@ -431,7 +431,7 @@ curl -s http://localhost:8083/connectors/postgres-cdc-connector/tasks | jq .
 
 ```bash
 # List all Kafka topics
-docker exec tmp-kafka-1 kafka-topics --list --bootstrap-server localhost:9092
+docker exec cdc-kafka kafka-topics --list --bootstrap-server localhost:9092
 
 # Expected topics (6 total):
 # __consumer_offsets        ← internal Kafka bookkeeping
@@ -443,7 +443,7 @@ docker exec tmp-kafka-1 kafka-topics --list --bootstrap-server localhost:9092
 # postgres-cdc.public.products  ← CDC events for the products table
 
 # Check message count in each CDC topic (should be > 0 after snapshot)
-docker exec tmp-kafka-1 kafka-run-class kafka.tools.GetOffsetShell \
+docker exec cdc-kafka kafka-run-class kafka.tools.GetOffsetShell \
   --broker-list localhost:9092 --topic postgres-cdc.public.users --time -1
 # Expected: postgres-cdc.public.users:0:<N>  where N = number of rows snapshotted
 ```
@@ -459,24 +459,24 @@ Now insert data and watch it flow through CDC:
 # products : id (auto), name VARCHAR(100), price DECIMAL(10,2), created_at TIMESTAMP
 
 # Insert test users
-docker exec postgres-cdc psql -U postgres -d cdc_db \
+docker exec cdc-postgres psql -U postgres -d cdc_db \
   -c "INSERT INTO public.users (name, email) VALUES
         ('John Doe', 'john@example.com'),
         ('Jane Smith', 'jane@example.com'),
         ('Bob Johnson', 'bob@example.com');"
 
 # Insert test products
-docker exec postgres-cdc psql -U postgres -d cdc_db \
+docker exec cdc-postgres psql -U postgres -d cdc_db \
   -c "INSERT INTO public.products (name, price) VALUES
         ('Laptop', 999.99), ('Mouse', 29.99), ('Keyboard', 79.99);"
 
 # Insert test orders (user_id references users.id)
-docker exec postgres-cdc psql -U postgres -d cdc_db \
+docker exec cdc-postgres psql -U postgres -d cdc_db \
   -c "INSERT INTO public.orders (user_id, amount) VALUES
         (1, 99.99), (2, 149.50), (1, 75.25);"
 
 # Verify row counts
-docker exec postgres-cdc psql -U postgres -d cdc_db \
+docker exec cdc-postgres psql -U postgres -d cdc_db \
   -c "SELECT 'users' AS tbl, COUNT(*) FROM public.users
       UNION ALL SELECT 'orders', COUNT(*) FROM public.orders
       UNION ALL SELECT 'products', COUNT(*) FROM public.products;"
@@ -508,14 +508,14 @@ open http://localhost:8080
 
 ```bash
 # View messages from users topic (from the beginning, max 5 messages)
-docker exec tmp-kafka-1 kafka-console-consumer \
+docker exec cdc-kafka kafka-console-consumer \
   --bootstrap-server localhost:9092 \
   --topic postgres-cdc.public.users \
   --from-beginning \
   --max-messages 5
 
 # Check message count without reading content
-docker exec tmp-kafka-1 kafka-run-class kafka.tools.GetOffsetShell \
+docker exec cdc-kafka kafka-run-class kafka.tools.GetOffsetShell \
   --broker-list localhost:9092 --topic postgres-cdc.public.users --time -1
 # Output: postgres-cdc.public.users:0:<count>
 ```
@@ -524,13 +524,13 @@ docker exec tmp-kafka-1 kafka-run-class kafka.tools.GetOffsetShell \
 
 ```bash
 # Terminal 1: Start a Kafka consumer watching for new messages (leave running)
-docker exec tmp-kafka-1 kafka-console-consumer \
+docker exec cdc-kafka kafka-console-consumer \
   --bootstrap-server localhost:9092 \
   --topic postgres-cdc.public.users
 
 # Terminal 2: Insert new data into PostgreSQL
 # The Kafka consumer in Terminal 1 will show the CDC event within ~1 second!
-docker exec postgres-cdc psql -U postgres -d cdc_db \
+docker exec cdc-postgres psql -U postgres -d cdc_db \
   -c "INSERT INTO public.users (name, email) VALUES ('New User', 'newuser@example.com');"
 
 # You should see a new message appear in Terminal 1 with:
@@ -543,7 +543,7 @@ docker exec postgres-cdc psql -U postgres -d cdc_db \
 
 ```bash
 # UPDATE: change a user's email
-docker exec postgres-cdc psql -U postgres -d cdc_db \
+docker exec cdc-postgres psql -U postgres -d cdc_db \
   -c "UPDATE public.users SET email = 'newemail@example.com' WHERE name = 'John Doe';"
 
 # In Kafka Terminal, you'll see a message with:
@@ -553,7 +553,7 @@ docker exec postgres-cdc psql -U postgres -d cdc_db \
 # Note: "before" is populated because REPLICA IDENTITY FULL is set on the table
 
 # DELETE: remove a user
-docker exec postgres-cdc psql -U postgres -d cdc_db \
+docker exec cdc-postgres psql -U postgres -d cdc_db \
   -c "DELETE FROM public.users WHERE name = 'New User';"
 
 # In Kafka Terminal:
@@ -596,7 +596,7 @@ Open **two terminals** side by side:
 
 **Terminal 1** (watch Kafka in real-time):
 ```bash
-docker exec tmp-kafka-1 kafka-console-consumer \
+docker exec cdc-kafka kafka-console-consumer \
   --bootstrap-server localhost:9092 \
   --topic postgres-cdc.public.users
 ```
@@ -604,7 +604,7 @@ Leave this running.
 
 **Terminal 2** (insert into PostgreSQL):
 ```bash
-docker exec postgres-cdc psql -U postgres -d cdc_db \
+docker exec cdc-postgres psql -U postgres -d cdc_db \
   -c "INSERT INTO public.users (name, email) VALUES ('Charlie Brown', 'charlie@example.com');"
 ```
 
@@ -614,7 +614,7 @@ Within ~1 second, Terminal 1 shows a JSON message. Look for `"op":"c"` (create).
 
 In **Terminal 2**:
 ```bash
-docker exec postgres-cdc psql -U postgres -d cdc_db \
+docker exec cdc-postgres psql -U postgres -d cdc_db \
   -c "UPDATE public.users SET email = 'charlie.updated@example.com' WHERE name = 'Charlie Brown';"
 ```
 
@@ -627,7 +627,7 @@ Terminal 1 now shows `"op":"u"` (update):
 ### Explore Step 5 — Trigger a DELETE
 
 ```bash
-docker exec postgres-cdc psql -U postgres -d cdc_db \
+docker exec cdc-postgres psql -U postgres -d cdc_db \
   -c "DELETE FROM public.users WHERE name = 'Charlie Brown';"
 ```
 
@@ -640,7 +640,7 @@ Terminal 1 shows `"op":"d"` (delete):
 Each time Debezium reads WAL changes and commits them to Kafka, the replication slot position advances. You can watch this:
 
 ```bash
-docker exec postgres-cdc psql -U postgres -d cdc_db \
+docker exec cdc-postgres psql -U postgres -d cdc_db \
   -c "SELECT slot_name, active, confirmed_flush_lsn, restart_lsn
       FROM pg_replication_slots;"
 ```
@@ -651,12 +651,12 @@ docker exec postgres-cdc psql -U postgres -d cdc_db \
 
 ```bash
 # How many messages are in the users topic?
-docker exec tmp-kafka-1 kafka-run-class kafka.tools.GetOffsetShell \
+docker exec cdc-kafka kafka-run-class kafka.tools.GetOffsetShell \
   --broker-list localhost:9092 --topic postgres-cdc.public.users --time -1
 # Output: postgres-cdc.public.users:0:<count>
 
 # Read the last 5 messages in raw JSON
-docker exec tmp-kafka-1 kafka-console-consumer \
+docker exec cdc-kafka kafka-console-consumer \
   --bootstrap-server localhost:9092 \
   --topic postgres-cdc.public.users \
   --from-beginning --max-messages 5
@@ -668,11 +668,11 @@ Debezium is a Kafka consumer itself (it writes to Kafka, but also reads internal
 
 ```bash
 # List consumer groups
-docker exec tmp-kafka-1 kafka-consumer-groups \
+docker exec cdc-kafka kafka-consumer-groups \
   --bootstrap-server localhost:9092 --list
 
 # Describe the main connect group (lag should be 0 = fully caught up)
-docker exec tmp-kafka-1 kafka-consumer-groups \
+docker exec cdc-kafka kafka-consumer-groups \
   --bootstrap-server localhost:9092 \
   --describe --group connect-cluster
 ```
@@ -685,7 +685,7 @@ The connector uses `publication.name: dbz_publication` which was created as `FOR
 
 ```bash
 # Create a new table in PostgreSQL
-docker exec postgres-cdc psql -U postgres -d cdc_db -c "
+docker exec cdc-postgres psql -U postgres -d cdc_db -c "
   CREATE TABLE IF NOT EXISTS public.inventory (
     id SERIAL PRIMARY KEY,
     item VARCHAR(100),
@@ -761,30 +761,30 @@ Debezium handles both:
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 # Check specific service logs
-docker logs postgres-cdc | tail -50              # PostgreSQL
-docker logs tmp-kafka-1 | tail -50               # Kafka
-docker logs tmp-debezium-connect-1 | tail -50    # Debezium
-docker logs tmp-kafka-ui-1 | tail -50            # Kafka UI
-docker logs pgadmin4-cdc | tail -50              # pgAdmin
+docker logs cdc-postgres | tail -50              # PostgreSQL
+docker logs cdc-kafka | tail -50                 # Kafka
+docker logs cdc-debezium | tail -50              # Debezium
+docker logs cdc-kafka-ui | tail -50              # Kafka UI
+docker logs cdc-pgadmin | tail -50               # pgAdmin
 ```
 
 ### PostgreSQL Management
 
 ```bash
 # Connect to PostgreSQL
-docker exec -it postgres-cdc psql -U postgres -d cdc_db
+docker exec -it cdc-postgres psql -U postgres -d cdc_db
 
 # Or directly with one command:
-docker exec postgres-cdc psql -U postgres -d cdc_db -c "SELECT * FROM public.users;"
+docker exec cdc-postgres psql -U postgres -d cdc_db -c "SELECT * FROM public.users;"
 
 # View all replication slots
-docker exec postgres-cdc psql -U postgres -d cdc_db -c "SELECT * FROM pg_replication_slots;"
+docker exec cdc-postgres psql -U postgres -d cdc_db -c "SELECT * FROM pg_replication_slots;"
 
 # View publications
-docker exec postgres-cdc psql -U postgres -d cdc_db -c "SELECT * FROM pg_publication;"
+docker exec cdc-postgres psql -U postgres -d cdc_db -c "SELECT * FROM pg_publication;"
 
 # View table REPLICA IDENTITY status
-docker exec postgres-cdc psql -U postgres -d cdc_db -c \
+docker exec cdc-postgres psql -U postgres -d cdc_db -c \
   "SELECT relname, pg_relation_replica_identity(oid) FROM pg_class WHERE relkind='r';"
 ```
 
@@ -823,32 +823,32 @@ curl -X POST http://localhost:8083/connectors/postgres-cdc-connector/restart
 
 ```bash
 # List all topics
-docker exec tmp-kafka-1 kafka-topics --list --bootstrap-server localhost:9092
+docker exec cdc-kafka kafka-topics --list --bootstrap-server localhost:9092
 
 # Describe a topic (partition count, replication, leader)
-docker exec tmp-kafka-1 kafka-topics --describe \
+docker exec cdc-kafka kafka-topics --describe \
   --bootstrap-server localhost:9092 --topic postgres-cdc.public.users
 
 # Check message count for each CDC topic
-docker exec tmp-kafka-1 kafka-run-class kafka.tools.GetOffsetShell \
+docker exec cdc-kafka kafka-run-class kafka.tools.GetOffsetShell \
   --broker-list localhost:9092 --topic postgres-cdc.public.users --time -1
-docker exec tmp-kafka-1 kafka-run-class kafka.tools.GetOffsetShell \
+docker exec cdc-kafka kafka-run-class kafka.tools.GetOffsetShell \
   --broker-list localhost:9092 --topic postgres-cdc.public.products --time -1
 
 # Consume messages from beginning (max 10)
-docker exec tmp-kafka-1 kafka-console-consumer \
+docker exec cdc-kafka kafka-console-consumer \
   --bootstrap-server localhost:9092 \
   --topic postgres-cdc.public.users \
   --from-beginning \
   --max-messages 10
 
 # Consume only NEW messages (live follow mode; Ctrl+C to stop)
-docker exec tmp-kafka-1 kafka-console-consumer \
+docker exec cdc-kafka kafka-console-consumer \
   --bootstrap-server localhost:9092 \
   --topic postgres-cdc.public.users
 
 # Check consumer group lag
-docker exec tmp-kafka-1 kafka-consumer-groups \
+docker exec cdc-kafka kafka-consumer-groups \
   --bootstrap-server localhost:9092 --describe --group connect-cluster
 ```
 
@@ -860,23 +860,23 @@ docker exec tmp-kafka-1 kafka-consumer-groups \
 
 ```bash
 # Check Debezium logs
-docker logs tmp-debezium-connect-1 | grep -i error
+docker logs cdc-debezium | grep -i error
 
 # Common causes:
 # 1. PostgreSQL not responding
-#    - Check: docker exec postgres-cdc psql -U postgres -d cdc_db -c "SELECT 1;"
+#    - Check: docker exec cdc-postgres psql -U postgres -d cdc_db -c "SELECT 1;"
 #
 # 2. Wrong credentials
 #    - Verify: replication user exists and has correct password
-#    - Check: docker exec postgres-cdc psql -U postgres -d cdc_db -c "SELECT * FROM pg_user WHERE usename='replication';"
+#    - Check: docker exec cdc-postgres psql -U postgres -d cdc_db -c "SELECT * FROM pg_user WHERE usename='replication';"
 #
 # 3. Publication doesn't exist
-#    - Check: docker exec postgres-cdc psql -U postgres -d cdc_db -c "SELECT * FROM pg_publication;"
-#    - Create: docker exec postgres-cdc psql -U postgres -d cdc_db -c "CREATE PUBLICATION dbz_publication FOR ALL TABLES;"
+#    - Check: docker exec cdc-postgres psql -U postgres -d cdc_db -c "SELECT * FROM pg_publication;"
+#    - Create: docker exec cdc-postgres psql -U postgres -d cdc_db -c "CREATE PUBLICATION dbz_publication FOR ALL TABLES;"
 #
 # 4. Replication slot doesn't exist
-#    - Check: docker exec postgres-cdc psql -U postgres -d cdc_db -c "SELECT * FROM pg_replication_slots;"
-#    - Create: docker exec postgres-cdc psql -U postgres -d cdc_db -c "SELECT * FROM pg_create_logical_replication_slot('debezium_slot', 'pgoutput');"
+#    - Check: docker exec cdc-postgres psql -U postgres -d cdc_db -c "SELECT * FROM pg_replication_slots;"
+#    - Create: docker exec cdc-postgres psql -U postgres -d cdc_db -c "SELECT * FROM pg_create_logical_replication_slot('debezium_slot', 'pgoutput');"
 ```
 
 ### No Messages in Kafka Topics
@@ -891,15 +891,15 @@ curl -s http://localhost:8083/connectors/postgres-cdc-connector/status | jq .
 curl -s http://localhost:8083/connectors/postgres-cdc-connector/status | jq '.connector.state, .connector.trace'
 
 # 3. Verify REPLICA IDENTITY is set correctly
-docker exec postgres-cdc psql -U postgres -d cdc_db -c \
+docker exec cdc-postgres psql -U postgres -d cdc_db -c \
   "SELECT relname, pg_relation_replica_identity(oid) FROM pg_class WHERE relkind='r' AND relname IN ('users', 'orders', 'products');"
 
 # 4. Check replication slot activity
-docker exec postgres-cdc psql -U postgres -d cdc_db -c \
+docker exec cdc-postgres psql -U postgres -d cdc_db -c \
   "SELECT slot_name, restart_lsn, confirmed_flush_lsn FROM pg_replication_slots;"
 
 # 5. View Debezium connector logs
-docker logs tmp-debezium-connect-1 | tail -100 | grep -i "users\|orders\|products\|error"
+docker logs cdc-debezium | tail -100 | grep -i "users\|orders\|products\|error"
 ```
 
 ### Connector Stuck or Not Processing Data
@@ -911,7 +911,7 @@ docker logs tmp-debezium-connect-1 | tail -100 | grep -i "users\|orders\|product
 curl -s http://localhost:8083/connectors/postgres-cdc-connector/tasks/0/status | jq .
 
 # 2. Verify snapshot phase completed
-docker logs tmp-debezium-connect-1 | grep -i "snapshot\|snapshotting"
+docker logs cdc-debezium | grep -i "snapshot\|snapshotting"
 
 # 3. Check if connector is in paused state
 curl -s http://localhost:8083/connectors/postgres-cdc-connector/status | jq '.connector.state'
@@ -933,18 +933,18 @@ curl -X DELETE http://localhost:8083/connectors/postgres-cdc-connector
 
 ```bash
 # 1. Check replication slot lag
-docker exec postgres-cdc psql -U postgres -d cdc_db -c \
+docker exec cdc-postgres psql -U postgres -d cdc_db -c \
   "SELECT slot_name, pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) as lag_bytes FROM pg_replication_slots;"
 
 # 2. Check PostgreSQL settings
-docker exec postgres-cdc psql -U postgres -d cdc_db -c \
+docker exec cdc-postgres psql -U postgres -d cdc_db -c \
   "SHOW wal_keep_size; SHOW max_wal_senders; SHOW max_replication_slots;"
 
 # 3. Monitor Debezium memory usage
-docker stats tmp-debezium-connect-1
+docker stats cdc-debezium
 
 # 4. Check Kafka broker lag
-docker exec tmp-kafka-1 kafka-consumer-groups \
+docker exec cdc-kafka kafka-consumer-groups \
   --bootstrap-server localhost:9092 --describe --group connect-cluster
 
 # 5. Reduce connector task count or increase batch size (modify connector config)
@@ -962,21 +962,21 @@ This happens when containers are restarted individually out of order. Zookeeper 
 **Fix - restart in correct order**:
 ```bash
 # Step 1: Restart Zookeeper first (clears stale broker registration)
-docker restart tmp-zookeeper-1
+docker restart cdc-zookeeper
 
 # Step 2: Wait for Zookeeper to be healthy, then start Kafka
 sleep 10
-docker start tmp-kafka-1
+docker start cdc-kafka
 
 # Step 3: Wait for Kafka to be healthy, then start Debezium
 sleep 15
-docker start tmp-debezium-connect-1
+docker start cdc-debezium
 
 # Verify all are up
 docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "zookeeper|kafka|debezium"
 
 # Verify Debezium connected successfully (look for "Herder started")
-docker logs --tail 20 tmp-debezium-connect-1 | grep -E "ERROR|Herder started|group coordinator"
+docker logs --tail 20 cdc-debezium | grep -E "ERROR|Herder started|group coordinator"
 ```
 
 ### Network Connectivity Issues
@@ -985,18 +985,18 @@ docker logs --tail 20 tmp-debezium-connect-1 | grep -E "ERROR|Herder started|gro
 
 ```bash
 # 1. Verify containers are on same network
-docker network inspect cdc-network
+docker network inspect lab-network
 
 # 2. Test PostgreSQL connectivity from Debezium container
-docker exec tmp-debezium-connect-1 bash -c 'nc -zv postgres-cdc 5432'
+docker exec cdc-debezium bash -c 'nc -zv cdc-postgres 5432'
 
 # 3. Test Kafka connectivity from Debezium
-docker exec tmp-debezium-connect-1 bash -c 'nc -zv kafka 9092'
+docker exec cdc-debezium bash -c 'nc -zv kafka 9092'
 
 # 4. Check container IPs
-docker inspect postgres-cdc | jq '.[] | .NetworkSettings.Networks'
-docker inspect tmp-kafka-1 | jq '.[] | .NetworkSettings.Networks'
-docker inspect tmp-debezium-connect-1 | jq '.[] | .NetworkSettings.Networks'
+docker inspect cdc-postgres | jq '.[] | .NetworkSettings.Networks'
+docker inspect cdc-kafka | jq '.[] | .NetworkSettings.Networks'
+docker inspect cdc-debezium | jq '.[] | .NetworkSettings.Networks'
 ```
 
 ## Performance Tuning
@@ -1025,11 +1025,11 @@ curl -s http://localhost:8083/connectors/postgres-cdc-connector/tasks/0/status |
   jq '.task_state.millis_behind_source'
 
 # Check Kafka consumer group lag
-docker exec tmp-kafka-1 kafka-consumer-groups \
+docker exec cdc-kafka kafka-consumer-groups \
   --bootstrap-server localhost:9092 --describe --group connect-cluster
 
 # Monitor PostgreSQL WAL size
-docker exec postgres-cdc psql -U postgres -d cdc_db -c \
+docker exec cdc-postgres psql -U postgres -d cdc_db -c \
   "SELECT pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), '0/0'));"
 ```
 
@@ -1088,12 +1088,12 @@ Downstream Systems (Analytics, Cache, Data Warehouse, etc.)
 
 | Component | Container | Port | Purpose |
 |-----------|-----------|------|---------|
-| PostgreSQL | postgres-cdc | 5433 | Source database with CDC enabled |
-| Zookeeper | tmp-zookeeper-1 | 2181 | Kafka coordination & metadata |
-| Kafka | tmp-kafka-1 | 29092 | Message broker & CDC event store |
-| Debezium | tmp-debezium-connect-1 | 8083 | CDC connector & event processor |
-| Kafka UI | tmp-kafka-ui-1 | 8080 | Web monitoring interface |
-| pgAdmin | pgadmin4-cdc | 5050 | Database management GUI |
+| PostgreSQL | cdc-postgres | 5433 | Source database with CDC enabled |
+| Zookeeper | cdc-zookeeper | 2181 | Kafka coordination & metadata |
+| Kafka | cdc-kafka | 29092 | Message broker & CDC event store |
+| Debezium | cdc-debezium | 8083 | CDC connector & event processor |
+| Kafka UI | cdc-kafka-ui | 8080 | Web monitoring interface |
+| pgAdmin | cdc-pgadmin | 5050 | Database management GUI |
 
 ### Deployment Files
 
@@ -1118,15 +1118,15 @@ Containers do **not** start automatically after a host reboot. Run these command
 cd ~/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka
 
 # Step 1: Start Zookeeper first (Kafka depends on it)
-docker start tmp-zookeeper-1
+docker start cdc-zookeeper
 sleep 5
 
 # Step 2: Start Kafka
-docker start tmp-kafka-1
+docker start cdc-kafka
 sleep 10
 
 # Step 3: Start Debezium, Kafka UI, PostgreSQL, pgAdmin (order doesn't matter here)
-docker start tmp-debezium-connect-1 tmp-kafka-ui-1 postgres-cdc pgadmin4-cdc
+docker start cdc-debezium cdc-kafka-ui cdc-postgres cdc-pgadmin
 
 # Step 4: Wait ~15 seconds for Debezium to reconnect, then re-register the connector
 sleep 15
@@ -1141,7 +1141,7 @@ curl -X POST http://localhost:8083/connectors \
     \"name\": \"postgres-cdc-connector\",
     \"config\": {
       \"connector.class\": \"io.debezium.connector.postgresql.PostgresConnector\",
-      \"database.hostname\": \"postgres-cdc\",
+      \"database.hostname\": \"cdc-postgres\",
       \"database.port\": \"5432\",
       \"database.user\": \"replication\",
       \"database.password\": \"${PG_REPLICATION_PASSWORD}\",
@@ -1179,25 +1179,25 @@ ansible-playbook -i hosts.yml playbook-deploy-all.yml --vault-password-file=vaul
 curl -s http://localhost:8083/connectors/postgres-cdc-connector/status | python3 -m json.tool
 
 # 3. Insert test data
-docker exec postgres-cdc psql -U postgres -d cdc_db \
+docker exec cdc-postgres psql -U postgres -d cdc_db \
   -c "INSERT INTO public.users (name, email) VALUES ('Test User', 'test@example.com');"
 
 # 4. View CDC events in browser
 open http://localhost:8080  # Kafka UI → Topics → postgres-cdc.public.users → Messages
 
 # 5. View CDC events from CLI
-docker exec tmp-kafka-1 kafka-console-consumer \
+docker exec cdc-kafka kafka-console-consumer \
   --bootstrap-server localhost:9092 \
   --topic postgres-cdc.public.users \
   --from-beginning --max-messages 5
 
 # 6. Live real-time demo (two terminals)
 # Terminal 1 - watch:
-docker exec tmp-kafka-1 kafka-console-consumer \
+docker exec cdc-kafka kafka-console-consumer \
   --bootstrap-server localhost:9092 --topic postgres-cdc.public.users
 
 # Terminal 2 - trigger:
-docker exec postgres-cdc psql -U postgres -d cdc_db \
+docker exec cdc-postgres psql -U postgres -d cdc_db \
   -c "INSERT INTO public.users (name, email) VALUES ('Live User', 'live@example.com');"
 # → CDC event appears in Terminal 1 within ~1 second!
 ```
@@ -1206,14 +1206,14 @@ docker exec postgres-cdc psql -U postgres -d cdc_db \
 
 You've successfully set up Debezium CDC when:
 
-✅ All 6 containers are running (`docker ps` shows postgres-cdc, tmp-kafka-1, tmp-zookeeper-1, tmp-debezium-connect-1, tmp-kafka-ui-1, pgadmin4-cdc)
+✅ All 6 containers are running (`docker ps` shows `cdc-postgres`, `cdc-kafka`, `cdc-zookeeper`, `cdc-debezium`, `cdc-kafka-ui`, `cdc-pgadmin`)
 ✅ Debezium connector shows `"state":"RUNNING"` (`curl http://localhost:8083/connectors/postgres-cdc-connector/status`)
 ✅ Kafka topics exist: `postgres-cdc.public.users`, `postgres-cdc.public.orders`, `postgres-cdc.public.products`
 ✅ Message count in topics is > 0 after initial snapshot
 ✅ Inserting a row into PostgreSQL produces a new message in Kafka within ~1 second
 ✅ UPDATE shows `"op":"u"` with both `"before"` and `"after"` populated
 ✅ DELETE shows `"op":"d"` with `"before"` populated and `"after": null`
-✅ No errors in Debezium logs (`docker logs tmp-debezium-connect-1 | grep ERROR`)
+✅ No errors in Debezium logs (`docker logs cdc-debezium | grep ERROR`)
 
 ---
 

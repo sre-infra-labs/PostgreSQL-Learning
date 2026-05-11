@@ -4,8 +4,8 @@
 # ============================================================================
 # DOCKER NETWORK & INFRASTRUCTURE
 # ============================================================================
-docker_network_name: "cdc-network"
-docker_network_subnet: "172.20.0.0/16"
+docker_network_name: "lab-network"
+docker_network_subnet: "172.18.0.0/16"
 docker_volumes_root: "{{ ansible_env.HOME }}/cdc-volumes"
 
 # ============================================================================
@@ -14,7 +14,7 @@ docker_volumes_root: "{{ ansible_env.HOME }}/cdc-volumes"
 # ============================================================================
 kafka_ecosystem_version: "3.7.0"
 kafka_ecosystem_container_name: "kafka-ecosystem-cdc"
-kafka_ecosystem_container_ip: "172.20.0.2"
+kafka_ecosystem_container_ip: "172.18.0.21"  # zookeeper (first compose service); others get sequential dynamic IPs
 
 # Zookeeper ports (internal)
 zk_listen_port: 2181
@@ -59,8 +59,8 @@ debezium_publication_name: "dbz_publication"
 # POSTGRESQL SOURCE DATABASE (CDC Source)
 # ============================================================================
 pg_version: "15"
-pg_container_name: "postgres-cdc"
-pg_container_ip: "172.20.0.3"
+pg_container_name: "cdc-postgres"
+pg_container_ip: "172.18.0.25"
 pg_listen_port: 5432
 pg_host_mapping_port: 5433  # Exposed to localhost (avoid conflict)
 pg_max_connections: 200
@@ -86,8 +86,8 @@ pg_admin_user: "postgres"
 # PGADMIN CONFIGURATION
 # ============================================================================
 pgadmin_version: "8.5"
-pgadmin_container_name: "pgadmin4-cdc"
-pgadmin_container_ip: "172.20.0.7"
+pgadmin_container_name: "cdc-pgadmin"
+pgadmin_container_ip: "172.18.0.26"
 pgadmin_listen_port: 80
 pgadmin_host_mapping_port: 5050  # Exposed to localhost
 pgadmin_maintenance_db: "pgadmin4"
