@@ -1,4 +1,6 @@
 # Change Data Capture (CDC) Using Debezium and Kafka
+- [Youtube - Send Table Changes from DB to Kafka Automatically. Change Data Captrure(CDC) using Debezium.](https://youtu.be/VQC-lkEve7M?si=dRhoQX9MbiVanrxg)
+  - 25:46
 
 ## Overview
 
@@ -48,6 +50,22 @@ SELECT * FROM pg_create_logical_replication_slot('debezium', 'pgoutput');
 -- Set REPLICA IDENTITY on tables (needed for updates/deletes)
 ALTER TABLE table_name REPLICA IDENTITY FULL;
 ```
+
+#### Connect to PostgreSQL
+```
+# view saved passwords
+ansible-vault view sensitive-values --vault-password-file=vault-pass
+
+# connect to postgresql using docker
+docker exec -it postgres-cdc bash
+su - postgres
+psql
+
+# connect directly
+export PGPASSWORD=$PGPWD_PERSONAL
+psql -h localhost -p 5433 -U postgres
+```
+
 
 ### 2. Debezium Connector
 

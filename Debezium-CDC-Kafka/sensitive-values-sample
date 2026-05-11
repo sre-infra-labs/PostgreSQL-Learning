@@ -1,32 +1,19 @@
-# Sensitive Values Sample - Copy to 'sensitive-values' and encrypt with Ansible Vault
-# Command to encrypt: ansible-vault encrypt sensitive-values --vault-password-file=vault-pass
-# Command to view: ansible-vault view sensitive-values --vault-password-file=vault-pass
-# Vault Password: Pa$$w0rd (set in vault-pass)
-
 # ============================================================================
-# PostgreSQL Passwords (Using Pa$$w0rd as per system standard)
+# PostgreSQL Passwords
 # ============================================================================
-PG_SUPERUSER_PASSWORD: "Pa$$w0rd"
-PG_REPLICATION_PASSWORD: "Pa$$w0rd"
-PG_APP_USER_PASSWORD: "Pa$$w0rd"
+PG_SUPERUSER_PASSWORD: "Pg@Superuser#2024!"
+PG_REPLICATION_PASSWORD: "Pg@Replication#2024!"
+PG_APP_USER_PASSWORD: "Pg@AppUser#2024!"
 
 # ============================================================================
 # pgAdmin Credentials
 # ============================================================================
-PGADMIN_DEFAULT_EMAIL: "admin@cdc-learning.local"
-PGADMIN_DEFAULT_PASSWORD: "Pa$$w0rd"
+PGADMIN_DEFAULT_EMAIL: "admin@debezium-cdc.local"
+PGADMIN_DEFAULT_PASSWORD: "PgAdmin@2024!"
 
 # ============================================================================
-# Debezium & Kafka Credentials (if authentication enabled)
+# Debezium & Kafka Credentials
 # ============================================================================
-KAFKA_BROKER_USERNAME: "kafka_user"
-KAFKA_BROKER_PASSWORD: "Pa$$w0rd"
-DEBEZIUM_CONNECTOR_USERNAME: "debezium_user"
-DEBEZIUM_CONNECTOR_PASSWORD: "Pa$$w0rd"
-
-# ============================================================================
-# SSH/Host Access
-# ============================================================================
-ANSIBLE_BECOME_PASSWORD: "Pa$$w0rd"
-ANSIBLE_SSH_KEY_PATH: "~/.ssh/id_ed25519"
-ANSIBLE_SSH_USER: "ansible"
+KAFKA_BROKER_USERNAME: "kafka_connector"
+KAFKA_BROKER_PASSWORD: "Kafka@Broker#2024!"
+DEBEZIUM_CONNECTOR_USERNAME: "debezium_serDEBEZIUM_CONNECTOR_USERNAME: "debezium_serDEBEZIUM_CONNECTOR_USERNAME: "debezium_serDEBEZIUM_CONNECTOR_USERNAME: "debe==DEBEZIUM_CONNECTOR_USERNAME: "debezium_serDEBEZIUM_CONNECTOR_USERNAME: "debez=========================DEBEZIUM_CONNECTOR_USERNAME: "debezium_serDEBEZIUM_CONNECTOR_USERNAME: "debezble"
