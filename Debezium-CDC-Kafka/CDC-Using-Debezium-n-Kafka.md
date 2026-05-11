@@ -1109,6 +1109,64 @@ Downstream Systems (Analytics, Cache, Data Warehouse, etc.)
 └── hosts.yml                         # Ansible inventory
 ```
 
+### Starting Containers After a Host Reboot
+
+Containers do **not** start automatically after a host reboot. Run these commands manually in order:
+
+```bash
+cd ~/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka
+
+# Step 1: Start Zookeeper first (Kafka depends on it)
+docker start tmp-zookeeper-1
+sleep 5
+
+# Step 2: Start Kafka
+docker start tmp-kafka-1
+sleep 10
+
+# Step 3: Start Debezium, Kafka UI, PostgreSQL, pgAdmin (order doesn't matter here)
+docker start tmp-debezium-connect-1 tmp-kafka-ui-1 postgres-cdc pgadmin4-cdc
+
+# Step 4: Wait ~15 seconds for Debezium to reconnect, then re-register the connector
+sleep 15
+PG_REPLICATION_PASSWORD=$(ansible-vault view sensitive-values --vault-password-file=vault-pass \
+  | grep PG_REPLICATION_PASSWORD | awk '{print $2}' | tr -d '"')
+
+curl -sf -X DELETE http://localhost:8083/connectors/postgres-cdc-connector 2>/dev/null || true
+sleep 2
+curl -X POST http://localhost:8083/connectors \
+  -H 'Content-Type: application/json' \
+  -d "{
+    \"name\": \"postgres-cdc-connector\",
+    \"config\": {
+      \"connector.class\": \"io.debezium.connector.postgresql.PostgresConnector\",
+      \"database.hostname\": \"postgres-cdc\",
+      \"database.port\": \"5432\",
+      \"database.user\": \"replication\",
+      \"database.password\": \"${PG_REPLICATION_PASSWORD}\",
+      \"database.dbname\": \"cdc_db\",
+      \"database.server.name\": \"postgres-cdc\",
+      \"topic.prefix\": \"postgres-cdc\",
+      \"plugin.name\": \"pgoutput\",
+      \"slot.name\": \"debezium_slot\",
+      \"publication.name\": \"dbz_publication\",
+      \"table.include.list\": \"public.users,public.orders,public.products\",
+      \"snapshot.mode\": \"initial\"
+    }
+  }"
+
+# Step 5: Verify everything is back up
+docker ps --format "table {{.Names}}\t{{.Status}}"
+curl -s http://localhost:8083/connectors/postgres-cdc-connector/status | python3 -m json.tool
+```
+
+> **Tip**: Alternatively, re-running the Ansible playbook achieves the same result:
+> ```bash
+> ansible-playbook -i hosts.yml playbook-deploy-all.yml --vault-password-file=vault-pass
+> ```
+
+---
+
 ### Quick Start Summary
 
 ```bash

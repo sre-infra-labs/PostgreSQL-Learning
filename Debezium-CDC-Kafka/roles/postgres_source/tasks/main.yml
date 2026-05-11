@@ -32,7 +32,6 @@
       shell: |
         docker run -d \
           --name "{{ pg_container_name }}" \
-          --restart unless-stopped \
           --network "{{ docker_network_name }}" \
           --ip "{{ pg_container_ip }}" \
           -p "{{ pg_host_mapping_port }}:{{ pg_listen_port }}" \

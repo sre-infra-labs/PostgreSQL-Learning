@@ -12,7 +12,6 @@
       shell: |
         docker run -d \
           --name "{{ pgadmin_container_name }}" \
-          --restart unless-stopped \
           --network "{{ docker_network_name }}" \
           --ip "{{ pgadmin_container_ip }}" \
           -p "{{ pgadmin_host_mapping_port }}:{{ pgadmin_listen_port }}" \
