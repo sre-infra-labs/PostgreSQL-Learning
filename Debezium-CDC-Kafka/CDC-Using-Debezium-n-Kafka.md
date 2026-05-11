@@ -1,6 +1,7 @@
 # Change Data Capture (CDC) Using Debezium and Kafka
-- [Youtube - Send Table Changes from DB to Kafka Automatically. Change Data Captrure(CDC) using Debezium.](https://youtu.be/VQC-lkEve7M?si=dRhoQX9MbiVanrxg)
-  - 25:46
+- [Blog - How Patroni Addresses the Problem of the Logical Replication Slot Failover in a PostgreSQL Cluster](https://www.percona.com/blog/how-patroni-addresses-the-problem-of-the-logical-replication-slot-failover-in-a-postgresql-cluster/)
+- [Patroni 2.1.0+ Doc - Replication slots](https://patroni.readthedocs.io/en/latest/dynamic_configuration.html#:~:text=slots%3A%20define%20permanent%20replication%20slots)
+- [Blog - How we managed Postgres HA with Logical Replication using Patroni](https://medium.com/@PavankumarHarikar/how-we-managed-postgres-ha-with-logical-replication-using-patroni-1d31a6f6c9b0)
 
 ## Overview
 
