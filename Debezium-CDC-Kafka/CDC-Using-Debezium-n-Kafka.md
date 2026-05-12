@@ -4,6 +4,7 @@
 - [Blog - How we managed Postgres HA with Logical Replication using Patroni](https://medium.com/@PavankumarHarikar/how-we-managed-postgres-ha-with-logical-replication-using-patroni-1d31a6f6c9b0)
 - [Youtube - Alexander Kukushkin. Failover of logical replication slots in Patroni](https://www.youtube.com/live/SllJsbPVaow?si=bjIlu-umeXKFeRlJ)
   - [Slidedeck](https://www.postgresql.eu/events/pgconfde2022/sessions/session/3745/slides/306/Implementing%20failover%20of%20logical%20replication%20slots%20in%20Patroni.pdf)
+- [Debezium - PostgreSQL - Permissions](https://debezium.io/documentation/reference/3.4/connectors/postgresql.html#postgresql-permissions)
 
 ## Overview
 
@@ -352,6 +353,107 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 ## Step-by-Step: Connect Debezium to PostgreSQL (Complete CDC Setup)
 
+### PostgreSQL Permissions Setup (Debezium Requirements)
+
+> **Source**: [Debezium Docs — Setting up permissions](https://debezium.io/documentation/reference/3.4/connectors/postgresql.html#postgresql-permissions)
+
+Debezium requires a PostgreSQL user with specific privileges to stream changes.
+Rather than granting superuser access, create a **dedicated replication user** with the minimum required privileges.
+
+#### 1. Create the Replication User
+
+The user must have `REPLICATION` and `LOGIN` privileges:
+
+```sql
+-- Create the dedicated Debezium replication user
+CREATE ROLE replication REPLICATION LOGIN PASSWORD 'your_password';
+
+-- Grant access to the target database (required for initial snapshot)
+GRANT CONNECT ON DATABASE cdc_db TO replication;
+```
+
+#### 2. Grant SELECT for Initial Snapshot
+
+Debezium reads all existing rows during the initial snapshot.
+The replication user needs `SELECT` on all captured tables:
+
+```sql
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO replication;
+
+-- Cover tables created in the future
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT ON TABLES TO replication;
+```
+
+#### 3. Create Publication (pgoutput plugin)
+
+Debezium uses the `pgoutput` logical decoding plugin, which requires a PostgreSQL **publication**.
+A publication must be created by a user who owns (or has shared ownership of) the tables.
+
+**Option A — Superuser creates the publication (simplest — used by this project):**
+
+```sql
+-- Run as superuser (postgres). This is what the Ansible playbook does.
+CREATE PUBLICATION dbz_publication FOR ALL TABLES;
+```
+
+**Option B — Let Debezium manage the publication (requires shared table ownership):**
+
+If `publication.autocreate.mode = filtered` and you want Debezium to create/manage
+the publication itself, the replication user must co-own the tables via a replication group:
+
+```sql
+-- Step 1: Create a shared replication group role
+CREATE ROLE replication_group;
+
+-- Step 2: Add the original table owner to the group (typically postgres superuser)
+GRANT replication_group TO postgres;
+
+-- Step 3: Add the Debezium replication user to the group
+GRANT replication_group TO replication;
+
+-- Step 4: Transfer table ownership to the group
+ALTER TABLE public.users    OWNER TO replication_group;
+ALTER TABLE public.orders   OWNER TO replication_group;
+ALTER TABLE public.products OWNER TO replication_group;
+```
+
+#### 4. Allow Replication in pg_hba.conf
+
+Add entries to `pg_hba.conf` to permit the Debezium connector host to connect for replication:
+
+```
+# Local socket
+local   replication     replication                             trust
+# IPv4 localhost
+host    replication     replication   127.0.0.1/32              scram-sha-256
+# IPv6 localhost
+host    replication     replication   ::1/128                   scram-sha-256
+# Docker lab-network (cdc-debezium at 172.18.0.21+ → cdc-postgres at 172.18.0.25)
+host    replication     replication   172.18.0.0/16             scram-sha-256
+```
+
+> The `172.18.0.0/16` line covers Docker-internal connections from `cdc-debezium`
+> to `cdc-postgres` over `lab-network`.
+
+#### Summary — What the Ansible Playbook Does Automatically
+
+The playbook (`roles/postgres_source/tasks/main.yml`) handles all permission steps
+automatically on every `ansible-playbook` run (idempotent):
+
+| Debezium Requirement | Ansible Task |
+|---|---|
+| `REPLICATION LOGIN` user | `CREATE USER replication WITH REPLICATION LOGIN` |
+| Encrypted password | `ALTER USER replication WITH ENCRYPTED PASSWORD '...'` |
+| Database connect | `GRANT CONNECT ON DATABASE cdc_db TO replication` |
+| Table SELECT (snapshot) | `GRANT SELECT ON ALL TABLES IN SCHEMA public TO replication` |
+| Publication | `CREATE PUBLICATION dbz_publication FOR ALL TABLES` (as superuser) |
+| Replication slot | `SELECT pg_create_logical_replication_slot('debezium_slot', 'pgoutput')` |
+| `pg_hba.conf` | Rendered from `roles/postgres_source/templates/pg_hba.conf` |
+| `REPLICA IDENTITY FULL` | `ALTER TABLE ... REPLICA IDENTITY FULL` on users/orders/products |
+
+---
+
 ### Step 3: Verify PostgreSQL is Ready
 
 ```bash
@@ -370,6 +472,29 @@ docker exec cdc-postgres psql -U postgres -d cdc_db \
   -c "SHOW wal_level;"
 
 # Expected output: logical
+```
+
+#### If patroni cluster setup, then
+```bash
+root@pg1:/# patronictl show-config
+
+loop_wait: 10
+master_start_timeout: 300
+maximum_lag_on_failover: 1048576
+postgresql:
+  parameters:
+    max_replication_slots: 10
+    max_wal_senders: 10
+    synchronous_standby_names: ANY 2 (pg2, pg4)
+    wal_level: logical
+    wal_log_hints: 'on'
+  use_pg_rewind: true
+  use_slots: true
+retry_timeout: 10
+synchronous_mode: true
+synchronous_mode_strict: false
+synchronous_node_count: 1
+ttl: 30
 ```
 
 ### Step 4: Check PostgreSQL Replication Configuration
