@@ -62,7 +62,7 @@ pg_version: "15"
 pg_container_name: "cdc-postgres"
 pg_container_ip: "172.18.0.25"
 pg_listen_port: 5432
-pg_host_mapping_port: 5433  # Exposed to localhost (avoid conflict)
+pg_host_mapping_port: 5438  # Exposed to localhost (5433-5437 reserved for Patroni pg1-pg4 and pg-bouncer)
 pg_max_connections: 200
 pg_shared_buffers: "256MB"
 pg_effective_cache_size: "1GB"

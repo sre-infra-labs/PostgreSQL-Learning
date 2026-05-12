@@ -45,7 +45,7 @@
 This setup uses **Docker** on macOS with a shared `lab-network` for all containers.
 
 ```bash
-cd playbook-install-pg-cluster-docker/
+cd playbook-install-pg-cluster-docker-etcd/
 
 # Phase 1: Create Docker containers and network
 ansible-playbook playbook-setup-docker.yml
@@ -1873,7 +1873,7 @@ docker exec pg1 etcdctl \
 ## Common Ansible Operations
 
 ```bash
-cd playbook-install-pg-cluster-docker/
+cd playbook-install-pg-cluster-docker-etcd/
 
 # Full cluster install (Phase 1 + Phase 2)
 ansible-playbook playbook-setup-docker.yml

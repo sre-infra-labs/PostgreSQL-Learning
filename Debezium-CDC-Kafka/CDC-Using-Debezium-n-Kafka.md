@@ -13,21 +13,90 @@ Change Data Capture (CDC) is a design pattern that captures data changes at the 
 
 ## Architecture
 
+Each CDC service runs in its own dedicated container on the shared `lab-network`, coexisting with
+the Patroni HA cluster (pg1–pg4). Ports 5433–5437 are reserved for the Patroni cluster; the CDC
+PostgreSQL source uses 5438.
+
 ```
-PostgreSQL Source Database (localhost:5433)
-    ↓ (Logical Replication via WAL)
-    ↓ (pgoutput plugin)
-    ↓
-Debezium PostgreSQL Connector (localhost:8083 REST API)
-    ↓ (Reads changes, converts to Kafka messages)
-    ↓
-Kafka Message Broker (localhost:29092)
-    ↓ (Stores CDC events in topics, managed by Zookeeper:2181)
-    ↓
-Kafka Consumers (via Kafka UI: localhost:8080)
-    ↓ (Any application can consume)
-    ↓
-Data Pipelines, Analytics, Cache, Data Warehousing, etc.
+Host (macOS)
+│
+├── Docker Network: lab-network (172.18.0.0/16)
+│   │
+│   ├─ Patroni HA Cluster (reserved IPs — do not reuse)
+│   │  ├── 172.18.0.9  ← Keepalived Replica VIP  (floats to sync standby)
+│   │  ├── 172.18.0.10 ← Keepalived Primary VIP  (floats to Patroni leader)
+│   │  ├── pg1  (172.18.0.11)  host port 5433
+│   │  ├── pg2  (172.18.0.12)  host port 5434
+│   │  ├── pg3  (172.18.0.13)  host port 5435
+│   │  ├── pg-bouncer (172.18.0.20)  host port 5436
+│   │  └── pg4  (172.18.0.14)  host port 5437
+│   │
+│   └─ CDC Stack
+│      │
+│      ├── cdc-postgres   (172.18.0.25)   PostgreSQL 15 CDC source
+│      │     container port 5432  →  host port 5438
+│      │     wal_level=logical, publication: dbz_publication
+│      │     replication slot: debezium_slot (pgoutput plugin)
+│      │
+│      ├── cdc-zookeeper  (172.18.0.21+)  Zookeeper (Kafka coordinator)
+│      │     container port 2181  →  host port 2181
+│      │     peer ports 2888/3888 (internal only)
+│      │
+│      ├── cdc-kafka      (172.18.0.21+)  Kafka broker
+│      │     container port 9092  →  host port 29092
+│      │
+│      ├── cdc-debezium   (172.18.0.21+)  Debezium Connect (REST API)
+│      │     container port 8083  →  host port 8083
+│      │     connector: postgres-cdc-connector (postgres plugin)
+│      │
+│      ├── cdc-kafka-ui   (172.18.0.21+)  Kafka UI (Provectus)
+│      │     container port 8080  →  host port 8080
+│      │
+│      └── cdc-pgadmin    (172.18.0.26)   pgAdmin 4 + pgBadger
+│            container port 80    →  host port 5050
+│            pgBadger web reports →  port 8888 (inside container)
+│
+└── Docker Bind-Mount Volumes  (~/cdc-volumes/)
+      ├── postgres/data     — PostgreSQL data directory
+      ├── postgres/logs     — PostgreSQL logs
+      ├── postgres/config   — postgresql.conf, pg_hba.conf (read-only mounts)
+      └── pgadmin/          — pgAdmin session/config persistence
+```
+
+### Port & Endpoint Summary
+
+| Container | Image | Container IP | Internal Port | Host Port | Endpoint / Purpose |
+|---|---|---|---|---|---|
+| `cdc-postgres` | postgres:15 | 172.18.0.25 | 5432 | **5438** | PostgreSQL CDC source (`psql -h localhost -p 5438`) |
+| `cdc-zookeeper` | confluentinc/cp-zookeeper | 172.18.0.21+ | 2181 | **2181** | Kafka coordination |
+| `cdc-kafka` | confluentinc/cp-kafka | 172.18.0.21+ | 9092 | **29092** | Kafka broker (`localhost:29092`) |
+| `cdc-debezium` | debezium/connect | 172.18.0.21+ | 8083 | **8083** | REST API `http://localhost:8083` |
+| `cdc-kafka-ui` | provectuslabs/kafka-ui | 172.18.0.21+ | 8080 | **8080** | Web UI `http://localhost:8080` |
+| `cdc-pgadmin` | dpage/pgadmin4 | 172.18.0.26 | 80 | **5050** | pgAdmin UI `http://localhost:5050` |
+
+> **Note:** `cdc-zookeeper`, `cdc-kafka`, `cdc-debezium`, and `cdc-kafka-ui` are deployed via a
+> single `docker-compose` file; their IPs are sequentially assigned by Docker starting at
+> `172.18.0.21`.
+
+### CDC Data Flow
+
+```
+cdc-postgres (172.18.0.25:5432)
+    │  WAL logical replication (pgoutput plugin)
+    │  Publication: dbz_publication  |  Slot: debezium_slot
+    ▼
+cdc-debezium (172.18.0.21+:8083)
+    │  Reads WAL changes → converts to JSON Kafka messages
+    │  Connector: postgres-cdc-connector
+    ▼
+cdc-kafka (172.18.0.21+:9092)   ←── coordinated by cdc-zookeeper (:2181)
+    │  Topics: postgres-cdc.public.users
+    │          postgres-cdc.public.orders
+    │          postgres-cdc.public.products
+    ▼
+Consumers: cdc-kafka-ui (browse), application clients (localhost:29092)
+    ▼
+Data Pipelines / Analytics / Cache / Data Warehousing
 ```
 
 ## How It Works
@@ -66,7 +135,7 @@ psql
 
 # connect directly
 export PGPASSWORD=$PGPWD_PERSONAL
-psql -h localhost -p 5433 -U postgres
+psql -h localhost -p 5438 -U postgres
 ```
 
 
@@ -207,7 +276,7 @@ services:
 
 | Service | Port | URL | Purpose |
 |---------|------|-----|---------|
-| **PostgreSQL** | 5433 | localhost:5433 | CDC source database |
+| **PostgreSQL** | 5438 | localhost:5438 | CDC source database |
 | **pgAdmin** | 5050 | http://localhost:5050 | Database management GUI |
 | **Zookeeper** | 2181 | localhost:2181 | Kafka coordination |
 | **Kafka Broker** | 29092 | localhost:29092 | Message broker (external) |
@@ -231,7 +300,7 @@ export PGADMIN_DEFAULT_PASSWORD=$(ansible-vault view sensitive-values --vault-pa
 
 ```
 PostgreSQL:
-  - Host: localhost, Port: 5433
+  - Host: localhost, Port: 5438
   - Admin User: postgres, Password: $PG_SUPERUSER_PASSWORD
   - Database: cdc_db
   - Replication User: replication, Password: $PG_REPLICATION_PASSWORD
@@ -261,7 +330,7 @@ This deploys:
 - Kafka Broker (port 29092 external, 9092 internal)
 - Debezium Connect (port 8083)
 - Kafka UI (port 8080)
-- PostgreSQL (port 5433)
+- PostgreSQL (port 5438)
 - pgAdmin (port 5050)
 
 **Expected output**: All 6 containers running, 3 Kafka topics created
@@ -274,7 +343,7 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 # Should show:
 # cdc-pgadmin         Up ... 0.0.0.0:5050->80/tcp
-# cdc-postgres        Up ... 0.0.0.0:5433->5432/tcp
+# cdc-postgres        Up ... 0.0.0.0:5438->5432/tcp
 # cdc-debezium        Up ... 0.0.0.0:8083->8083/tcp
 # cdc-kafka-ui        Up ... 0.0.0.0:8080->8080/tcp
 # cdc-kafka           Up ... 0.0.0.0:29092->9092/tcp
@@ -286,6 +355,9 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 ### Step 3: Verify PostgreSQL is Ready
 
 ```bash
+# If required, use below command to restart services inside containers
+for n in pg1 pg2 pg3 pg4; do echo "=== $n ===" && docker exec $n systemctl restart patroni | tail -3; done
+
 # Test PostgreSQL connectivity
 docker exec cdc-postgres psql -U postgres -d cdc_db \
   -c "SELECT version();"
@@ -1090,7 +1162,7 @@ Downstream Systems (Analytics, Cache, Data Warehouse, etc.)
 
 | Component | Container | Port | Purpose |
 |-----------|-----------|------|---------|
-| PostgreSQL | cdc-postgres | 5433 | Source database with CDC enabled |
+| PostgreSQL | cdc-postgres | 5438 | Source database with CDC enabled |
 | Zookeeper | cdc-zookeeper | 2181 | Kafka coordination & metadata |
 | Kafka | cdc-kafka | 29092 | Message broker & CDC event store |
 | Debezium | cdc-debezium | 8083 | CDC connector & event processor |
