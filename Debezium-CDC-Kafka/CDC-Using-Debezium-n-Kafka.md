@@ -2,6 +2,8 @@
 - [Blog - How Patroni Addresses the Problem of the Logical Replication Slot Failover in a PostgreSQL Cluster](https://www.percona.com/blog/how-patroni-addresses-the-problem-of-the-logical-replication-slot-failover-in-a-postgresql-cluster/)
 - [Patroni 2.1.0+ Doc - Replication slots](https://patroni.readthedocs.io/en/latest/dynamic_configuration.html#:~:text=slots%3A%20define%20permanent%20replication%20slots)
 - [Blog - How we managed Postgres HA with Logical Replication using Patroni](https://medium.com/@PavankumarHarikar/how-we-managed-postgres-ha-with-logical-replication-using-patroni-1d31a6f6c9b0)
+- [Youtube - Alexander Kukushkin. Failover of logical replication slots in Patroni](https://www.youtube.com/live/SllJsbPVaow?si=bjIlu-umeXKFeRlJ)
+  - [Slidedeck](https://www.postgresql.eu/events/pgconfde2022/sessions/session/3745/slides/306/Implementing%20failover%20of%20logical%20replication%20slots%20in%20Patroni.pdf)
 
 ## Overview
 
