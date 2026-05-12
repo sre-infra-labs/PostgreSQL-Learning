@@ -39,14 +39,16 @@
       changed_when: false
 
     - name: Deploy pgAdmin container (if missing)
+      # Single-quote PGADMIN_PASS to prevent $$ from being shell-expanded to PID
       shell: |
+        PGADMIN_PASS='{{ PGADMIN_DEFAULT_PASSWORD }}'
         docker run -d \
           --name "{{ pgadmin_container_name }}" \
           --network "{{ docker_network_name }}" \
           --ip "{{ pgadmin_container_ip }}" \
           -p "{{ pgadmin_host_mapping_port }}:{{ pgadmin_listen_port }}" \
-          -e PGADMIN_DEFAULT_EMAIL="{{ PGADMIN_DEFAULT_EMAIL }}" \
-          -e PGADMIN_DEFAULT_PASSWORD="{{ PGADMIN_DEFAULT_PASSWORD }}" \
+          -e "PGADMIN_DEFAULT_EMAIL={{ PGADMIN_DEFAULT_EMAIL }}" \
+          -e "PGADMIN_DEFAULT_PASSWORD=$PGADMIN_PASS" \
           -v "{{ docker_volumes_root }}/pgadmin:/var/lib/pgadmin" \
           dpage/pgadmin4:{{ pgadmin_version }}
       when: pgadmin_state.stdout | trim == 'missing'

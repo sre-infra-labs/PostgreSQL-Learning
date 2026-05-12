@@ -254,7 +254,7 @@ ansible-playbook -i hosts.yml playbook-deploy-all.yml \
 ```
 
 This deploys:
-- Docker network (cdc-network: 172.20.0.0/16)
+- Docker network (lab-network: 172.18.0.0/16)
 - Zookeeper (port 2181)
 - Kafka Broker (port 29092 external, 9092 internal)
 - Debezium Connect (port 8083)
@@ -1040,7 +1040,7 @@ docker exec cdc-postgres psql -U postgres -d cdc_db -c \
 - View with: `ansible-vault view sensitive-values --vault-password-file=vault-pass`
 - Replication user has minimal required permissions
 - All ports bound to localhost (not exposed to network)
-- Network isolation via Docker network (cdc-network)
+- Network isolation via Docker network (lab-network)
 
 **For Production**:
 - Use strong passwords for all users

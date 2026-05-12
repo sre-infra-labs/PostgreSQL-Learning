@@ -15,7 +15,9 @@ services:
       - {{ docker_volumes_root }}/zookeeper/data:/var/lib/zookeeper/data
       - {{ docker_volumes_root }}/zookeeper/log:/var/lib/zookeeper/log
     networks:
-      - {{ docker_network_name }}
+      {{ docker_network_name }}:
+        aliases:
+          - zookeeper
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "{{ zk_listen_port }}"]
       interval: 10s
@@ -39,7 +41,9 @@ services:
     volumes:
       - {{ docker_volumes_root }}/kafka/data:/var/lib/kafka/data
     networks:
-      - {{ docker_network_name }}
+      {{ docker_network_name }}:
+        aliases:
+          - kafka
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "{{ kafka_advertised_port }}"]
       interval: 10s
@@ -60,7 +64,9 @@ services:
     ports:
       - "{{ debezium_host_mapping_port }}:{{ debezium_listen_port }}"
     networks:
-      - {{ docker_network_name }}
+      {{ docker_network_name }}:
+        aliases:
+          - debezium-connect
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -74,7 +80,9 @@ services:
     ports:
       - "{{ kafka_ui_host_mapping_port }}:{{ kafka_ui_listen_port }}"
     networks:
-      - {{ docker_network_name }}
+      {{ docker_network_name }}:
+        aliases:
+          - kafka-ui
 
 networks:
   {{ docker_network_name }}:
