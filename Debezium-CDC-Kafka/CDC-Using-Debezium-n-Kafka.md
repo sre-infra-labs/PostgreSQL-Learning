@@ -1416,6 +1416,380 @@ You've successfully set up Debezium CDC when:
 
 ---
 
-**Last Updated**: 2026-05-11 (Idempotent deployment, persistent volumes, full CDC exploration guide)
+## CDC with Patroni HA Cluster (PostgreSQL 14+)
+
+This section covers connecting Debezium to a **Patroni-managed PostgreSQL cluster** as the CDC
+source — where the source is the Patroni HA cluster (pg1–pg3 primary, pg4 standby DR) rather
+than a standalone PostgreSQL container.
+
+The critical challenge: **logical replication slots do not automatically follow failovers**.
+If pg1 (Leader) fails and pg2 is promoted, the `debezium_slot` that existed only on pg1 is gone
+from pg2's perspective, and Debezium stalls. Patroni's `slots:` DCS feature solves this by
+maintaining permanent logical slots synchronized across the entire cluster.
+
+> **Reference**: [Patroni Docs — Permanent Replication Slots](https://patroni.readthedocs.io/en/latest/dynamic_configuration.html#:~:text=slots%3A%20define%20permanent%20replication%20slots)
+
+---
+
+### Requirements
+
+| Requirement | Minimum | Why |
+|---|---|---|
+| PostgreSQL | **11+** | Logical slot files copied primary → replicas; PG 9.6/10 lack required functions |
+| Patroni | **2.1.0+** | `slots:` DCS config and logical slot copy via libpq introduced |
+| `wal_level` | `logical` | Must be set on all Patroni cluster nodes (requires rolling restart) |
+| `use_slots` | `true` | Required for permanent slots to work (Patroni default on PG 9.4+) |
+| `max_replication_slots` | ≥ 10 | Must have headroom for Debezium slot + member replication slots |
+| `max_wal_senders` | ≥ 10 | Must allow connections from replicas + Debezium |
+
+> Your lab cluster runs **PostgreSQL 18** with **Patroni 4.0.6** — all features are fully supported.
+
+---
+
+### Step 1: Set `wal_level = logical` on the Primary Cluster
+
+`wal_level` must be `logical` (not `replica`) on all nodes so PostgreSQL can decode WAL for
+Debezium. This requires a rolling restart. Add it under `postgresql.parameters:` in the DCS:
+
+```bash
+# On any Patroni primary cluster node (pg1, pg2, or pg3)
+patronictl edit-config pg-docker-cls1
+```
+
+Ensure the `postgresql` section looks like this (parameters under `parameters:`, not at the top
+level of `postgresql:`):
+
+```yaml
+postgresql:
+  parameters:
+    max_replication_slots: 10
+    max_wal_senders: 10
+    wal_level: logical          # ← must be logical, not replica
+    wal_log_hints: 'on'
+  use_pg_rewind: true
+  use_slots: true
+```
+
+Then perform a rolling restart to apply the `wal_level` change:
+
+```bash
+patronictl restart pg-docker-cls1
+
+# Verify after restart
+patronictl list
+psql -h 172.18.0.10 -U postgres -c "SHOW wal_level;"
+# Expected: logical
+```
+
+---
+
+### Step 2: Define Permanent Replication Slot in Patroni DCS
+
+Add a `slots:` block to the primary cluster DCS config. Patroni will:
+
+- Create `debezium_slot` on the Leader if it does not exist
+- Copy it to all replicas (pg2, pg3) every `loop_wait` seconds via libpq
+- Automatically re-create it on the new Leader after every failover
+- Enable `hot_standby_feedback` on all replicas automatically (prevents vacuum from removing rows still needed for decoding)
+
+```bash
+patronictl edit-config pg-docker-cls1
+```
+
+Add the `slots:` block at the root level (same indentation as `postgresql:`, `ttl:`, etc.):
+
+```yaml
+loop_wait: 10
+master_start_timeout: 300
+maximum_lag_on_failover: 1048576
+postgresql:
+  parameters:
+    max_replication_slots: 10
+    max_wal_senders: 10
+    wal_level: logical
+    wal_log_hints: 'on'
+  use_pg_rewind: true
+  use_slots: true
+retry_timeout: 10
+synchronous_mode: true
+synchronous_mode_strict: false
+synchronous_node_count: 1
+ttl: 30
+slots:                          # ← ADD THIS BLOCK
+  debezium_slot:
+    type: logical
+    database: dba               # ← replace with your CDC source database name
+    plugin: pgoutput
+```
+
+> **Slot name**: Must exactly match the `slot.name` value in your Debezium connector config.
+> **Database**: Replace `dba` with the actual database you want to capture (e.g., `cdc_db`).
+
+Patroni applies the change within one `loop_wait` cycle (10 seconds). No restart needed.
+
+---
+
+### Step 3: Standby Cluster (pg4) — Slot Behaviour
+
+The standby cluster (pg4, Standby Leader) has its **own separate DCS** (etcd running on pg4).
+The primary cluster's DCS config does **not** apply to pg4.
+
+| Scenario | What to do on pg4 |
+|---|---|
+| Debezium only reads from the primary cluster VIP | **No slots config needed on pg4.** Debezium reconnects to the primary cluster after failover within the primary DC (pg1→pg2). |
+| pg4 is promoted (full DC failure) and becomes the new primary | Re-create the Debezium connector pointing to pg4. Patroni will create the slot on pg4 once you add `slots:` to its DCS. |
+
+**If you need the slot pre-created on pg4 for faster DR recovery**, add the same `slots:` block
+to pg4's DCS **only after pg4 is promoted**:
+
+```bash
+# Run on pg4 (only after promotion to primary)
+patronictl edit-config pg-docker-cls1
+```
+
+```yaml
+slots:
+  debezium_slot:
+    type: logical
+    database: dba
+    plugin: pgoutput
+```
+
+**While pg4 is a Standby Leader** (streaming from the primary cluster), logical slots on pg4
+are **not useful** — logical decoding can only run on the timeline-owning primary. Do not attempt
+to consume from a logical slot on a Standby Leader.
+
+---
+
+### Step 4: Set Up Permissions on the Patroni Cluster
+
+Connect via the Primary VIP and create the Debezium replication user and publication.
+Because Patroni replicates all DDL and DML via WAL streaming, these objects will automatically
+appear on pg2, pg3 (and pg4 via streaming replication) — no need to run on each node.
+
+```sql
+-- Connect via Patroni Primary VIP (172.18.0.10) or HAProxy write port (:5000)
+-- psql -h 172.18.0.10 -U postgres -d <your_database>
+
+-- 1. Create dedicated Debezium replication user
+CREATE ROLE replication REPLICATION LOGIN PASSWORD 'your_password';
+
+-- 2. Grant database and table access (for initial snapshot)
+GRANT CONNECT ON DATABASE dba TO replication;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO replication;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT ON TABLES TO replication;
+
+-- 3. Create publication (as superuser; slot is managed by Patroni via slots: config)
+CREATE PUBLICATION dbz_publication FOR ALL TABLES;
+
+-- 4. Set REPLICA IDENTITY FULL on captured tables (required for UPDATE/DELETE events)
+ALTER TABLE public.<table1> REPLICA IDENTITY FULL;
+ALTER TABLE public.<table2> REPLICA IDENTITY FULL;
+
+-- Do NOT manually create the replication slot — Patroni's slots: config manages it.
+```
+
+---
+
+### Step 5: Allow Replication in pg_hba.conf (via Patroni DCS)
+
+Add a `pg_hba:` entry for the Debezium host in the primary cluster DCS. Patroni regenerates
+`pg_hba.conf` on all nodes and sends SIGHUP — no restart required.
+
+```bash
+patronictl edit-config pg-docker-cls1
+```
+
+Add under `postgresql:` → `pg_hba:`:
+
+```yaml
+postgresql:
+  pg_hba:
+    - local all postgres peer
+    - host  all all      127.0.0.1/32   scram-sha-256
+    - host  replication  replicator 0.0.0.0/0 scram-sha-256
+    # Allow Debezium (cdc-debezium container on lab-network) to replicate
+    - host  replication  replication 172.18.0.0/16 scram-sha-256
+    - host  all all      0.0.0.0/0      scram-sha-256
+    - host  all all      ::/0           scram-sha-256
+```
+
+---
+
+### Step 6: Debezium Connector Configuration for Patroni Cluster
+
+Connect Debezium via the **Keepalived Primary VIP** (`172.18.0.10`) so it automatically follows
+the current Leader after every failover. Do **not** use a fixed node IP.
+
+```bash
+PG_REPLICATION_PASSWORD="your_password"
+
+curl -sf -X POST http://localhost:8083/connectors \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"name\": \"patroni-cdc-connector\",
+    \"config\": {
+      \"connector.class\": \"io.debezium.connector.postgresql.PostgresConnector\",
+      \"database.hostname\": \"172.18.0.10\",
+      \"database.port\": \"5432\",
+      \"database.user\": \"replication\",
+      \"database.password\": \"${PG_REPLICATION_PASSWORD}\",
+      \"database.dbname\": \"dba\",
+      \"topic.prefix\": \"patroni-cdc\",
+      \"plugin.name\": \"pgoutput\",
+      \"slot.name\": \"debezium_slot\",
+      \"publication.name\": \"dbz_publication\",
+      \"publication.autocreate.mode\": \"disabled\",
+      \"slot.drop.on.stop\": \"false\",
+      \"snapshot.mode\": \"initial\",
+      \"heartbeat.interval.ms\": \"10000\"
+    }
+  }"
+```
+
+| Key Config | Value | Reason |
+|---|---|---|
+| `database.hostname` | `172.18.0.10` | Keepalived Primary VIP — always points to current Patroni Leader |
+| `database.port` | `5432` | Direct PostgreSQL port inside the container |
+| `slot.name` | `debezium_slot` | Must match the name in Patroni's `slots:` DCS config |
+| `slot.drop.on.stop` | `false` | **Critical** — never drop the slot when connector stops; Patroni manages it |
+| `publication.autocreate.mode` | `disabled` | Publication already created manually as superuser |
+| `heartbeat.interval.ms` | `10000` | Keeps the slot LSN advancing even when no data changes occur |
+
+> **Alternatively**, use the HAProxy write port (port `5000` inside each container, mapped to
+> `15000/25000/35000` on the host) instead of the VIP. HAProxy health-checks Patroni's REST API
+> (`GET /primary`) and only routes to the current primary, providing the same failover behaviour.
+
+---
+
+### Step 7: Verify Slot Replication Across All Nodes
+
+After Patroni applies the `slots:` config, verify the slot exists on all nodes:
+
+```bash
+# Primary node (pg1 — current Leader)
+psql -h 172.18.0.11 -U postgres -c \
+  "SELECT slot_name, slot_type, plugin, database, active, confirmed_flush_lsn
+   FROM pg_replication_slots WHERE slot_name = 'debezium_slot';"
+# Expected: active=true (Debezium is connected), confirmed_flush_lsn advancing
+
+# Sync Standby (pg2) — slot copied from primary, inactive
+psql -h 172.18.0.12 -U postgres -c \
+  "SELECT slot_name, slot_type, plugin, database, active, confirmed_flush_lsn
+   FROM pg_replication_slots WHERE slot_name = 'debezium_slot';"
+# Expected: active=false, confirmed_flush_lsn close to primary's value
+
+# Replica (pg3) — same
+psql -h 172.18.0.13 -U postgres -c \
+  "SELECT slot_name, slot_type, plugin, database, active, confirmed_flush_lsn
+   FROM pg_replication_slots WHERE slot_name = 'debezium_slot';"
+```
+
+Monitor slot lag across all nodes in one command:
+
+```bash
+for host in 172.18.0.11 172.18.0.12 172.18.0.13; do
+  echo "=== $host ===";
+  psql -h "$host" -U postgres -c \
+    "SELECT slot_name, active, confirmed_flush_lsn, restart_lsn,
+            pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn) AS lag_bytes
+     FROM pg_replication_slots WHERE slot_name = 'debezium_slot';" 2>/dev/null;
+done
+```
+
+---
+
+### Failover Behaviour — What Happens Step by Step
+
+Scenario: pg1 (Leader) crashes; pg2 (Sync Standby) is promoted.
+
+```
+1. pg1 crashes
+2. Patroni detects Leader loss (within loop_wait + retry_timeout = ~20 s)
+3. pg2 is promoted to Leader (Keepalived VIP 172.18.0.10 moves to pg2)
+4. debezium_slot already exists on pg2 (synchronized by Patroni's slots: config)
+5. Debezium detects broken connection → reconnects to 172.18.0.10 (now pg2)
+6. Debezium resumes reading from debezium_slot on pg2
+7. Some messages committed just before the crash may be re-delivered (at-least-once)
+8. pg3 continues streaming from pg2; slot is re-synchronized to pg3
+```
+
+To detect and discard duplicate messages in your consumer application:
+
+```sql
+-- Track the slot's confirmed_flush_lsn on the new primary
+-- Your consumer should compare event LSN against the last committed LSN
+SELECT slot_name, confirmed_flush_lsn
+FROM pg_replication_slots
+WHERE slot_name = 'debezium_slot';
+```
+
+---
+
+### Key Warnings
+
+> ⚠️ **Permanent slots are synchronized only from the Leader → replicas.**
+> Debezium must connect only to the current Leader (via VIP or HAProxy). Connecting to a replica
+> and consuming from the slot causes unbounded `pg_wal` growth on all other nodes in the cluster.
+
+> ⚠️ **Never manually drop or re-create the replication slot** once it is under Patroni's `slots:`
+> management. Use `patronictl edit-config` to remove it from the `slots:` block first, then drop
+> it manually. Dropping a Patroni-managed slot manually causes Patroni to immediately re-create it.
+
+> ⚠️ **`hot_standby_feedback` is enabled automatically** on all replicas when permanent logical
+> slots are defined. This prevents VACUUM from removing rows that replicas still need for decoding
+> but can cause table bloat on the primary if a replica falls far behind. Monitor replica lag.
+
+> ⚠️ **`nostream` tag on a Patroni member** disables copying and synchronization of permanent
+> logical slots on that node and all its cascading replicas. pg3 has `nosync: true` (not
+> `nostream`), so slot synchronization to pg3 is not affected.
+
+> ⚠️ **Logical slot failover on PostgreSQL < 11 is not supported.** For PostgreSQL 14+ (your
+> environment), all features work correctly. PG 9.6 and 10 lack the internal functions required
+> for slot file copying.
+
+---
+
+### Summary — Primary Cluster DCS Config (Final State)
+
+```bash
+patronictl show-config pg-docker-cls1
+```
+
+```yaml
+loop_wait: 10
+master_start_timeout: 300
+maximum_lag_on_failover: 1048576
+postgresql:
+  parameters:
+    max_replication_slots: 10
+    max_wal_senders: 10
+    wal_level: logical
+    wal_log_hints: 'on'
+  use_pg_rewind: true
+  use_slots: true
+  pg_hba:
+    - local all postgres peer
+    - host  all all      127.0.0.1/32   scram-sha-256
+    - host  replication  replicator 0.0.0.0/0 scram-sha-256
+    - host  replication  replication 172.18.0.0/16 scram-sha-256
+    - host  all all      0.0.0.0/0      scram-sha-256
+    - host  all all      ::/0           scram-sha-256
+retry_timeout: 10
+synchronous_mode: true
+synchronous_mode_strict: false
+synchronous_node_count: 1
+ttl: 30
+slots:
+  debezium_slot:
+    type: logical
+    database: dba               # replace with your CDC source database
+    plugin: pgoutput
+```
+
+---
+
+**Last Updated**: 2026-05-12 (Added Patroni HA cluster CDC section, permissions setup, architecture diagram)
 **Status**: Working CDC Learning Infrastructure
-**Version**: 1.1 - Persistence, Idempotency, and Steps to Explore
+**Version**: 1.2 - Patroni HA cluster CDC support
