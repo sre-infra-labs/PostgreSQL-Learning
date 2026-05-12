@@ -1452,12 +1452,17 @@ maintaining permanent logical slots synchronized across the entire cluster.
 Debezium. This requires a rolling restart. Add it under `postgresql.parameters:` in the DCS:
 
 ```bash
-# On any Patroni primary cluster node (pg1, pg2, or pg3)
-patronictl edit-config pg-docker-cls1
+# Run from the Docker host — no interactive prompt
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 --force \
+  --set "postgresql.parameters.wal_level=logical" \
+  --set "postgresql.parameters.wal_log_hints=on" \
+  --set "postgresql.parameters.max_replication_slots=10" \
+  --set "postgresql.parameters.max_wal_senders=10" \
+  --set "postgresql.use_pg_rewind=true" \
+  --set "postgresql.use_slots=true"
 ```
 
-Ensure the `postgresql` section looks like this (parameters under `parameters:`, not at the top
-level of `postgresql:`):
+Expected DCS structure after the command (verify with `docker exec pg1 patronictl -c /etc/patroni/patroni.yml show-config`):
 
 ```yaml
 postgresql:
@@ -1473,11 +1478,12 @@ postgresql:
 Then perform a rolling restart to apply the `wal_level` change:
 
 ```bash
-patronictl restart pg-docker-cls1
+# Rolling restart — replicas first, leader last (no downtime)
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml restart pg-docker-cls1 --force
 
 # Verify after restart
-patronictl list
-psql -h 172.18.0.10 -U postgres -c "SHOW wal_level;"
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
+docker exec pg1 psql -h 172.18.0.10 -U postgres -c "SHOW wal_level;"
 # Expected: logical
 ```
 
@@ -1493,10 +1499,14 @@ Add a `slots:` block to the primary cluster DCS config. Patroni will:
 - Enable `hot_standby_feedback` on all replicas automatically (prevents vacuum from removing rows still needed for decoding)
 
 ```bash
-patronictl edit-config pg-docker-cls1
+# Run from the Docker host — no interactive prompt
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 --force \
+  --set "slots.debezium_slot.type=logical" \
+  --set "slots.debezium_slot.database=dba" \
+  --set "slots.debezium_slot.plugin=pgoutput"
 ```
 
-Add the `slots:` block at the root level (same indentation as `postgresql:`, `ttl:`, etc.):
+Expected DCS structure after the command (the `slots:` block appears at the root level, same indentation as `postgresql:`, `ttl:`, etc.):
 
 ```yaml
 loop_wait: 10
@@ -1543,16 +1553,11 @@ The primary cluster's DCS config does **not** apply to pg4.
 to pg4's DCS **only after pg4 is promoted**:
 
 ```bash
-# Run on pg4 (only after promotion to primary)
-patronictl edit-config pg-docker-cls1
-```
-
-```yaml
-slots:
-  debezium_slot:
-    type: logical
-    database: dba
-    plugin: pgoutput
+# Run from the Docker host — no interactive prompt (only after pg4 is promoted to primary)
+docker exec pg4 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 --force \
+  --set "slots.debezium_slot.type=logical" \
+  --set "slots.debezium_slot.database=dba" \
+  --set "slots.debezium_slot.plugin=pgoutput"
 ```
 
 **While pg4 is a Standby Leader** (streaming from the primary cluster), logical slots on pg4
@@ -1597,23 +1602,39 @@ ALTER TABLE public.<table2> REPLICA IDENTITY FULL;
 Add a `pg_hba:` entry for the Debezium host in the primary cluster DCS. Patroni regenerates
 `pg_hba.conf` on all nodes and sends SIGHUP — no restart required.
 
+The `pg_hba:` key holds a YAML list, which cannot be set with `--set` dot-notation.
+Use the `--apply` flag with a JSON patch file instead, or append the entry directly to `pg_hba.conf`
+on each node and reload — whichever matches how Patroni manages the file in your cluster.
+
+**Option A — Append to pg_hba.conf on each node (works regardless of Patroni hba_file management):**
+
 ```bash
-patronictl edit-config pg-docker-cls1
+# Idempotently add the Debezium replication entry and reload on all primary cluster nodes
+for node in pg1 pg2 pg3; do
+  docker exec "$node" bash -c '
+    HBA=$(psql -U postgres -tAc "SHOW hba_file;")
+    grep -q "replication 172.18.0.0/16" "$HBA" || \
+      echo "host  replication  replication 172.18.0.0/16 scram-sha-256" >> "$HBA"
+    psql -U postgres -c "SELECT pg_reload_conf();"
+  '
+done
 ```
 
-Add under `postgresql:` → `pg_hba:`:
+**Option B — Set the full `pg_hba:` list via Patroni DCS (only if Patroni manages pg_hba.conf):**
 
-```yaml
-postgresql:
-  pg_hba:
-    - local all postgres peer
-    - host  all all      127.0.0.1/32   scram-sha-256
-    - host  replication  replicator 0.0.0.0/0 scram-sha-256
-    # Allow Debezium (cdc-debezium container on lab-network) to replicate
-    - host  replication  replication 172.18.0.0/16 scram-sha-256
-    - host  all all      0.0.0.0/0      scram-sha-256
-    - host  all all      ::/0           scram-sha-256
+```bash
+# Creates/replaces the entire pg_hba list in the DCS — Patroni regenerates pg_hba.conf and sends SIGHUP
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 --force \
+  --set 'postgresql.pg_hba=["local all postgres peer",
+    "host all all 127.0.0.1/32 scram-sha-256",
+    "host replication replicator 0.0.0.0/0 scram-sha-256",
+    "host replication replication 172.18.0.0/16 scram-sha-256",
+    "host all all 0.0.0.0/0 scram-sha-256",
+    "host all all ::/0 scram-sha-256"]'
 ```
+
+> **Note**: Option B replaces the entire `pg_hba` list in the DCS. Confirm the full list is correct
+> before running — use `docker exec pg1 patronictl -c /etc/patroni/patroni.yml show-config` first.
 
 ---
 
@@ -1754,7 +1775,7 @@ WHERE slot_name = 'debezium_slot';
 ### Summary — Primary Cluster DCS Config (Final State)
 
 ```bash
-patronictl show-config pg-docker-cls1
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml show-config pg-docker-cls1
 ```
 
 ```yaml
