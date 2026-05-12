@@ -1502,7 +1502,7 @@ Add a `slots:` block to the primary cluster DCS config. Patroni will:
 # Run from the Docker host — no interactive prompt
 docker exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 --force \
   --set "slots.debezium_slot.type=logical" \
-  --set "slots.debezium_slot.database=dba" \
+  --set "slots.debezium_slot.database=cdc_db" \
   --set "slots.debezium_slot.plugin=pgoutput"
 ```
 
@@ -1528,12 +1528,12 @@ ttl: 30
 slots:                          # ← ADD THIS BLOCK
   debezium_slot:
     type: logical
-    database: dba               # ← replace with your CDC source database name
+    database: cdc_db               # ← replace with your CDC source database name
     plugin: pgoutput
 ```
 
 > **Slot name**: Must exactly match the `slot.name` value in your Debezium connector config.
-> **Database**: Replace `dba` with the actual database you want to capture (e.g., `cdc_db`).
+> **Database**: Replace `cdc_db` with the actual database you want to capture (e.g., `dba`).
 
 Patroni applies the change within one `loop_wait` cycle (10 seconds). No restart needed.
 
@@ -1556,7 +1556,7 @@ to pg4's DCS **only after pg4 is promoted**:
 # Run from the Docker host — no interactive prompt (only after pg4 is promoted to primary)
 docker exec pg4 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 --force \
   --set "slots.debezium_slot.type=logical" \
-  --set "slots.debezium_slot.database=dba" \
+  --set "slots.debezium_slot.database=cdc_db" \
   --set "slots.debezium_slot.plugin=pgoutput"
 ```
 
@@ -1576,17 +1576,29 @@ appear on pg2, pg3 (and pg4 via streaming replication) — no need to run on eac
 -- Connect via Patroni Primary VIP (172.18.0.10) or HAProxy write port (:5000)
 -- psql -h 172.18.0.10 -U postgres -d <your_database>
 
+-- 0. Connect to your database
+\c cdc_db
+
 -- 1. Create dedicated Debezium replication user
 CREATE ROLE replication REPLICATION LOGIN PASSWORD 'your_password';
 
+SELECT slot_name, plugin, slot_type, database, confirmed_flush_lsn FROM pg_replication_slots;
+
 -- 2. Grant database and table access (for initial snapshot)
-GRANT CONNECT ON DATABASE dba TO replication;
+GRANT CONNECT ON DATABASE cdc_db TO replication;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO replication;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
   GRANT SELECT ON TABLES TO replication;
 
 -- 3. Create publication (as superuser; slot is managed by Patroni via slots: config)
 CREATE PUBLICATION dbz_publication FOR ALL TABLES;
+
+-- 3.1. Create required table
+CREATE TABLE replicate_me (id BIGINT NOT NULL GENERATED ALWAYS AS IDENTITY PRIMARY KEY, name TEXT);
+
+INSERT INTO replicate_me (name) VALUES ('PGConf.DE');
+
+SELECT * FROM pg_logical_slot_peek_changes( 'debezium_slot', NULL, NULL); -- for test_decoding plugin
 
 -- 4. Set REPLICA IDENTITY FULL on captured tables (required for UPDATE/DELETE events)
 ALTER TABLE public.<table1> REPLICA IDENTITY FULL;
