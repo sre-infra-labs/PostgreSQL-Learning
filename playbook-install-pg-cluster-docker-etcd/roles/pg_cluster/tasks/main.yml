@@ -67,6 +67,26 @@
       tags: etcd
   tags: etcd
 
+- name: Create standby cluster replication slot on primary
+  # Must exist before pg4 starts streaming; creates it only if absent (idempotent).
+  # Delegates to pg1 (primary leader) and runs once per standby cluster deployment.
+  become_user: postgres
+  ansible.builtin.shell: |
+    psql -U postgres -tAc "
+      SELECT pg_create_physical_replication_slot('{{ patroni_standby_primary_slot_name }}', true, false)
+      WHERE NOT EXISTS (
+        SELECT 1 FROM pg_replication_slots WHERE slot_name = '{{ patroni_standby_primary_slot_name }}'
+      );"
+  register: _slot_create
+  changed_when: _slot_create.stdout | trim != ''
+  failed_when: _slot_create.rc != 0
+  delegate_to: "{{ groups['primary_cluster_leader'] | first }}"
+  run_once: true
+  when:
+    - groups['standby_cluster_leader'] is defined
+    - groups['standby_cluster_leader'] | length > 0
+  tags: patroni
+
 - name: Install and configure Patroni
   include_tasks:
     file: custom/patroni.yml

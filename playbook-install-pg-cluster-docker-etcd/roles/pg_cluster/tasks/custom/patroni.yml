@@ -105,6 +105,7 @@
     - /etc/patroni
     - "{{ patroni_log_dir }}"
     - "{{ postgresql_log_dir }}"
+    - "{{ postgresql_data_dir | dirname }}"   # /var/lib/postgresql/<version>/ — parent dir must be traversable by postgres
     - "{{ postgresql_data_dir }}"
     - "{{ postgresql_stats_temp_directory_path }}"
     - "{{ postgresql_data_archive }}"
@@ -148,7 +149,8 @@
 
     - name: Wait for leader to be elected
       ansible.builtin.uri:
-        url: "http://{{ ip }}:{{ patroni_restapi_port }}/primary"
+        # Primary leaders respond on /primary; standby leaders respond on /standby-leader
+        url: "http://{{ ip }}:{{ patroni_restapi_port }}/{{ 'standby-leader' if inventory_hostname in (groups['standby_cluster_leader'] | default([])) else 'primary' }}"
         method: GET
         status_code: 200
       register: leader_check
@@ -169,7 +171,9 @@
     - name: Fail with diagnostic message (leader)
       ansible.builtin.fail:
         msg: "Patroni failed to start on leader {{ inventory_hostname }}. Review journal logs above."
-  when: inventory_hostname in groups['primary_cluster_leader']
+  when: >
+    inventory_hostname in (groups['primary_cluster_leader'] | default([])) or
+    inventory_hostname in (groups['standby_cluster_leader'] | default([]))
 
 - name: Start Patroni on Replicas (stream from leader)
   block:
@@ -208,4 +212,6 @@
     - name: Fail with diagnostic message (replica)
       ansible.builtin.fail:
         msg: "Patroni failed to start on replica {{ inventory_hostname }}. Review journal logs above."
-  when: inventory_hostname in groups['primary_cluster_replica']
+  when: >
+    inventory_hostname in (groups['primary_cluster_replica'] | default([])) or
+    inventory_hostname in (groups['standby_cluster_replica'] | default([]))
