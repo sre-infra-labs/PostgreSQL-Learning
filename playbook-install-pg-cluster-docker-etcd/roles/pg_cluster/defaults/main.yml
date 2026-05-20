@@ -191,6 +191,10 @@ patroni_superuser_username: "{{ postgres_user }}"
 patroni_replication_username: "replicator"
 patroni_superuser_password:   "{{ creds.PG_SUPERUSER_PWD }}"
 patroni_replication_password: "{{ creds.PG_SUPERUSER_PWD }}"
+
+# Replication slot name created on the primary for the standby cluster.
+# Override via hosts.yml: patroni_standby_cluster.primary_slot_name
+patroni_standby_primary_slot_name: "standby_cluster_slot"
 patroni_restapi_port: 8008
 patroni_ttl: 30
 patroni_loop_wait: 10

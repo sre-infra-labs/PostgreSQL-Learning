@@ -261,6 +261,7 @@ File: `~/.pgpass` (permissions must be `chmod 600`)
 pg1:*:*:*:Pg@Lab2026!
 pg2:*:*:*:Pg@Lab2026!
 pg3:*:*:*:Pg@Lab2026!
+pg4:*:*:*:Pg@Lab2026!
 127.0.0.1:*:*:*:Pg@Lab2026!
 localhost:*:*:*:Pg@Lab2026!
 ```
@@ -1383,12 +1384,12 @@ docker exec pg4 curl -s --max-time 3 http://172.18.0.13:8008/primary \
 ```bash
 # Create replication slot on primary (pg1) for pg4 standby
 docker exec pg1 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.11 -p 5432 -U postgres postgres \
-  -c "SELECT * FROM pg_create_physical_replication_slot('\''pg4_standby_slot'\'', true);"'
+  -c "SELECT * FROM pg_create_physical_replication_slot('\''standby_cluster_slot'\'', true);"'
 
 # Verify slot was created and is active
 docker exec pg1 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.11 -p 5432 -U postgres postgres \
   -c "SELECT slot_name, slot_type, active, restart_lsn FROM pg_replication_slots;"'
-# Expected: pg4_standby_slot | physical | t | 0/XXXXXXX
+# Expected: standby_cluster_slot | physical | t | 0/XXXXXXX
 ```
 
 #### Step 2b: Configure pg4 to Use the Replication Slot (REALTIME)
@@ -1396,7 +1397,7 @@ docker exec pg1 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.11 -p 5432 -U
 ```bash
 # Update pg4's Patroni config to use the slot
 docker exec pg4 patronictl -c /etc/patroni/patroni.yml edit-config pg-docker-cls1 \
-  --force --set "standby_cluster={host: 172.18.0.10, port: 5432, primary_slot_name: pg4_standby_slot}"
+  --force --set "standby_cluster={host: 172.18.0.10, port: 5432, primary_slot_name: standby_cluster_slot}"
 
 # Verify the config was applied
 docker exec pg4 patronictl -c /etc/patroni/patroni.yml show-config | grep -A 5 "standby_cluster:"
@@ -1404,7 +1405,7 @@ docker exec pg4 patronictl -c /etc/patroni/patroni.yml show-config | grep -A 5 "
 # standby_cluster:
 #   host: 172.18.0.10
 #   port: 5432
-#   primary_slot_name: pg4_standby_slot
+#   primary_slot_name: standby_cluster_slot
 ```
 
 #### Step 2c: Assess pg4 Replication Status (Data Loss Scope)
