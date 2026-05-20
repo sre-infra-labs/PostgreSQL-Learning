@@ -116,4 +116,6 @@
     apply:
       tags: patronictl_list
   tags: patronictl_list
-  when: inventory_hostname in groups['primary_cluster_leader']
+  when: >-
+    inventory_hostname in groups['primary_cluster_leader'] or
+    inventory_hostname in groups['standby_cluster_leader']

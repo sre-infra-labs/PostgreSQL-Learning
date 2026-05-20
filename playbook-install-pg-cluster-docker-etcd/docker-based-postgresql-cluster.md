@@ -113,21 +113,19 @@ All on same Docker network: lab-network (172.18.0.0/16)
 ### Port Mapping (host → container)
 
 ```
-┌────────────┬──────┬──────┬─────────┬─────────────┬──────────┬───────────────────────────────────┐
-│ Container  │ SSH  │ PG   │ Patroni │ pg_exporter │ pgBouncer│ HAProxy (host ports — needs new    │
-│            │      │      │ REST    │             │          │  container creation to take effect) │
-├────────────┼──────┼──────┼─────────┼─────────────┼──────────┼────────┬──────────┬───────────────┤
-│ pg1        │ 2221 │ 5433 │ 8011    │ 9194        │ 6433     │ 15000  │ 15001    │ 17000         │
-│ pg2        │ 2222 │ 5434 │ 8012    │ 9195        │ 6434     │ 25000  │ 25001    │ 27000         │
-│ pg3        │ 2223 │ 5435 │ 8013    │ 9196        │ 6435     │ 35000  │ 35001    │ 37000         │
-│ pg4 (DR)   │ 2224 │ 5437 │ 8014    │ 9197        │ 6436     │ 45000  │ 45001    │ 47000         │
-│ pg-bouncer │ 2225 │ 5436 │  —      │  —          │  —       │  —     │  —       │  —            │
-└────────────┴──────┴──────┴─────────┴─────────────┴──────────┴────────┴──────────┴───────────────┘
-                                                                write    read      stats
-                                                                port     port      UI
-
-pg-bouncer: dedicated pgBouncer container (172.18.0.20) that always routes to the current
-  Patroni leader. Clients connect on host port 5436; SSH on 2225. No Patroni/etcd/HAProxy.
+┌───────────┬──────┬──────┬─────────┬─────────────┬───────────────────────────────────────────┐
+│ Container │ SSH  │ PG   │ Patroni │ pg_exporter │ HAProxy (host ports — needs new container  │
+│           │      │      │ REST    │             │  creation to take effect)                  │
+├───────────┼──────┼──────┼─────────┼─────────────┼────────┬──────────┬────────────────────────┤
+│ pg1       │ 2221 │ 5433 │ 8011    │ 9194        │ 15000  │ 15001    │ 17000                  │
+│ pg2       │ 2222 │ 5434 │ 8012    │ 9195        │ 25000  │ 25001    │ 27000                  │
+│ pg3       │ 2223 │ 5435 │ 8013    │ 9196        │ 35000  │ 35001    │ 37000                  │
+│ pg4 (DR)  │ 2224 │ 5437 │ 8014    │ 9197        │ 45000  │ 45001    │ 47000                  │
+│ pg5 (DR)  │ 2231 │ 5438 │ 8015    │ 9198        │ 55000  │ 55001    │ 57000                  │
+│ pg6 (DR)  │ 2232 │ 5439 │ 8016    │ 9199        │ 65000  │ 65001    │ 65100                  │
+└───────────┴──────┴──────┴─────────┴─────────────┴────────┴──────────┴────────────────────────┘
+                                                    write    read      stats
+                                                    port     port      UI
 
 HAProxy container-internal ports (always available via docker exec):
   :5000 → write   (routes to Patroni primary only, health: GET /primary  → 200)
@@ -218,14 +216,21 @@ ansible-playbook -i hosts.yml playbook-setup-standby-cluster-containers.yml 2>&1
 # Phase 2: Setup Standby Patroni/PostgreSQL Cluster with one or more nodes
 ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass 2>&1 | tee run_logs/playbook-install-standby-cluster.yml.log
 
+  # OR
+    #below incase $PGDATA directories exists from previous run
+
+    ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass \
+      -e reinit_cluster=true -e skip_confirm=true \
+      2>&1 | tee run_logs/playbook-install-standby-cluster.yml.log
+
 # Phase 3: Verify Standby Cluster is Streaming
-docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
+docker exec pg4 patronictl -c /etc/patroni/patroni.yml list
 
 # Expected output:
 # | pg4    | 172.18.0.14 | Standby      | streaming | TL | 0 MB | (secondary cluster) |
 
-# Verify pg4 can reach primary leader
-docker exec pg4 psql -h 172.18.0.11 -p 5432 -U postgres -c "SELECT 1;"
+# Verify pg4 can reach primary cluster leader
+docker exec pg4 psql -h 172.18.0.10 -p 5432 -U postgres -c "SELECT 1;"
 ```
 
 ---
@@ -256,9 +261,9 @@ Run these steps once on your Mac to enable password-free named connections and c
 sudo tee -a /etc/hosts << 'EOF'
 
 # PostgreSQL Docker cluster — lab-network 172.18.0.0/16
-127.0.0.1  pg1    # PostgreSQL :5433  pgBouncer :6433  Patroni :8011
-127.0.0.1  pg2    # PostgreSQL :5434  pgBouncer :6434  Patroni :8012
-127.0.0.1  pg3    # PostgreSQL :5435  pgBouncer :6435  Patroni :8013
+127.0.0.1  pg1    # PostgreSQL :5433  Patroni :8011
+127.0.0.1  pg2    # PostgreSQL :5434  Patroni :8012
+127.0.0.1  pg3    # PostgreSQL :5435  Patroni :8013
 EOF
 ```
 
@@ -970,14 +975,7 @@ for port in 5433 5434 5435; do
   echo
 done
 
-# 7. All pgBouncer ports
-for port in 6433 6434 6435; do
-  echo -n "localhost:$port → "
-  psql -h localhost -p $port -U postgres postgres -c "SELECT pg_is_in_recovery();" -t 2>&1 | tr -d ' \n'
-  echo
-done
-
-# 8. etcd health
+# 7. etcd health
 docker exec pg1 etcdctl \
   --endpoints=http://172.18.0.11:2379,http://172.18.0.12:2379,http://172.18.0.13:2379 \
   endpoint health
@@ -1901,8 +1899,6 @@ ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml \
 ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml \
   --vault-password-file=vault-pass --tags patroni
 ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml \
-  --vault-password-file=vault-pass --tags pgbouncer
-ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml \
   --vault-password-file=vault-pass --tags pgbackrest
 ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml \
   --vault-password-file=vault-pass --tags etcd
@@ -2054,9 +2050,9 @@ EOF
 tee -a /etc/hosts << 'EOF'
 
 # PostgreSQL Docker cluster — lab-network 172.18.0.0/16
-172.18.0.11  pg1    # PostgreSQL :5433  pgBouncer :6433  Patroni :8011
-172.18.0.12  pg2    # PostgreSQL :5434  pgBouncer :6434  Patroni :8012
-172.18.0.13  pg3    # PostgreSQL :5435  pgBouncer :6435  Patroni :8013
+172.18.0.11  pg1    # PostgreSQL :5433  Patroni :8011
+172.18.0.12  pg2    # PostgreSQL :5434  Patroni :8012
+172.18.0.13  pg3    # PostgreSQL :5435  Patroni :8013
 
 172.18.0.10 pg-primary pg-leader
 172.18.0.9  pg-replica

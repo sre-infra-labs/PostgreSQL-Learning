@@ -22,7 +22,6 @@ keepalived_replica_vip: "172.18.0.9"   # replica/standby VIP → sync standby or
 # pg_port:            host-side port (5432 inside container)
 # patroni_port:       host-side port (8008 inside container)
 # pg_exporter_port:   host-side port (9194 inside container)
-# pgbouncer_port:     host-side port (6432 inside container)
 # haproxy_write_port: host-side port (5000 inside container) — primary-only write
 # haproxy_read_port:  host-side port (5001 inside container) — replica read
 # haproxy_stats_port: host-side port (7000 inside container) — HAProxy stats UI
@@ -35,7 +34,6 @@ primary_containers:
     pg_port: 5433
     patroni_port: 8011
     pg_exporter_port: 9194
-    pgbouncer_port: 6433
     haproxy_write_port: 15000
     haproxy_read_port: 15001
     haproxy_stats_port: 17000
@@ -45,7 +43,6 @@ primary_containers:
     pg_port: 5434
     patroni_port: 8012
     pg_exporter_port: 9195
-    pgbouncer_port: 6434
     haproxy_write_port: 25000
     haproxy_read_port: 25001
     haproxy_stats_port: 27000
@@ -55,13 +52,11 @@ primary_containers:
     pg_port: 5435
     patroni_port: 8013
     pg_exporter_port: 9196
-    pgbouncer_port: 6435
     haproxy_write_port: 35000
     haproxy_read_port: 35001
     haproxy_stats_port: 37000
 
 # Standby cluster containers — created by playbook-setup-standby-docker.yml
-# Add pg5, pg6 here when expanding the standby cluster
 standby_containers:
   - name: pg4
     ip: "172.18.0.14"
@@ -69,17 +64,27 @@ standby_containers:
     pg_port: 5437
     patroni_port: 8014
     pg_exporter_port: 9197
-    pgbouncer_port: 6436
     haproxy_write_port: 45000
     haproxy_read_port: 45001
     haproxy_stats_port: 47000
-
-# pgBouncer routing container (always routes to the current Patroni leader)
-pgbouncer_container_name: "pg-bouncer"
-pgbouncer_ip: "172.18.0.20"
-pgbouncer_ssh_port: 2225      # SSH access (different from pg1-4 which use 2221-2224)
-pgbouncer_host_port: 5436      # clients connect here; routes to leader
-pgbouncer_container_port: 6432
+  - name: pg5
+    ip: "172.18.0.15"
+    ssh_port: 2231
+    pg_port: 5438
+    patroni_port: 8015
+    pg_exporter_port: 9198
+    haproxy_write_port: 55000
+    haproxy_read_port: 55001
+    haproxy_stats_port: 57000
+  - name: pg6
+    ip: "172.18.0.16"
+    ssh_port: 2232
+    pg_port: 5439
+    patroni_port: 8016
+    pg_exporter_port: 9199
+    haproxy_write_port: 65000
+    haproxy_read_port: 65001
+    haproxy_stats_port: 65100
 
 # Docker named volumes
 pg_data_volume_prefix: "pg-data"

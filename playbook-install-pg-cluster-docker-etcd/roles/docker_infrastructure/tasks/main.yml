@@ -27,7 +27,4 @@
   tags: standby_containers
   when: setup_standby | default(false) | bool
 
-- name: Setup pgBouncer routing container
-  include_tasks: custom/pgbouncer_container.yml
-  tags: pgbouncer
-  when: not (setup_standby | default(false) | bool)
+

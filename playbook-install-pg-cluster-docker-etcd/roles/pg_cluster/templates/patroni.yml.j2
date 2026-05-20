@@ -25,11 +25,13 @@ restapi:
 # etcd3 DCS configuration
 etcd3:
   {% if inventory_hostname in groups['standby_cluster'] %}
-  # Standby cluster in Region B: single-node etcd on pg4
-  hosts: {{ ip }}:2379
+  # Standby cluster: etcd endpoints for all active standby nodes
+  {% set _standby_all = groups['standby_cluster_leader'] + groups['standby_cluster_replica'] %}
+  hosts: {{ _standby_all | map('extract', hostvars, 'ip') | product([':2379']) | map('join') | join(',') }}
   {% else %}
-  # Primary cluster in Region A: 3-member etcd cluster (pg1, pg2, pg3)
-  hosts: {{ groups['primary_cluster_leader'] | map('extract', hostvars, 'ip') | product([':2379']) | map('join') | join(',') }},{{ groups['primary_cluster_replica'] | map('extract', hostvars, 'ip') | product([':2379']) | map('join') | join(',') }}
+  # Primary cluster: etcd endpoints for all active primary nodes
+  {% set _primary_all = groups['primary_cluster_leader'] + groups['primary_cluster_replica'] %}
+  hosts: {{ _primary_all | map('extract', hostvars, 'ip') | product([':2379']) | map('join') | join(',') }}
   {% endif %}
   protocol: http
 
