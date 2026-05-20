@@ -68,6 +68,27 @@
       tags: patroni
   tags: patroni
 
+- name: Register permanent replication slot in Patroni DCS
+  # bootstrap.dcs.slots seeds the slot only on first initdb.
+  # This PATCH keeps the DCS in sync on every playbook run (idempotent).
+  # PATCH merges — it never overwrites unrelated DCS settings.
+  # Targets the primary VIP so the request always reaches the current leader.
+  ansible.builtin.uri:
+    url: "http://{{ keepalived_vip }}:{{ patroni_restapi_port }}/config"
+    method: PATCH
+    body_format: json
+    body:
+      slots:
+        "{{ patroni_standby_primary_slot_name }}":
+          type: physical
+    status_code: [200, 201]
+  run_once: true
+  when:
+    - inventory_hostname in groups['primary_cluster']
+    - groups['standby_cluster'] | default([]) | length > 0
+    - patroni_standby_primary_slot_name | default('') | length > 0
+  tags: patroni
+
 - name: Configure pgBackRest
   include_tasks:
     file: custom/pgbackrest.yml
