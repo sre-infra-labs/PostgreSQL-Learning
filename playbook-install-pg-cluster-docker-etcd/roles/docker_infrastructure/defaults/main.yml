@@ -26,7 +26,9 @@ keepalived_replica_vip: "172.18.0.9"   # replica/standby VIP → sync standby or
 # haproxy_write_port: host-side port (5000 inside container) — primary-only write
 # haproxy_read_port:  host-side port (5001 inside container) — replica read
 # haproxy_stats_port: host-side port (7000 inside container) — HAProxy stats UI
-pg_containers:
+
+# Primary cluster containers — created by playbook-setup-docker.yml
+primary_containers:
   - name: pg1
     ip: "172.18.0.11"
     ssh_port: 2221
@@ -57,6 +59,10 @@ pg_containers:
     haproxy_write_port: 35000
     haproxy_read_port: 35001
     haproxy_stats_port: 37000
+
+# Standby cluster containers — created by playbook-setup-standby-docker.yml
+# Add pg5, pg6 here when expanding the standby cluster
+standby_containers:
   - name: pg4
     ip: "172.18.0.14"
     ssh_port: 2224

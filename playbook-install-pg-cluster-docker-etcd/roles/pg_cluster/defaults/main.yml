@@ -120,8 +120,8 @@ postgresql_parameters:
   - { option: "max_locks_per_transaction",     value: "512" }
   - { option: "max_prepared_transactions",     value: "0" }
   - { option: "huge_pages",                    value: "off" }
-  - { option: "shared_buffers",                value: "{{ (ansible_memtotal_mb * 0.25) | int }}MB" }
-  - { option: "effective_cache_size",          value: "{{ (ansible_memtotal_mb * 0.75) | int }}MB" }
+  - { option: "shared_buffers",                value: "{{ (ansible_facts['memtotal_mb'] * 0.25) | int }}MB" }
+  - { option: "effective_cache_size",          value: "{{ (ansible_facts['memtotal_mb'] * 0.75) | int }}MB" }
   - { option: "work_mem",                      value: "{{ pg_params['work_mem'] }}" }
   - { option: "maintenance_work_mem",          value: "{{ pg_params['maintenance_work_mem'] }}" }
   - { option: "max_worker_processes",          value: "{{ server_hardware['cpu_count'] }}" }

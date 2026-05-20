@@ -17,10 +17,17 @@
   include_tasks: custom/build_image.yml
   tags: image
 
-- name: Create PostgreSQL node containers (etcd + patroni + postgres inside each)
+- name: Create PostgreSQL primary node containers (pg1, pg2, pg3)
   include_tasks: custom/pg_containers.yml
   tags: containers
+  when: not (setup_standby | default(false) | bool)
+
+- name: Create PostgreSQL standby node containers (pg4, ...)
+  include_tasks: custom/standby_pg_containers.yml
+  tags: standby_containers
+  when: setup_standby | default(false) | bool
 
 - name: Setup pgBouncer routing container
   include_tasks: custom/pgbouncer_container.yml
   tags: pgbouncer
+  when: not (setup_standby | default(false) | bool)

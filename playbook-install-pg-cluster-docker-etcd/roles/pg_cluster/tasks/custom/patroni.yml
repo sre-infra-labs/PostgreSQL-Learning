@@ -93,12 +93,14 @@
   ansible.builtin.systemd:
     daemon_reload: yes
 
+- name: Check if postgres OS user exists
+  ansible.builtin.command: id postgres
+  register: postgres_user_check
+  changed_when: false
+  failed_when: false
+
 - name: Fix directory ownership for postgres user (Docker compatibility)
-  ansible.builtin.file:
-    path: "{{ item }}"
-    owner: postgres
-    group: postgres
-    recurse: yes
+  ansible.builtin.shell: chown -R postgres:postgres "{{ item }}"
   loop:
     - /etc/patroni
     - "{{ patroni_log_dir }}"
@@ -106,7 +108,8 @@
     - "{{ postgresql_data_dir }}"
     - "{{ postgresql_stats_temp_directory_path }}"
     - "{{ postgresql_data_archive }}"
-  ignore_errors: true
+  changed_when: false
+  when: postgres_user_check.rc == 0
 
 - name: Ensure locales package is installed
   ansible.builtin.package:
@@ -126,15 +129,22 @@
         name: patroni
         state: restarted
         enabled: true
-        daemon_reload: true
+
+    - name: Verify Patroni process is active on leader (catch early crashes fast)
+      ansible.builtin.command: systemctl is-active patroni
+      register: _patroni_active_leader
+      changed_when: false
+      retries: 6
+      delay: 5
+      until: _patroni_active_leader.rc == 0
 
     - name: Wait for Patroni REST API to become available on leader
       ansible.builtin.wait_for:
         port: "{{ patroni_restapi_port }}"
-        host: "0.0.0.0"
+        host: "127.0.0.1"
         state: started
-        timeout: 180
-        delay: 10
+        timeout: 120
+        delay: 5
 
     - name: Wait for leader to be elected
       ansible.builtin.uri:
@@ -145,7 +155,21 @@
       until: leader_check.status == 200
       retries: 30
       delay: 5
-  when: inventory_hostname in groups['leader']
+  rescue:
+    - name: Collect Patroni journal logs for diagnosis (leader)
+      ansible.builtin.command: journalctl -u patroni -n 80 --no-pager
+      register: _patroni_journal_leader
+      changed_when: false
+      failed_when: false
+
+    - name: Show Patroni journal logs (leader)
+      ansible.builtin.debug:
+        var: _patroni_journal_leader.stdout_lines
+
+    - name: Fail with diagnostic message (leader)
+      ansible.builtin.fail:
+        msg: "Patroni failed to start on leader {{ inventory_hostname }}. Review journal logs above."
+  when: inventory_hostname in groups['primary_cluster_leader']
 
 - name: Start Patroni on Replicas (stream from leader)
   block:
@@ -154,13 +178,34 @@
         name: patroni
         state: restarted
         enabled: true
-        daemon_reload: true
+
+    - name: Verify Patroni process is active on replicas (catch early crashes fast)
+      ansible.builtin.command: systemctl is-active patroni
+      register: _patroni_active_replica
+      changed_when: false
+      retries: 6
+      delay: 5
+      until: _patroni_active_replica.rc == 0
 
     - name: Wait for Patroni REST API to become available on replica
       ansible.builtin.wait_for:
         port: "{{ patroni_restapi_port }}"
-        host: "0.0.0.0"
+        host: "127.0.0.1"
         state: started
         timeout: 300
-        delay: 10
-  when: inventory_hostname in groups['replica']
+        delay: 5
+  rescue:
+    - name: Collect Patroni journal logs for diagnosis (replica)
+      ansible.builtin.command: journalctl -u patroni -n 80 --no-pager
+      register: _patroni_journal_replica
+      changed_when: false
+      failed_when: false
+
+    - name: Show Patroni journal logs (replica)
+      ansible.builtin.debug:
+        var: _patroni_journal_replica.stdout_lines
+
+    - name: Fail with diagnostic message (replica)
+      ansible.builtin.fail:
+        msg: "Patroni failed to start on replica {{ inventory_hostname }}. Review journal logs above."
+  when: inventory_hostname in groups['primary_cluster_replica']

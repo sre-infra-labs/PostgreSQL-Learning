@@ -1,7 +1,7 @@
 ---
 - name: Set postgres_exporter download architecture
   ansible.builtin.set_fact:
-    pg_exporter_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}"
+    pg_exporter_arch: "{{ 'amd64' if ansible_facts['architecture'] == 'x86_64' else 'arm64' }}"
 
 - name: Download postgres_exporter {{ postgres_exporter_version }} into container
   ansible.builtin.get_url:

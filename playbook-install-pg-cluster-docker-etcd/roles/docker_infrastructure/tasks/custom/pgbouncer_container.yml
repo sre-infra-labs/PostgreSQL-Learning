@@ -19,7 +19,7 @@
     restart_policy: unless-stopped
     privileged: true
     cgroupns_mode: host
-    dns:
+    dns_servers:
       - 8.8.8.8
       - 1.1.1.1
     tmpfs:

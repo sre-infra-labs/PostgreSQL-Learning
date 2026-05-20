@@ -2,7 +2,7 @@
 ---
 
 scope: {{ patroni_cluster_name }}
-name: {{ ansible_hostname }}
+name: {{ ansible_facts['hostname'] }}
 namespace: /service
 
 log:
@@ -24,12 +24,12 @@ restapi:
 
 # etcd3 DCS configuration
 etcd3:
-  {% if inventory_hostname in groups['standby'] %}
+  {% if inventory_hostname in groups['standby_cluster'] %}
   # Standby cluster in Region B: single-node etcd on pg4
   hosts: {{ ip }}:2379
   {% else %}
   # Primary cluster in Region A: 3-member etcd cluster (pg1, pg2, pg3)
-  hosts: {{ groups['leader'] | map('extract', hostvars, 'ip') | product([':2379']) | map('join') | join(',') }},{{ groups['replica'] | map('extract', hostvars, 'ip') | product([':2379']) | map('join') | join(',') }}
+  hosts: {{ groups['primary_cluster_leader'] | map('extract', hostvars, 'ip') | product([':2379']) | map('join') | join(',') }},{{ groups['primary_cluster_replica'] | map('extract', hostvars, 'ip') | product([':2379']) | map('join') | join(',') }}
   {% endif %}
   protocol: http
 

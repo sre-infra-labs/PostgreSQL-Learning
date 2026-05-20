@@ -39,7 +39,6 @@
     apply:
       tags: repository
   tags: repository
-  when: not (reinit_cluster is defined and reinit_cluster | bool)
 
 - name: Install packages
   include_tasks:
@@ -47,7 +46,6 @@
     apply:
       tags: packages
   tags: packages
-  when: not (reinit_cluster is defined and reinit_cluster | bool)
 
 - name: Configure .pgpass
   include_tasks:
@@ -118,4 +116,4 @@
     apply:
       tags: patronictl_list
   tags: patronictl_list
-  when: inventory_hostname in groups['leader']
+  when: inventory_hostname in groups['primary_cluster_leader']

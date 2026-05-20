@@ -40,25 +40,6 @@
 
 ---
 
-## Quick Start (Docker)
-
-This setup uses **Docker** on macOS with a shared `lab-network` for all containers.
-
-```bash
-cd playbook-install-pg-cluster-docker-etcd/
-
-# Phase 1: Create Docker containers and network
-ansible-playbook playbook-setup-docker.yml
-
-# Phase 2: Install PostgreSQL 18 cluster
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
-
-# Verify cluster status
-docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
-```
-
----
-
 ## Architecture
 
 Every pg container runs the full stack — PostgreSQL, Patroni, etcd, pgBouncer, HAProxy, and
@@ -181,33 +162,63 @@ After failover (e.g. pg2 promoted to leader after pg1 failure):
 
 ---
 
-## Standby Cluster Setup (Multi-Region DR)
+---
 
-### Phase 1: Setup Docker Container for pg4
+# Cluster Setup - Docker Containers + PostgreSQL 18 + Patroni + etcd + HAProxy + Keepalived
 
-Add pg4 to the Docker infrastructure:
+This setup uses **Docker** on macOS with a shared `lab-network` for all containers.
+
+## Primary Cluster Setup
+
+This will create patroni based `primary cluster` with `write copy`.
 
 ```bash
-# pg4 container definition is pre-configured in:
-# roles/docker_infrastructure/defaults/main.yml (172.18.0.14)
+cd PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/
 
-# Create and run pg4 container via Docker playbook
-ansible-playbook playbook-setup-docker.yml -e 'pg_containers=[pg4]'
+# Phase 0: Validate ansible hosts
+ansible-inventory -i hosts.yml --graph
+ansible -i hosts.yml all --list-hosts
+ansible -i hosts.yml primary_cluster --list-hosts
+ansible -i hosts.yml standby_cluster --list-hosts
+
+# Phase 1: Create Docker containers and network. Place logs in run_logs for analysis
+ansible-playbook -i hosts.yml playbook-setup-primary-cluster-containers.yml 2>&1 | tee run_logs/playbook-setup-primary-cluster-containers.yml.log
+
+# Phase 2: Setup Primary Patroni/PostgreSQL Cluster with one or more nodes
+ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml --vault-password-file=vault-pass \
+  2>&1 | tee run_logs/playbook-install-primary-cluster.yml.log
+
+  # OR
+    #below incase $PGDATA directories exists from previous run
+
+    ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml --vault-password-file=vault-pass \
+      -e reinit_cluster=true -e skip_confirm=true \
+      2>&1 | tee run_logs/playbook-install-primary-cluster.yml.log
+
+# Verify cluster status
+docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
 ```
 
-### Phase 2: Deploy PostgreSQL + Patroni on pg4
+## Standby Cluster Setup
 
-Install PostgreSQL 18 with standby cluster configuration:
-
-```bash
-# Deploy standby cluster (pg4 only)
-ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass
-```
-
-### Phase 3: Verify Standby Cluster is Streaming
+This will create patroni based `standby cluster` that receives streaming replication from primary cluster, and can be promoted to primary if needed.
 
 ```bash
-# Check pg4 status (should be Standby role, streaming state)
+cd PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/
+
+# Phase 0: Validate ansible hosts
+ansible-inventory -i hosts.yml --graph
+ansible -i hosts.yml all --list-hosts
+ansible -i hosts.yml primary_cluster --list-hosts
+ansible -i hosts.yml standby_cluster --list-hosts
+
+# Phase 1: Create Docker containers and network. Place logs in run_logs for analysis
+ansible-playbook -i hosts.yml playbook-setup-standby-cluster-containers.yml 2>&1 | tee run_logs/playbook-setup-standby-cluster-containers.yml.log
+
+# Phase 2: Setup Standby Patroni/PostgreSQL Cluster with one or more nodes
+ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass 2>&1 | tee run_logs/playbook-install-standby-cluster.yml.log
+
+# Phase 3: Verify Standby Cluster is Streaming
 docker exec pg1 patronictl -c /etc/patroni/patroni.yml list
 
 # Expected output:
@@ -1789,10 +1800,10 @@ docker ps --format "table {{.Names}}\t{{.Ports}}" | grep pg
 docker rm -f pg1 pg2 pg3
 
 # 2. Recreate with correct port mappings (reads from roles/docker_infrastructure/defaults/main.yml)
-ansible-playbook playbook-setup-docker.yml
+ansible-playbook -i hosts.yml playbook-setup-primary-cluster-containers.yml
 
 # 3. Reinstall cluster software on the fresh containers
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
+ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml --vault-password-file=vault-pass
 ```
 
 ### psql password authentication failed despite correct ~/.pgpass
@@ -1877,35 +1888,35 @@ docker exec pg1 etcdctl \
 cd playbook-install-pg-cluster-docker-etcd/
 
 # Full cluster install (Phase 1 + Phase 2)
-ansible-playbook playbook-setup-docker.yml
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
+ansible-playbook -i hosts.yml playbook-setup-primary-cluster-containers.yml
+ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml --vault-password-file=vault-pass
 
 # Install/reconfigure a single component only
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
+ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml \
   --vault-password-file=vault-pass --tags haproxy
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
+ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml \
   --vault-password-file=vault-pass --tags keepalived
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
+ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml \
   --vault-password-file=vault-pass --tags haproxy,keepalived
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
+ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml \
   --vault-password-file=vault-pass --tags patroni
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
+ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml \
   --vault-password-file=vault-pass --tags pgbouncer
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
+ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml \
   --vault-password-file=vault-pass --tags pgbackrest
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
+ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml \
   --vault-password-file=vault-pass --tags etcd
 
 # Reinitialize cluster (DESTROYS ALL DATA — keeps packages)
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
+ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml \
   --vault-password-file=vault-pass -e reinit_cluster=true
 
 # Reinitialize without confirmation prompt (CI/automation)
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
+ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml \
   --vault-password-file=vault-pass -e reinit_cluster=true -e skip_confirm=true
 
 # Reinitialize + wipe all pgBackRest backups
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
+ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml \
   --vault-password-file=vault-pass \
   -e reinit_cluster=true -e skip_confirm=true -e cleanup_pgbackrest_backups=true
 

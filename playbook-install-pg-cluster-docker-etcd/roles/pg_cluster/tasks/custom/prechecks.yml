@@ -31,10 +31,8 @@
 #  etcd must already be running (from a previous install) for these
 # -------------------------------------------------------------------
 - name: Stop Patroni service (reinit mode)
-  ansible.builtin.service:
-    name: patroni
-    state: stopped
-  ignore_errors: true
+  ansible.builtin.shell: systemctl stop patroni 2>/dev/null || true
+  changed_when: false
   when: reinit_cluster is defined and reinit_cluster | bool
 
 - name: Remove PostgreSQL data directory (reinit mode)
@@ -65,7 +63,7 @@
     pgbackrest --stanza={{ pgbackrest_stanza_name }} expire --repo1-retention-full=0 2>/dev/null || true
   ignore_errors: true
   run_once: true
-  delegate_to: "{{ groups['leader'] | first }}"
+  delegate_to: "{{ groups['primary_cluster_leader'] | first }}"
   when:
     - reinit_cluster is defined and reinit_cluster | bool
     - cleanup_pgbackrest_backups is defined and cleanup_pgbackrest_backups | bool
@@ -76,7 +74,7 @@
     method: GET
     status_code: 200
   register: etcd_check
-  ignore_errors: true
+  failed_when: false
   run_once: true
   when: reinit_cluster is defined and reinit_cluster | bool
 
@@ -89,11 +87,15 @@
       key: "{{ ('/service/' + patroni_cluster_name + '/') | b64encode }}"
       range_end: "{{ ('/service/' + patroni_cluster_name + '0') | b64encode }}"
     status_code: [200, 204]
-  ignore_errors: true
+  register: etcd_delete
+  # Only fail on a real HTTP error (4xx/5xx); connection refused (status -1)
+  # is expected when etcd hasn't started yet on a fresh reinit.
+  failed_when: etcd_delete.status | default(-1) | int > 0 and
+               etcd_delete.status | default(-1) | int not in [200, 204]
   run_once: true
   when:
     - reinit_cluster is defined and reinit_cluster | bool
-    - etcd_check is not failed
+    - etcd_check.status | default(-1) | int == 200
 
 - name: End pg_cluster/custom/prechecks.yml
   ansible.builtin.debug:

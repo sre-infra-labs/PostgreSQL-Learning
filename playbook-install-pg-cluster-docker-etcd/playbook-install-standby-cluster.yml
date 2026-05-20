@@ -5,7 +5,7 @@
 # pg4 streams from primary cluster leader (pg1 or pg2) via standby_cluster configuration
 
 - name: Install PostgreSQL 18 Standby Cluster in Docker container (pg4)
-  hosts: standby
+  hosts: standby_cluster
   become: true
   become_user: root
   gather_facts: true

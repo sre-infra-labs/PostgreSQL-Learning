@@ -1,6 +1,6 @@
 ---
 - name: Install PostgreSQL 18 Cluster in Docker containers
-  hosts: all
+  hosts: primary_cluster
   become: true
   become_user: root
   gather_facts: true

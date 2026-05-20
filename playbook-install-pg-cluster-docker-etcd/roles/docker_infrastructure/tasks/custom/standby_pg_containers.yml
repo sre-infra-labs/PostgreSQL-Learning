@@ -1,38 +1,33 @@
 ---
-- name: Build list of active primary containers from inventory
+- name: Build list of active standby containers from inventory
   ansible.builtin.set_fact:
-    active_primary_containers: "{{ primary_containers | selectattr('name', 'in', groups['primary_cluster']) | list }}"
+    active_standby_containers: "{{ standby_containers | selectattr('name', 'in', groups['standby_cluster']) | list }}"
 
-- name: Fail if no primary cluster hosts are enabled in hosts.yml
+- name: Fail if no standby cluster hosts are enabled in hosts.yml
   ansible.builtin.fail:
     msg: >
-      No hosts found in the 'primary_cluster' inventory group.
-      Run with: ansible-playbook -i hosts.yml playbook-setup-docker.yml
-  when: active_primary_containers | length == 0
+      No hosts found in the 'standby_cluster' inventory group.
+      Run with: ansible-playbook -i hosts.yml playbook-setup-standby-docker.yml
+  when: active_standby_containers | length == 0
 
 - name: Read SSH public key from local machine
   ansible.builtin.slurp:
     src: "{{ ansible_ssh_public_key_path | expanduser }}"
   register: ssh_pub_key
 
-- name: Create per-node PostgreSQL data volumes
+- name: Create per-node PostgreSQL data volumes (standby)
   community.docker.docker_volume:
     name: "{{ pg_data_volume_prefix }}-{{ item.name }}"
     state: present
-  loop: "{{ active_primary_containers }}"
+  loop: "{{ active_standby_containers }}"
 
-- name: Create per-node PostgreSQL log volumes
+- name: Create per-node PostgreSQL log volumes (standby)
   community.docker.docker_volume:
     name: "{{ pg_log_volume_prefix }}-{{ item.name }}"
     state: present
-  loop: "{{ active_primary_containers }}"
+  loop: "{{ active_standby_containers }}"
 
-- name: Create shared pgbackrest backup volume
-  community.docker.docker_volume:
-    name: "{{ pg_backup_volume }}"
-    state: present
-
-- name: Create PostgreSQL primary node containers
+- name: Create PostgreSQL standby node containers
   community.docker.docker_container:
     name: "{{ item.name }}"
     image: "{{ pg_node_image }}"
@@ -40,8 +35,6 @@
     restart_policy: unless-stopped
     privileged: true
     cgroupns_mode: host
-    # Docker bridge networks on macOS do not inherit the host DNS — set explicit resolvers
-    # so apt-get update and package installs can reach archive.ubuntu.com / apt.postgresql.org
     dns_servers:
       - 8.8.8.8
       - 1.1.1.1
@@ -66,9 +59,9 @@
       - "{{ pg_backup_volume }}:/var/lib/pgbackrest"
       - "/sys/fs/cgroup:/sys/fs/cgroup:rw"
     hostname: "{{ item.name }}"
-  loop: "{{ active_primary_containers }}"
+  loop: "{{ active_standby_containers }}"
 
-- name: Inject SSH public key into primary containers
+- name: Inject SSH public key into standby containers
   ansible.builtin.shell: |
     docker exec {{ item.name }} bash -c "
       mkdir -p /home/ansible/.ssh
@@ -78,19 +71,19 @@
       chmod 600 /home/ansible/.ssh/authorized_keys
       chown -R ansible:ansible /home/ansible/.ssh
     "
-  loop: "{{ active_primary_containers }}"
+  loop: "{{ active_standby_containers }}"
   changed_when: true
 
-- name: Wait for SSH to be available on primary containers
+- name: Wait for SSH to be available on standby containers
   ansible.builtin.wait_for:
     host: "127.0.0.1"
     port: "{{ item.ssh_port }}"
     state: started
     timeout: 90
     delay: 3
-  loop: "{{ active_primary_containers }}"
+  loop: "{{ active_standby_containers }}"
 
-- name: Primary container connectivity summary
+- name: Standby container connectivity summary
   ansible.builtin.debug:
     msg:
       - "{{ item.name }} | IP: {{ item.ip }}"
@@ -102,4 +95,4 @@
       - "  HAProxy write: localhost:{{ item.haproxy_write_port }}"
       - "  HAProxy read:  localhost:{{ item.haproxy_read_port }}"
       - "  HAProxy stats: localhost:{{ item.haproxy_stats_port }}"
-  loop: "{{ active_primary_containers }}"
+  loop: "{{ active_standby_containers }}"

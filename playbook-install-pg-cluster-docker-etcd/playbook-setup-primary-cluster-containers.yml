@@ -1,5 +1,5 @@
 ---
-- name: Setup Docker Infrastructure for PostgreSQL Cluster
+- name: Setup Docker Infrastructure for PostgreSQL Primary Cluster
   hosts: localhost
   connection: local
   gather_facts: true
@@ -9,9 +9,9 @@
     - community.docker
 
   pre_tasks:
-    - name: Starting Docker Infrastructure Setup
+    - name: Starting Docker Infrastructure Setup (Primary Cluster)
       ansible.builtin.debug:
-        msg: "Setting up Docker infrastructure for 3-node PostgreSQL 18 cluster (Patroni + etcd)"
+        msg: "Setting up Docker infrastructure for primary cluster: pg1, pg2, pg3 (Patroni + etcd)"
 
   roles:
     - role: roles/docker_infrastructure
@@ -29,6 +29,6 @@
           - ""
           - "Next: ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass"
 
-# ansible-playbook playbook-setup-docker.yml
-# ansible-playbook playbook-setup-docker.yml --tags network    # only network
-# ansible-playbook playbook-setup-docker.yml --tags containers # only containers
+# ansible-playbook -i hosts.yml playbook-setup-docker.yml
+# ansible-playbook -i hosts.yml playbook-setup-docker.yml --tags network     # only network
+# ansible-playbook -i hosts.yml playbook-setup-docker.yml --tags containers  # containers only

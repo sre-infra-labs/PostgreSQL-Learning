@@ -1,0 +1,31 @@
+---
+- name: Setup Docker Infrastructure for PostgreSQL Standby Cluster
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars_files:
+    - vars/dba_vars.yml
+  vars:
+    setup_standby: true
+  collections:
+    - community.docker
+
+  pre_tasks:
+    - name: Starting Docker Infrastructure Setup (Standby Cluster)
+      ansible.builtin.debug:
+        msg: "Setting up Docker infrastructure for standby PostgreSQL cluster (pg4, ...)"
+
+  roles:
+    - role: roles/docker_infrastructure
+
+  post_tasks:
+    - name: Docker Infrastructure Setup Completed (Standby Cluster)
+      ansible.builtin.debug:
+        msg:
+          - "Standby Docker infrastructure is ready!"
+          - "  pg4 => SSH:2224 | PG:5437 | Patroni:8014 | pgBouncer:6436 | HAProxy write:45000 read:45001 stats:47000"
+          - ""
+          - "Next: ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass"
+
+# ansible-playbook -i hosts.yml playbook-setup-standby-docker.yml
+# ansible-playbook -i hosts.yml playbook-setup-standby-docker.yml --tags standby_containers  # containers only

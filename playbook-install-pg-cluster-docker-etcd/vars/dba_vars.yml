@@ -3,9 +3,9 @@
 
 debug: true
 
-# Cluster name — must be unique across all clusters
-patroni_cluster_name: "pg-docker-cls1"
-pgbackrest_stanza_name: "pg-docker-cls1"
+# Cluster name — defined per group in hosts.yml (primary_cluster.vars / standby_cluster.vars)
+# patroni_cluster_name is intentionally NOT set here; hosts.yml group vars are the source of truth.
+pgbackrest_stanza_name: "{{ patroni_cluster_name }}"
 
 # ReInit Standby — set to true ONLY when rebuilding after a failure (skips package install)
 # reinit_cluster: true
