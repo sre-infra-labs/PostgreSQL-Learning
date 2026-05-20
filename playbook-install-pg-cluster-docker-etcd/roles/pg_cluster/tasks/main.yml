@@ -68,27 +68,6 @@
       tags: patroni
   tags: patroni
 
-- name: Create standby cluster replication slot on primary
-  # Patroni has already started PostgreSQL above, so the socket is available.
-  # Only runs during the standby cluster playbook (inventory_hostname in standby_cluster).
-  # Delegates to pg1 so the physical slot exists on the primary before pg4 starts streaming.
-  # Idempotent — skips silently if the slot already exists.
-  become_user: postgres
-  ansible.builtin.shell: |
-    psql -U postgres -tAc "
-      SELECT pg_create_physical_replication_slot('{{ patroni_standby_primary_slot_name }}', true, false)
-      WHERE NOT EXISTS (
-        SELECT 1 FROM pg_replication_slots WHERE slot_name = '{{ patroni_standby_primary_slot_name }}'
-      );"
-  register: _slot_create
-  changed_when: _slot_create.stdout | trim != ''
-  failed_when: _slot_create.rc != 0
-  delegate_to: "{{ groups['primary_cluster_leader'] | first }}"
-  run_once: true
-  when:
-    - inventory_hostname in groups['standby_cluster']
-  tags: patroni
-
 - name: Configure pgBackRest
   include_tasks:
     file: custom/pgbackrest.yml

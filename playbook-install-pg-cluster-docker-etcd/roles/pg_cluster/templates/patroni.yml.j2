@@ -64,6 +64,15 @@ bootstrap:
       restore_command: "{{ patroni_standby_cluster.restore_command }}"
       {% endif %}
     {% endif %}
+    {% if inventory_hostname in groups['primary_cluster']
+          and groups['standby_cluster'] | default([]) | length > 0
+          and patroni_standby_primary_slot_name | default('') | length > 0 %}
+    # Permanent physical slot — Patroni creates and maintains this on the current primary.
+    # Survives switchover/failover automatically. pg4 uses it to stream from the primary VIP.
+    slots:
+      {{ patroni_standby_primary_slot_name }}:
+        type: physical
+    {% endif %}
 
   initdb:
     - encoding: {{ postgresql_encoding }}
