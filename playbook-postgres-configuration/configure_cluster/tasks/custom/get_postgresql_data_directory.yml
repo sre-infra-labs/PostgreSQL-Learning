@@ -1,0 +1,84 @@
+---
+- name: Check if pg_superuser_password is defined
+  ansible.builtin.debug:
+    msg: "pg_superuser_password is defined."
+  when: pg_superuser_password is defined
+  run_once: true
+
+- name: Find data_directory by querying using psql with superuser password
+  ansible.builtin.shell: |
+    export PGPASSWORD="{{ pg_superuser_password }}"
+    psql -h localhost -U postgres -d postgres -t -A -c "SHOW data_directory;"
+  register: data_directory_result
+  changed_when: false
+  ignore_errors: true
+  when: postgresql_data_directory is not defined
+
+- name: Set fact for PostgreSQL data directory
+  ansible.builtin.set_fact:
+    postgresql_data_directory: "{{ data_directory_result.stdout }}"
+  when:
+    - postgresql_data_directory is not defined
+    - data_directory_result is defined
+    - data_directory_result.stdout is defined and (data_directory_result.stdout | trim) != ""
+
+- name: Find PostgreSQL data directory by querying using psql without superuser password
+  ansible.builtin.shell: |
+    cd /tmp && sudo -u postgres psql -t -A -c "SHOW data_directory;"
+  register: data_directory_result
+  changed_when: false
+  ignore_errors: true
+  when: postgresql_data_directory is not defined
+
+- name: Set fact for PostgreSQL data directory
+  ansible.builtin.set_fact:
+    postgresql_data_directory: "{{ data_directory_result.stdout }}"
+  when:
+    - postgresql_data_directory is not defined
+    - data_directory_result is defined
+    - data_directory_result.stdout is defined and (data_directory_result.stdout | trim) != ""
+
+- name: Check if /etc/pgbackrest/pgbackrest.conf exists
+  ansible.builtin.stat:
+    path: /etc/pgbackrest/pgbackrest.conf
+  register: pgbackrest_conf_stat
+  when:
+    # - postgresql_version is defined
+    - postgresql_data_directory is not defined
+
+- name: Read pgbackrest.conf
+  ansible.builtin.slurp:
+    src: /etc/pgbackrest/pgbackrest.conf
+  register: pgbackrest_file_raw
+  when:
+    - postgresql_data_directory is not defined
+    - pgbackrest_conf_stat.stat.exists
+
+- name: Decode pgbackrest.conf content
+  ansible.builtin.set_fact:
+    pgbackrest_file_content: "{{ pgbackrest_file_raw.content | b64decode }}"
+  when:
+    - postgresql_data_directory is not defined
+    - pgbackrest_conf_stat.stat.exists
+    - pgbackrest_file_raw.content is defined
+
+- name: Debug pgbackrest.conf content
+  ansible.builtin.debug:
+    var: pgbackrest_file_content
+  when:
+    - postgresql_data_directory is not defined
+    - pgbackrest_file_content is defined
+
+- name: Extract Data Directory from [pg1-path] option in pgbackrest.conf
+  ansible.builtin.set_fact:
+    postgresql_data_directory: "{{ (pgbackrest_file_content | regex_findall('^pg1-path\\s*=\\s*(.*)', multiline=True))[0] }}"
+  when:
+    - postgresql_data_directory is not defined
+    - pgbackrest_file_raw is defined
+    - pgbackrest_file_content is defined
+
+- name: Debug data_directory
+  ansible.builtin.debug:
+    msg: "PostgreSQL data Directory: '{{ postgresql_data_directory }}'"
+
+

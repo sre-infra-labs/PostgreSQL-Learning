@@ -1,0 +1,94 @@
+---
+- name: Kafka Ecosystem Deployment
+  block:
+    - name: Generate docker-compose file from template
+      template:
+        src: docker-compose.yml.j2
+        dest: /tmp/kafka-ecosystem-compose.yml
+        mode: '0644'
+
+    - name: Remove old tmp-* named containers (legacy cleanup)
+      shell: |
+        for c in tmp-zookeeper-1 tmp-kafka-1 tmp-debezium-connect-1 tmp-kafka-ui-1; do
+          if docker inspect "$c" >/dev/null 2>&1; then
+            docker stop "$c" 2>/dev/null || true
+            docker rm "$c"
+            echo "Removed old-named: $c"
+          fi
+        done
+      changed_when: false
+
+    - name: Remove cdc-* kafka containers that are missing required network aliases
+      # Aliases are needed for internal DNS on external lab-network.
+      # Uses a shell function to avoid YAML-problematic colon chars in loop values.
+      shell: |
+        NET="{{ docker_network_name }}"
+        check_alias() {
+          local c="$1" a="$2"
+          docker inspect "$c" >/dev/null 2>&1 || return 0
+          local has
+          has=$(docker inspect "$c" | python3 -c \
+            "import json,sys; d=json.load(sys.stdin)[0]; cfg=d.get('NetworkSettings',{}).get('Networks',{}).get('$NET',{}); print('yes' if '$a' in cfg.get('Aliases',[]) else 'no')" \
+            2>/dev/null || echo "no")
+          if [ "$has" = "no" ]; then
+            docker stop "$c" 2>/dev/null || true
+            docker rm "$c" && echo "Removed $c (missing alias $a)"
+          else
+            echo "Keeping $c (alias $a present)"
+          fi
+        }
+        check_alias cdc-zookeeper zookeeper
+        check_alias cdc-kafka kafka
+        check_alias cdc-debezium debezium-connect
+        check_alias cdc-kafka-ui kafka-ui
+      changed_when: false
+
+    - name: Deploy Kafka Ecosystem services using docker-compose
+      shell: |
+        cd /tmp
+        docker-compose -f kafka-ecosystem-compose.yml up -d
+      register: ecosystem_deploy
+      retries: 2
+      delay: 5
+
+    - name: Wait for Kafka broker to be ready (up to 3 minutes)
+      shell: |
+        for i in $(seq 1 60); do
+          docker exec cdc-kafka kafka-topics --bootstrap-server localhost:9092 --list >/dev/null 2>&1 && exit 0
+          sleep 3
+        done
+        exit 1
+      retries: 1
+      delay: 10
+
+    - name: Create Kafka topics
+      shell: |
+        docker exec cdc-kafka kafka-topics --create \
+          --bootstrap-server localhost:9092 \
+          --topic "{{ item.name }}" \
+          --partitions {{ item.partitions }} \
+          --replication-factor {{ item.replication_factor }} \
+          --if-not-exists 2>&1 || true
+      loop: "{{ kafka_topics }}"
+
+    - name: Wait for Debezium Connect REST API to be ready
+      shell: |
+        for i in $(seq 1 30); do
+          curl -sf http://localhost:{{ debezium_host_mapping_port }}/ >/dev/null 2>&1 && exit 0
+          sleep 2
+        done
+        exit 1
+      retries: 2
+      delay: 5
+
+    - name: Display Kafka Ecosystem deployment success
+      debug:
+        msg: |
+          ✓ Kafka Ecosystem deployed successfully
+          Services running: Zookeeper, Kafka, Debezium, Kafka UI
+
+          Access URLs:
+          • Kafka UI:       http://localhost:{{ kafka_ui_host_mapping_port }}
+          • Debezium REST:  http://localhost:{{ debezium_host_mapping_port }}/connectors
+          • Kafka Broker:   localhost:{{ kafka_host_mapping_port }}
+          • Zookeeper:      localhost:{{ zk_host_mapping_port }}

@@ -1,0 +1,46 @@
+---
+- name: Check psql connectivity among members of same cluster (stanza_name)
+  hosts: all
+  gather_facts: false
+  # remote_user: ansible
+  become: true
+
+  vars:
+    pg_password: "{{ lookup('env','PGPASSWORD') }}"
+    # ansible_ssh_private_key_file: ".ssh/a.key"
+    timeout_seconds: 2
+
+  tasks:
+
+    - name: Build stanza_peers
+      set_fact:
+        stanza_peers: "{{ stanza_peers | default([]) + [ {'host_name': item, 'host_ip': hostvars[item]['ip']} ] }}"
+      loop: "{{ groups['all']
+               | map('extract', hostvars)
+               | selectattr('stanza_name', 'equalto', stanza_name)
+               | map(attribute='inventory_hostname')
+               | reject('equalto', inventory_hostname)
+               | list }}"
+
+    - name: Check psql connection
+      ansible.builtin.shell: |
+        # echo "========== {{ inventory_hostname }} => [{{ item.host_name }}]({{ item.host_ip }}) ========="
+
+        timeout {{ timeout_seconds }}  psql -h {{ item.host_name }} -U postgres -c "SELECT 1;" \
+        && echo "SUCCESS {{ inventory_hostname }} ({{ hostvars[inventory_hostname]['ip'] }}) → {{ item.host_name }} ({{ item.host_ip }})" \
+        || echo "FAILED {{ inventory_hostname }} ({{ hostvars[inventory_hostname]['ip'] }}) → {{ item.host_name }}({{ item.host_ip }}) "
+      loop: "{{ stanza_peers }}"
+      environment:
+        PGPASSWORD: "{{ pg_password }}"
+      register: psql_results
+      ignore_errors: true
+
+    - name: Show results
+      debug:
+        var: psql_results.results | map(attribute='stdout') | list
+
+
+# export PGPASSWORD="your_password_here"
+# ansible-playbook -i hosts_all.yml playbook-psql_connectivity_among_cluster_members.yml
+# or
+# ansible-playbook -i hosts_all.yml playbook-psql_connectivity_among_cluster_members.yml -e "PGPASSWORD=your_password_here"

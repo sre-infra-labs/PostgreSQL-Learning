@@ -1,0 +1,30 @@
+---
+- name: Inside docker_infrastructure/tasks/main.yml
+  ansible.builtin.debug:
+    msg: "Setting up Docker infrastructure — etcd runs inside each pg container"
+
+- name: Verify Docker daemon is running
+  ansible.builtin.command: docker info
+  changed_when: false
+  register: docker_info
+  failed_when: docker_info.rc != 0
+
+- name: Create or verify Docker network
+  include_tasks: custom/network.yml
+  tags: network
+
+- name: Build pg-cluster-node Docker image
+  include_tasks: custom/build_image.yml
+  tags: image
+
+- name: Create PostgreSQL primary node containers (pg1, pg2, pg3)
+  include_tasks: custom/pg_containers.yml
+  tags: containers
+  when: not (setup_standby | default(false) | bool)
+
+- name: Create PostgreSQL standby node containers (pg4, ...)
+  include_tasks: custom/standby_pg_containers.yml
+  tags: standby_containers
+  when: setup_standby | default(false) | bool
+
+

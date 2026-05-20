@@ -1,0 +1,45 @@
+---
+- name: Check PostgreSQL connectivity among all hosts
+  hosts: all
+  gather_facts: false
+
+  vars:
+    # Retrieve from terminal environment variable
+    pg_password: "{{ lookup('env', 'PGPWD_CLUSTER') }}"
+
+  tasks:
+    - name: Build list of other hosts for each host
+      set_fact:
+        other_hosts: "{{ groups['all'] | difference([inventory_hostname]) }}"
+
+    - name: Connect psql for other servers on inventory
+      shell: |
+        for host in {{ other_hosts | join(' ') }}; do
+          echo "===== {{ inventory_hostname }} -> $host ====="
+
+          #export PGPASSWORD={{ pg_password }}
+
+          psql -h $host -U postgres -d postgres -c '\conninfo'
+          if [ $? -eq 0 ]; then
+            echo "Connection to $host successful"
+          else
+            echo "Connection to $host FAILED"
+          fi
+        done
+      environment:
+        # Retrieve from terminal environment variable, and pass as environment variable to shell task
+        PGPASSWORD: "{{ lookup('env', 'PGPWD_CLUSTER') }}"
+      register: result_all_servers
+      args:
+        executable: /bin/bash
+
+    - name: Show connectivity results
+      debug:
+        var: result_all_servers.stdout_lines
+
+# export PGPWD_CLUSTER="your_password_here"
+# ansible-playbook -i hosts__multi_datacenter.yml check_psql_connectivity.yml
+# or
+# ansible-playbook -i hosts__multi_datacenter.yml check_psql_connectivity.yml -e "PGPWD_CLUSTER=your_password_here"
+
+

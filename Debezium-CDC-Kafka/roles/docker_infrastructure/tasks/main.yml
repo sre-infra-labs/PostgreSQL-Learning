@@ -1,0 +1,62 @@
+---
+- name: Docker Infrastructure Setup
+  block:
+    - name: Check if Docker is installed
+      shell: docker --version
+      register: docker_version
+      changed_when: false
+
+    - name: Display Docker version
+      ansible.builtin.debug:
+        msg: "✓ Docker is installed: {{ docker_version.stdout }}"
+
+    - name: Create volume root directory
+      ansible.builtin.file:
+        path: "{{ docker_volumes_root }}"
+        state: directory
+        mode: '0755'
+
+    - name: Create individual volume directories
+      ansible.builtin.file:
+        path: "{{ item.split(':')[0] if ':' in item else item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ docker_volumes_root }}/zookeeper/data"
+        - "{{ docker_volumes_root }}/zookeeper/log"
+        - "{{ docker_volumes_root }}/kafka/data"
+        - "{{ docker_volumes_root }}/postgres/data"
+        - "{{ docker_volumes_root }}/postgres/logs"
+        - "{{ docker_volumes_root }}/postgres/config"
+        - "{{ docker_volumes_root }}/pgadmin"
+        - "{{ docker_volumes_root }}/pgbadger/reports"
+        - "{{ docker_volumes_root }}/pgbadger/logs"
+
+    - name: Check if Docker network exists
+      shell: docker network ls | grep "{{ docker_network_name }}"
+      register: network_check
+      failed_when: false
+      changed_when: false
+
+    - name: Create Docker network
+      shell: docker network create --subnet "{{ docker_network_subnet }}" "{{ docker_network_name }}"
+      when: network_check.rc != 0
+      register: network_created
+      changed_when: network_created.rc == 0
+
+    - name: Display network status
+      ansible.builtin.debug:
+        msg: "✓ Docker network '{{ docker_network_name }}' is ready"
+
+    - name: Test DNS resolution in network
+      shell: docker run --rm --network "{{ docker_network_name }}" busybox echo "✓ Network connectivity verified"
+      register: network_test
+      changed_when: false
+
+- name: Ensure Internet connectivity in network (for package installations)
+  block:
+    - name: Test internet connectivity
+      shell: docker run --rm --network "{{ docker_network_name }}" busybox wget -O- https://www.google.com &>/dev/null && echo "✓ Internet accessible"
+      register: internet_test
+      changed_when: false
+      failed_when: false

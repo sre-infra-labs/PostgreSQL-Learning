@@ -54,6 +54,8 @@ system_packages:
   - yum-utils
   - tldr
   - pgcopydb
+  - htop
+  - ncdu
 
 postgres_user: "postgres"
 sudo_users:
@@ -176,10 +178,10 @@ postgresql_parameters:
   - { option: "log_checkpoints", value: "on" }
   - { option: "logging_collector", value: "on" }
   - { option: "log_truncate_on_rotation", value: "on" }
-  - { option: "log_rotation_age", value: "1d" }
-  - { option: "log_rotation_size", value: "0" }
   - { option: "log_line_prefix", value: "'%t [%p-%l] %r %q%u@%d '" }
-  - { option: "log_filename", value: "postgresql-%a.log" }
+  - { option: "log_rotation_age", value: "1h" }
+  - { option: "log_rotation_size", value: "50MB" }
+  - { option: "log_filename", value: "postgresql-%Y-%m-%d_%H%M%S.log" }
   - { option: "log_directory", value: "{{ postgresql_log_dir }}" }
   - { option: "log_statement", value: "ddl" }  # Logs all SQL statements
   - { option: "hot_standby_feedback", value: "on" }  # allows feedback from a hot standby to the primary that will avoid query conflicts
@@ -248,13 +250,26 @@ patroni_remove_data_directory_on_diverged_timelines: true  # or 'true'
 # https://patroni.readthedocs.io/en/latest/replica_bootstrap.html#bootstrap
 patroni_cluster_bootstrap_method: "initdb"  # or "wal-g", "pgbackrest", "pg_probackup"
 
-pgbackrest_repo1_type: s3
-pgbackrest_repo1_s3_endpoint: "{{ creds.PG_BACKREST_REPO1_S3_ENDPOINT }}"
-pgbackrest_repo1_s3_region: "{{ creds.PG_BACKREST_REPO1_S3_REGION }}"
-pgbackrest_repo1_s3_bucket: "{{ creds.PG_BACKREST_REPO1_S3_BUCKET }}"
-pgbackrest_repo1_s3_path: "{{ creds.PG_BACKREST_REPO1_S3_PATH }}"
-pgbackrest_repo1_s3_key: "{{ creds.PG_BACKREST_REPO1_S3_KEY }}"
-pgbackrest_repo1_s3_key_secret: "{{ creds.PG_BACKREST_REPO1_S3_KEY_SECRET }}"
+# --- SMB / Shared-Folder backup repository (active) ---
+# ryzen9 exposes share-stalestorage as a guest usershare (guest_ok=y, Everyone:F).
+# No credentials are required — the mount uses the 'guest' CIFS option.
+# uid/gid are resolved at run-time from the postgres OS user.
+pgbackrest_smb_server: "192.168.100.1"               # ryzen9 hypervisor — DC1 subnet (192.168.100.0/24)
+pgbackrest_smb_share_name: "share-stalestorage"
+pgbackrest_smb_share_mount: /stale-storage/share-stalestorage
+
+pgbackrest_repo1_type: posix
+pgbackrest_repo1_path: /stale-storage/share-stalestorage/pgbackrest_backups
+
+# --- AWS S3 backup repository (commented out / backed-up) ---
+# Uncomment and set pgbackrest_repo1_type: s3 to switch back to S3.
+#pgbackrest_repo1_type: s3
+#pgbackrest_repo1_s3_endpoint: "{{ creds.PG_BACKREST_REPO1_S3_ENDPOINT }}"
+#pgbackrest_repo1_s3_region: "{{ creds.PG_BACKREST_REPO1_S3_REGION }}"
+#pgbackrest_repo1_s3_bucket: "{{ creds.PG_BACKREST_REPO1_S3_BUCKET }}"
+#pgbackrest_repo1_s3_path: "{{ creds.PG_BACKREST_REPO1_S3_PATH }}"
+#pgbackrest_repo1_s3_key: "{{ creds.PG_BACKREST_REPO1_S3_KEY }}"
+#pgbackrest_repo1_s3_key_secret: "{{ creds.PG_BACKREST_REPO1_S3_KEY_SECRET }}"
 
 # pgbackrest_stanza_name: "{{ patroni_cluster_name }}"
 pgbackrest_pg1_path: /var/lib/pgsql/{{ postgresql_version }}/data

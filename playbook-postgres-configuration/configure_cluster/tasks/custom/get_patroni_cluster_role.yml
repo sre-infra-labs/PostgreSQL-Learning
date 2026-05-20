@@ -1,0 +1,76 @@
+---
+- name: Begin tasks/custom/get_patroni_cluster_role.yml
+  debug:
+    msg: "Begin tasks/custom/get_patroni_cluster_role.yml"
+  run_once: true
+
+- name: Query Patroni API to get config
+  uri:
+    url: "http://{{ inventory_hostname }}:8008/config"
+    method: GET
+    return_content: yes
+  register: patroni_api_config
+  ignore_errors: true
+
+- name: Query Patroni API to get cluster info
+  uri:
+    url: "http://{{ inventory_hostname }}:8008/cluster"
+    method: GET
+    return_content: yes
+  register: patroni_api_cluster
+  ignore_errors: true
+
+- name: Set cluster health fact (handle empty members list)
+  ansible.builtin.set_fact:
+    are_cluster_nodes_healthy: >-
+      {{
+        (patroni_api_cluster.json.members | default([])) | length > 0
+        and
+        (
+          (patroni_api_cluster.json.members | selectattr('state', 'in', ['running', 'streaming', 'in archive recovery'])) | list | length
+          ==
+          (patroni_api_cluster.json.members | list | length)
+        )
+      }}
+    is_cluster_online: >-
+      {{ true if patroni_api_cluster.json.members is defined else false | bool }}
+
+- name: Set fact patroni_cluster_role if patroni api is up
+  set_fact:
+    patroni_cluster_role: >-
+      {{ 'standby' if (patroni_api_config.json.standby_cluster is defined) else 'primary' }}
+  when:
+    - patroni_api_config.json is defined
+    - not (patroni_api_config.failed | default(false))
+
+- name: Set fact patroni_cluster_leader_host & patroni_cluster_leader_name if patroni api is up
+  set_fact:
+    patroni_cluster_leader_host: >-
+      {{ (patroni_api_cluster.json.members
+          | selectattr('role', 'in', ['leader', 'standby_leader'])
+          | map(attribute='host')
+          | list)[0] }}
+    patroni_cluster_leader_name: >-
+      {{ (patroni_api_cluster.json.members
+          | selectattr('role', 'in', ['leader', 'standby_leader'])
+          | map(attribute='name')
+          | list)[0] }}
+  when:
+    - patroni_api_cluster.json is defined
+    - not (patroni_api_cluster.failed | default(false))
+  ignore_errors: true
+
+- name: Debug cluster-level role
+  debug:
+    var: my_debug_vars
+  vars:
+    my_debug_vars:
+      is_cluster_online: "{{ is_cluster_online }}"
+      are_cluster_nodes_healthy: "{{ are_cluster_nodes_healthy }}"
+      present_cluster_role: "Cluster {{ hostvars[inventory_hostname].cluster_name }} is a {{ patroni_cluster_role }} cluster"
+      present_cluster_leader: "{{ patroni_cluster_leader_host }} is present leader on Cluster {{ hostvars[inventory_hostname].cluster_name }}"
+
+- name: End tasks/custom/get_patroni_cluster_role.yml
+  debug:
+    msg: "End tasks/custom/get_patroni_cluster_role.yml"
+  run_once: true

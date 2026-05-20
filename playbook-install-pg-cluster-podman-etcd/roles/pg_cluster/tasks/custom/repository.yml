@@ -1,0 +1,47 @@
+---
+- name: Begin pg_cluster/custom/repository.yml
+  ansible.builtin.debug:
+    msg: "Setting up PGDG apt repository for PostgreSQL {{ postgresql_version }}"
+
+- name: Set system architecture fact
+  ansible.builtin.set_fact:
+    system_arch: "{{ 'amd64' if ansible_facts['architecture'] == 'x86_64' else ('arm64' if ansible_facts['architecture'] == 'aarch64' else ansible_facts['architecture']) }}"
+
+- name: Create apt keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Download PostgreSQL PGDG GPG key
+  ansible.builtin.get_url:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    dest: /etc/apt/keyrings/postgresql.asc
+    mode: '0644'
+    timeout: 300
+  register: gpg_key_status
+  until: gpg_key_status is success
+  delay: 5
+  retries: 3
+
+- name: Add PGDG apt repository (shell — no python3-apt required)
+  ansible.builtin.shell: |
+    echo "deb [arch={{ system_arch }} signed-by=/etc/apt/keyrings/postgresql.asc] https://apt.postgresql.org/pub/repos/apt {{ ansible_facts['distribution_release'] }}-pgdg main" \
+      > /etc/apt/sources.list.d/pgdg.list
+  args:
+    creates: /etc/apt/sources.list.d/pgdg.list
+
+- name: Force apt-get update to pick up PGDG packages (shell — no python3-apt required)
+  ansible.builtin.shell: apt-get update -y
+  register: apt_update_status
+  until: apt_update_status.rc == 0
+  delay: 5
+  retries: 3
+  changed_when: true
+  environment:
+    APT_ACQUIRE_HTTP_TIMEOUT: "300"
+    APT_ACQUIRE_HTTPS_TIMEOUT: "300"
+
+- name: End pg_cluster/custom/repository.yml
+  ansible.builtin.debug:
+    msg: "PGDG repository configured"

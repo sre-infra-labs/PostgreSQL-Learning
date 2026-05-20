@@ -16,6 +16,16 @@
     state: absent
   when: reinit_cluster is defined and reinit_cluster is true
 
+# - name: Remove log directories
+#   ansible.builtin.file:
+#     name: "{{ item }}"
+#     state: absent
+#   loop:
+#     - "{{ postgresql_log_dir }}"
+#     - "{{ patroni_log_dir }}"
+#     - "/var/spool/pgbackrest"
+#   when: reinit_cluster is defined and reinit_cluster is true
+
 - name: Remove files under directories
   become: true
   ansible.builtin.shell: |
@@ -25,24 +35,26 @@
     - "{{ patroni_log_dir }}"
     - "/var/log/pgbackrest"
     - "/var/spool/pgbackrest"
-    - "/var/lib/pgsql/{{ postgresql_version}}/backups"
+    - "{{ postgresql_home_dir }}/{{ postgresql_version}}/backups"
   when: reinit_cluster is defined and reinit_cluster is true
 
 - name: Stop pgBackRest stanza and delete all backups
   become_user: postgres
   ansible.builtin.shell: |
-    # stop & remove pgbackrest stanza
-    pgbackrest --stanza={{ pgbackrest_stanza_name }} stop
-    pgbackrest --stanza={{ pgbackrest_stanza_name }} stanza-delete --force
+    # stop postgresql using pgbackrest
+    # pgbackrest --stanza={{ pgbackrest_stanza_name }} stop
 
     # remove WALs older than latest backup
-    # pgbackrest --stanza={{ pgbackrest_stanza_name }} expire
+    pgbackrest --stanza={{ pgbackrest_stanza_name }} expire
 
     # remove all backups
     # pgbackrest --stanza={{ pgbackrest_stanza_name }} expire --repo1-retention-full=0
 
     # clear only archive WALs
-    # pgbackrest --stanza={{ pgbackrest_stanza_name }} expire --repo1-retention-archive=1
+    pgbackrest --stanza={{ pgbackrest_stanza_name }} expire --repo1-retention-archive=1
+
+    # remove stanza
+    # pgbackrest --stanza={{ pgbackrest_stanza_name }} stanza-delete --force
 
 
     # cleanup older backup/archive for pgbackrest-stanza
@@ -56,12 +68,6 @@
   when:
     - reinit_cluster is defined and reinit_cluster is true
     - cleanup_pgbackrest_backups is defined and cleanup_pgbackrest_backups is true
-  register: pgbackrest_cleanup
-  # failed_when: >
-  #   (pgbackrest_cleanup.rc != 0) and
-  #   (
-  #     not ("x message" in pgbackrest_cleanup.stdout)
-  #   )
 
 - name: Remove existing Consul KV entries for cluster
   community.general.consul_kv:

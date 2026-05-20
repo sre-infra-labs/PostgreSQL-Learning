@@ -1,0 +1,60 @@
+# This file is supposed to have only variables that need DBA input
+
+debug: true
+
+# Possibles values are true, false
+reinitialize_logrotate: true
+# reinitialize_db_and_roles: true
+reinitialize_bkp_script: true
+# reinitialize_disk_alert_script: true
+reinitialize_graylog_postgres: true
+reinitialize_graylog_consul: false
+
+# Encryption related. Possible values are true, false
+reinitialize_ssl: true
+remove_ssl_enforcement: false
+  # WARNING: Set it to true only when to remove restriction of SSL. Take priority over enforce_encrypted_connections.
+enforce_encrypted_connections: true
+  # Important. Set true if PostgreSQL services can be rebooted.
+restart_pg_services: true
+
+# Users to be created for Application Team
+db_name: "dba"
+db_user_rw: dba_user_rw
+db_user_ro: 'dba_user_ro'
+
+# Run task for these Patroni clusters, but ignore errors if any
+clusters_to_ignore:
+  - "some-dummy-cluster-name-DO-NOT-REPLACE"
+
+clusters_decommissioned:
+  - "some-dummy-cluster-name-DO-NOT-REPLACE"
+
+# Run task for these servers as well, but ignore errors if any
+hosts_to_ignore:
+  - "some-dummy-host-name-DO-NOT-REPLACE"
+
+# SSL steps to be taken
+ssl_steps_required:
+  # - copy_crt_files
+  - update_postgresql_conf
+  - update_pghba_conf
+  - reload_config
+  - restart_pg_services
+
+# Run tasks for servers of these domains only
+# domains_to_include:
+#   - "prod.lab.com"
+#   - "dr.lab.com"
+
+# Skip servers from these domain
+domains_to_exclude:
+  - "some.dummy.domain.in"
+
+# Skip all tasks for following hosts
+hosts_to_exclude:
+  - "some-dummy-host-name.DO.NOT.REMOTE.IT"
+
+
+
+

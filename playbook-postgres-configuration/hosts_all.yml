@@ -1,0 +1,62 @@
+all:
+  children:
+    clustered:
+      children:
+        leaders:
+          children:
+            leader:
+              hosts:
+                pg-cls1-prod1:
+                  ip: 192.168.100.43
+                  stanza_name: pg-cls1
+                pg-cls2-prod1:
+                  ip: 192.168.100.48
+                  stanza_name: pg-cls2
+            standby_leader:
+              hosts:
+                pg-cls1-dr1:
+                  ip: 192.168.200.43
+                  stanza_name: pg-cls1
+                pg-cls2-dr1:
+                  ip: 192.168.200.48
+                  stanza_name: pg-cls2
+        replicas:
+          hosts:
+            pg-cls1-prod0:
+              ip: 192.168.100.42
+              stanza_name: pg-cls1
+            pg-cls1-prod2:
+              ip: 192.168.100.44
+              stanza_name: pg-cls1
+            pg-cls1-dr0:
+              ip: 192.168.200.42
+              stanza_name: pg-cls1
+            pg-cls1-dr2:
+              ip: 192.168.200.44
+              stanza_name: pg-cls1
+            pg-cls2-prod0:
+              ip: 192.168.100.47
+              stanza_name: pg-cls2
+            pg-cls2-prod2:
+              ip: 192.168.100.49
+              stanza_name: pg-cls2
+            pg-cls2-dr0:
+              ip: 192.168.200.47
+              stanza_name: pg-cls2
+            pg-cls2-dr2:
+              ip: 192.168.200.49
+              stanza_name: pg-cls2
+
+    non_clustered:
+      children:
+        standalone_leaders:
+          hosts:
+        standalone_replicas:
+          hosts:
+        standalone:
+          hosts:
+
+  vars:
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+    # gather_facts: false
+    # callbacks_enabled: ansible.builtin.minimal

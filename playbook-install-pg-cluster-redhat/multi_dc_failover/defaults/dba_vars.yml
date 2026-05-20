@@ -3,8 +3,8 @@
 debug: true
 
 # primary, standby
-dc1_cluster_target_role: primary
-dc2_cluster_target_role: standby
+dc1_cluster_target_role: standby
+dc2_cluster_target_role: primary
 
 # boolean parameter
 set_demoted_cluster_up: true

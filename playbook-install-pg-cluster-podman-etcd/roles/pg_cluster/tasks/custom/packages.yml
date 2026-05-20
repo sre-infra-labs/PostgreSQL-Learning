@@ -1,0 +1,126 @@
+---
+- name: Begin pg_cluster/custom/packages.yml
+  ansible.builtin.debug:
+    msg: "Installing system, PostgreSQL {{ postgresql_version }}, and Patroni packages"
+
+- name: Install system packages (shell — no python3-apt required)
+  ansible.builtin.shell: >
+    apt-get install -y --no-install-recommends {{ system_packages | join(' ') }}
+  register: system_pkg_status
+  until: system_pkg_status.rc == 0
+  delay: 5
+  retries: 3
+  changed_when: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    APT_ACQUIRE_HTTP_TIMEOUT: "300"
+    APT_ACQUIRE_HTTPS_TIMEOUT: "300"
+
+- name: Install PostgreSQL {{ postgresql_version }} required packages (shell — no python3-apt required)
+  ansible.builtin.shell: >
+    apt-get install -y --no-install-recommends {{ postgres_packages_required | join(' ') }}
+  register: pg_pkg_status
+  until: pg_pkg_status.rc == 0
+  delay: 5
+  retries: 3
+  changed_when: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    APT_ACQUIRE_HTTP_TIMEOUT: "300"
+    APT_ACQUIRE_HTTPS_TIMEOUT: "300"
+
+- name: Install optional PostgreSQL extensions (skip if not yet in PGDG for PG{{ postgresql_version }})
+  ansible.builtin.shell: "apt-get install -y --no-install-recommends {{ item }} || true"
+  loop: "{{ postgres_packages_optional }}"
+  changed_when: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    APT_ACQUIRE_HTTP_TIMEOUT: "300"
+    APT_ACQUIRE_HTTPS_TIMEOUT: "300"
+
+- name: Drop default PostgreSQL cluster ({{ postgresql_version }}/main) if present
+  ansible.builtin.command: >
+    pg_dropcluster --stop {{ postgresql_version }} main
+  args:
+    removes: "/etc/postgresql/{{ postgresql_version }}/main"
+
+- name: Disable and stop the default PostgreSQL systemd service
+  ansible.builtin.systemd:
+    name: "postgresql@{{ postgresql_version }}-main"
+    state: stopped
+    enabled: no
+  ignore_errors: true
+
+- name: Install Patroni apt dependencies (shell — no python3-apt required)
+  ansible.builtin.shell: >
+    apt-get install -y --no-install-recommends {{ patroni_packages | join(' ') }}
+  register: patroni_dep_status
+  until: patroni_dep_status.rc == 0
+  delay: 5
+  retries: 3
+  changed_when: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    APT_ACQUIRE_HTTP_TIMEOUT: "300"
+    APT_ACQUIRE_HTTPS_TIMEOUT: "300"
+
+- name: Install Patroni {{ patroni_install_version }} via pip
+  ansible.builtin.pip:
+    name: "patroni[etcd3]=={{ patroni_install_version }}"
+    state: present
+    executable: pip3
+    extra_args: "--break-system-packages"
+
+- name: Ensure postgres user exists
+  ansible.builtin.user:
+    name: "{{ postgres_user }}"
+    shell: /bin/bash
+    state: present
+
+# -------------------------------------------------------------------
+# pg_wait_tracer — install from source (optional)
+# -------------------------------------------------------------------
+- name: Install build dependencies for pg_wait_tracer (shell — no python3-apt required)
+  ansible.builtin.shell: >
+    apt-get install -y --no-install-recommends git build-essential postgresql-server-dev-{{ postgresql_version }}
+  changed_when: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  when: pg_wait_tracer_enabled | default(false) | bool
+
+- name: Clone pg_wait_tracer repository
+  ansible.builtin.shell: |
+    rm -rf /tmp/pg_wait_tracer
+    git clone --depth 1 --branch {{ pg_wait_tracer_branch }} {{ pg_wait_tracer_repo }} /tmp/pg_wait_tracer
+  environment:
+    GIT_TERMINAL_PROMPT: "0"
+    GIT_ASKPASS: "/bin/false"
+  register: pg_wait_tracer_clone
+  failed_when: false
+  when: pg_wait_tracer_enabled | default(false) | bool
+
+- name: Build and install pg_wait_tracer
+  ansible.builtin.shell: |
+    cd /tmp/pg_wait_tracer
+    make PG_CONFIG=/usr/lib/postgresql/{{ postgresql_version }}/bin/pg_config
+    make install PG_CONFIG=/usr/lib/postgresql/{{ postgresql_version }}/bin/pg_config
+  register: pg_wait_tracer_install
+  failed_when: false
+  changed_when: pg_wait_tracer_install.rc == 0
+  when:
+    - pg_wait_tracer_enabled | default(false) | bool
+    - pg_wait_tracer_clone is defined
+    - pg_wait_tracer_clone.rc == 0
+
+- name: Warn if pg_wait_tracer build failed
+  ansible.builtin.debug:
+    msg: "WARNING: pg_wait_tracer build failed — skipping. Install manually if needed."
+  when:
+    - pg_wait_tracer_enabled | default(false) | bool
+    - pg_wait_tracer_install is defined
+    - not (pg_wait_tracer_install.skipped | default(false))
+    - (pg_wait_tracer_install.rc | default(0)) != 0
+
+- name: End pg_cluster/custom/packages.yml
+  ansible.builtin.debug:
+    msg: "Package installation complete"

@@ -1,0 +1,153 @@
+---
+- name: Read SSH public key from local machine
+  ansible.builtin.slurp:
+    src: "{{ ansible_ssh_public_key_path | expanduser }}"
+  register: ssh_pub_key
+
+- name: Create per-node PostgreSQL data volumes
+  ansible.builtin.command: podman volume create {{ pg_data_volume_prefix }}-{{ item.name }}
+  loop: "{{ pg_containers }}"
+  register: data_volume_result
+  failed_when: false
+  changed_when: "'Error' not in data_volume_result.stdout and data_volume_result.rc == 0"
+
+- name: Create per-node PostgreSQL log volumes
+  ansible.builtin.command: podman volume create {{ pg_log_volume_prefix }}-{{ item.name }}
+  loop: "{{ pg_containers }}"
+  register: log_volume_result
+  failed_when: false
+  changed_when: "'Error' not in log_volume_result.stdout and log_volume_result.rc == 0"
+
+- name: Create shared pgbackrest backup volume
+  ansible.builtin.command: podman volume create {{ pg_backup_volume }}
+  register: backup_volume_result
+  failed_when: false
+  changed_when: "'Error' not in backup_volume_result.stdout and backup_volume_result.rc == 0"
+
+- name: Remove stale pg4 container if deploying standby only
+  ansible.builtin.command: podman rm -f pg4
+  ignore_errors: true
+  when: target_hosts is defined and target_hosts == 'standby'
+
+- name: Wait for port to be released
+  ansible.builtin.pause:
+    seconds: 3
+  when: target_hosts is defined and target_hosts == 'standby'
+
+- name: Create PostgreSQL node containers
+  ansible.builtin.command: >
+    podman run -d
+    --name {{ item.name }}
+    --hostname {{ item.name }}
+    --network {{ podman_network_name }}:ip={{ item.ip }}
+    --privileged
+    --cgroupns=host
+    --dns 8.8.8.8
+    --dns 1.1.1.1
+    --tmpfs /run
+    --tmpfs /run/lock
+    --volume {{ pg_data_volume_prefix }}-{{ item.name }}:/var/lib/postgresql
+    --volume {{ pg_log_volume_prefix }}-{{ item.name }}:/var/log
+    --volume {{ pg_backup_volume }}:/var/lib/pgbackrest
+    --volume /sys/fs/cgroup:/sys/fs/cgroup:rw
+    --publish {{ item.ssh_port }}:22
+    --publish {{ item.pg_port }}:5432
+    --publish {{ item.patroni_port }}:8008
+    --publish {{ item.pg_exporter_port }}:9194
+    --publish {{ item.pgbouncer_port }}:6432
+    --publish {{ item.haproxy_write_port }}:5000
+    --publish {{ item.haproxy_read_port }}:5001
+    --publish {{ item.haproxy_stats_port }}:7000
+    --restart=unless-stopped
+    {{ pg_node_image }}
+  loop: "{{ pg_containers }}"
+  register: container_create
+  failed_when: false
+  changed_when: "'Error' not in container_create.stdout and container_create.rc == 0"
+
+- name: Handle containers that already exist
+  ansible.builtin.debug:
+    msg: "Container {{ item.item.name }} already exists or network attachment failed: {{ item.stdout }}"
+  when: item.rc != 0
+  loop: "{{ container_create.results }}"
+
+- name: Inject SSH public key into containers
+  ansible.builtin.shell: |
+    podman exec {{ item.name }} bash -c "
+      mkdir -p /home/ansible/.ssh
+      chmod 700 /home/ansible/.ssh
+      echo '{{ ssh_pub_key.content | b64decode | trim }}' >> /home/ansible/.ssh/authorized_keys
+      sort -u /home/ansible/.ssh/authorized_keys -o /home/ansible/.ssh/authorized_keys
+      chmod 600 /home/ansible/.ssh/authorized_keys
+      chown -R ansible:ansible /home/ansible/.ssh
+    "
+  loop: "{{ pg_containers }}"
+  changed_when: true
+  register: ssh_inject
+  failed_when: ssh_inject.rc != 0
+
+- name: Configure DNS resolvers in containers (/etc/resolv.conf)
+  ansible.builtin.shell: |
+    podman exec {{ item.name }} bash -c '
+      echo "nameserver 8.8.8.8" > /etc/resolv.conf
+      echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+      echo "options ndots:0" >> /etc/resolv.conf
+    '
+  loop: "{{ pg_containers }}"
+  changed_when: true
+
+- name: Remove apt proxy config (direct downloads — proxy not reachable from Podman bridge)
+  ansible.builtin.shell: |
+    podman exec {{ item.name }} bash -c 'rm -f /etc/apt/apt.conf.d/01proxy'
+  loop: "{{ pg_containers }}"
+  changed_when: true
+
+- name: Force apt to use IPv4 to prevent 'Waiting for headers' IPv6 timeouts
+  ansible.builtin.shell: |
+    podman exec {{ item.name }} bash -c '
+      echo "Acquire::ForceIPv4 \"true\";" > /etc/apt/apt.conf.d/99force-ipv4
+    '
+  loop: "{{ pg_containers }}"
+  changed_when: true
+
+- name: Disable IPv6 in containers via sysctl
+  ansible.builtin.shell: |
+    podman exec {{ item.name }} bash -c '
+      sysctl -w net.ipv6.conf.all.disable_ipv6=1
+      sysctl -w net.ipv6.conf.default.disable_ipv6=1
+    '
+  loop: "{{ pg_containers }}"
+  changed_when: true
+
+- name: Stop and mask apt-daily timers to prevent apt lock conflicts
+  ansible.builtin.shell: |
+    podman exec {{ item.name }} bash -c '
+      systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service 2>/dev/null || true
+      systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
+      systemctl mask apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service 2>/dev/null || true
+    '
+  loop: "{{ pg_containers }}"
+  changed_when: true
+
+- name: Wait for SSH to be available on all containers
+  ansible.builtin.wait_for:
+    host: "127.0.0.1"
+    port: "{{ item.ssh_port }}"
+    state: started
+    timeout: 90
+    delay: 3
+  loop: "{{ pg_containers }}"
+
+- name: Container connectivity summary
+  ansible.builtin.debug:
+    msg:
+      - "{{ item.name }} | IP: {{ item.ip }}"
+      - "  SSH:           localhost:{{ item.ssh_port }}"
+      - "  PostgreSQL:    localhost:{{ item.pg_port }}"
+      - "  Patroni:       localhost:{{ item.patroni_port }}"
+      - "  pg_exporter:   localhost:{{ item.pg_exporter_port }}"
+      - "  pgBouncer:     localhost:{{ item.pgbouncer_port }}"
+      - "  HAProxy write: localhost:{{ item.haproxy_write_port }} (primary only)"
+      - "  HAProxy read:  localhost:{{ item.haproxy_read_port }}  (replicas)"
+      - "  HAProxy stats: localhost:{{ item.haproxy_stats_port }} (HTTP UI)"
+  loop: "{{ pg_containers }}"

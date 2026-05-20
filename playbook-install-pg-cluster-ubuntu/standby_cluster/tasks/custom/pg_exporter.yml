@@ -1,36 +1,43 @@
 ---
-- name: Download Postgres Exporter
+- name: Download Postgres Exporter on localhost
   ansible.builtin.get_url:
-    url: "https://github.com/prometheus-community/postgres_exporter/releases/download/v0.15.0/postgres_exporter-0.15.0.linux-amd64.tar.gz"
-    dest: "/var/lib/pgsql/{{ postgresql_version }}/scripts"
-    mode: '0744'
+    url: "https://github.com/prometheus-community/postgres_exporter/releases/download/v{{ postgres_exporter_version }}/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64.tar.gz"
+    dest: "/tmp/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64.tar.gz"
+    mode: '0644'
+  delegate_to: localhost
+  run_once: true
+  become: false
   when: not (reinit_cluster is defined and reinit_cluster)
 
-- name: Extract postgres_exporter tar file 
-  ansible.builtin.unarchive:
-    src: /var/lib/pgsql/{{ postgresql_version }}/scripts/postgres_exporter-0.15.0.linux-amd64.tar.gz
-    dest: /var/lib/pgsql/{{ postgresql_version }}/scripts/
-    remote_src: yes
-  when: not (reinit_cluster is defined and reinit_cluster)
-
-- name: Verify postgres_exporter binary exists after extraction
-  ansible.builtin.stat:
-    path: /var/lib/pgsql/{{ postgresql_version }}/scripts/postgres_exporter-0.15.0.linux-amd64/postgres_exporter
-  register: extracted_binary_status
-
-- name: Fail if postgres_exporter binary is missing after extraction
-  ansible.builtin.fail:
-    msg: "The postgres_exporter binary was not found after extracting the tar file."
-  when:
-    - not extracted_binary_status.stat.exists
-    - not (reinit_cluster is defined and reinit_cluster)
-
-- name: Move postgres_exporter binary to /usr/local/bin
-  ansible.builtin.copy:
-    src: /var/lib/pgsql/{{ postgresql_version }}/scripts/postgres_exporter-0.15.0.linux-amd64/postgres_exporter
-    dest: /usr/local/bin/postgres_exporter
+- name: Create temporary unzip directory on localhost
+  ansible.builtin.file:
+    path: "/tmp/postgres_exporter_unzip"
+    state: directory
     mode: '0755'
+  delegate_to: localhost
+  run_once: true
+  become: false   # explicitly disable sudo
+  when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: Extract postgres_exporter tar file
+  ansible.builtin.unarchive:
+    src: "/tmp/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64.tar.gz"
+    dest: "/tmp"
     remote_src: yes
+    creates: "/tmp/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64/postgres_exporter"
+  delegate_to: localhost
+  run_once: true
+  become: false
+  when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: Copy postgres_exporter binary to target hosts
+  ansible.builtin.copy:
+    src: "/tmp/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64/postgres_exporter"
+    dest: "/usr/local/bin/postgres_exporter"
+    mode: '0755'
+    owner: root
+    group: root
+    backup: yes
   become: true
   when: not (reinit_cluster is defined and reinit_cluster)
 
@@ -46,7 +53,6 @@
     - not final_binary_status.stat.exists
     - not (reinit_cluster is defined and reinit_cluster)
 
-
 - name: Create postgres_exporter user
   ansible.builtin.user:
     name: postgres_exporter
@@ -57,8 +63,8 @@
   ansible.builtin.copy:
     dest: /etc/systemd/postgres_exporter.env
     content: |
-      DATA_SOURCE_NAME="postgresql://postgres:{{ patroni_superuser_password }}@localhost:5432/postgres?sslmode=disable"
-      DATA_SOURCE_NAME="postgresql://postgres:{{ patroni_superuser_password }}@localhost:5432/{{ db_name }}?sslmode=disable"
+      DATA_SOURCE_NAME="postgresql://postgres:{{ patroni_superuser_password }}@localhost:{{ postgresql_port }}/postgres?sslmode=disable"
+      DATA_SOURCE_NAME="postgresql://postgres:{{ patroni_superuser_password }}@localhost:{{ postgresql_port }}/{{ db_name }}?sslmode=disable"
     owner: postgres_exporter
     group: postgres_exporter
     mode: '0644'

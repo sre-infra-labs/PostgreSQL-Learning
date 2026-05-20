@@ -1,14 +1,42 @@
+# Check where the setting is coming from
+```
+show log_rotation_age;
+
+SELECT name, setting, source, sourcefile, sourceline
+FROM pg_settings
+WHERE name = 'log_rotation_age';
+
+select pg_reload_conf();
+```
+
+
 # Changes for PostgreSQL.conf
+
+## `auto_explain` to Capture Execution Plans for Slow Queries
+
+`EXPLAIN (ANALYZE, SETTINGS, COSTS, TIMING, SUMMARY, WAL, VERBOSE, BUFFERS, FORMAT JSON)`
+
+
 ```
 session_preload_libraries = 'auto_explain'
-auto_explain.log_min_duration = '5s'
+
+auto_explain.log_min_duration = '1000ms'
 auto_explain.log_format = 'json'
 auto_explain.log_verbose = 'on'
 auto_explain.log_analyze = 'on'
 auto_explain.log_buffers = 'on'
 auto_explain.log_wal = 'on'
 auto_explain.log_timing = 'on'
+auto_explain.log_triggers = 'on'
+auto_explain.log_summary = 'on'
 auto_explain.log_settings = 'on'
+auto_explain.log_nested_statements = on
+
+```
+
+## `pg_stat_statements` to Capture Slow Queries
+
+```
 shared_preload_libraries = 'pg_stat_statements'    # (change requires restart)
 
 logging_collector = on
@@ -16,7 +44,7 @@ log_destination = 'stderr'
 log_directory = 'log'
 log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
 #log_filename = 'postgresql-%a.log'
-log_rotation_age = '1d'
+log_rotation_age = '1h'
 log_rotation_size = '50MB'
 
 log_min_messages = 'info'
@@ -121,5 +149,23 @@ set pgaudit.role to pgaudit_role;
 
 -- In postgresql.conf
 pgaudit.role = 'pgaudit_role'
+
+```
+
+# Reset all settings
+```
+-- Reset a single setting
+ALTER SYSTEM RESET shared_preload_libraries;
+ALTER SYSTEM RESET max_connections;
+
+-- Or for session-level settings
+RESET work_mem;
+RESET statement_timeout;
+
+-- Reset all settings for entire server;
+ALTER SYSTEM RESET ALL;
+
+-- This resets all settings in postgresql.auto.conf
+SELECT pg_reload_conf();
 
 ```

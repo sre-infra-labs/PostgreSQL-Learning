@@ -99,7 +99,8 @@ bootstrap:
 
 
 postgresql:
-  listen: {{ hostvars[inventory_hostname]['inventory_hostname'] }},127.0.0.1:{{ postgresql_port }}
+  {# listen: {{ hostvars[inventory_hostname]['inventory_hostname'] }},127.0.0.1:{{ postgresql_port }} #}
+  listen: 0.0.0.0:5432
   connect_address: {{ hostvars[inventory_hostname]['inventory_hostname'] }}:{{ postgresql_port }}
 {% if patroni_superuser_username == 'postgres' %}
   use_unix_socket: true
@@ -107,7 +108,8 @@ postgresql:
   data_dir: {{ postgresql_data_dir }}
   bin_dir: {{ postgresql_bin_dir }}
   config_dir: {{ postgresql_conf_dir }}
-  pgpass: {{ postgresql_home_dir }}/.pgpass_patroni
+  pgpass: {{ postgresql_home_dir }}/.pgpass
+  {# pgpass: {{ postgresql_home_dir }}/.pgpass_patroni #}
   authentication:
     replication:
       username: {{ patroni_replication_username }}
@@ -115,7 +117,6 @@ postgresql:
     superuser:
       username: {{ patroni_superuser_username }}
       password: "{{ patroni_superuser_password }}"
-
 
   parameters:
     unix_socket_directories: {{ postgresql_unix_socket_dir }}

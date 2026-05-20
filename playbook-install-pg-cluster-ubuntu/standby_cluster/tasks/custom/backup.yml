@@ -2,7 +2,7 @@
 
 - name: Ensure script directory exists
   file:
-    path: "/var/lib/pgsql/{{ postgresql_version }}/scripts"
+    path: "{{ postgresql_home_dir }}/{{ postgresql_version }}/scripts"
     state: directory
     owner: postgres
     group: postgres
@@ -10,7 +10,7 @@
 
 - name: Deploy the backup script
   copy:
-    dest: "/var/lib/pgsql/{{ postgresql_version }}/scripts/backup.sh"
+    dest: "{{ postgresql_home_dir }}/{{ postgresql_version }}/scripts/backup.sh"
     content: |
       #!/bin/bash
 
@@ -28,7 +28,7 @@
       hostname=$(hostname)
 
       # Define the path to the log file
-      LOG_FILE="/var/lib/pgsql/{{ postgresql_version }}/backups/pgbackrest_backup_$(date +'%Y-%m-%d_%H-%M-%S').log"
+      LOG_FILE="{{ postgresql_home_dir }}/{{ postgresql_version }}/backups/pgbackrest_backup_$(date +'%Y-%m-%d_%H-%M-%S').log"
 
       # Check if the Patroni role is master using the hostname
       PATRONI_ROLE=$(curl -s http://"$hostname":8008/patroni | jq -r .role)
@@ -63,14 +63,14 @@
 
       # Clean up old backup logs (older than 7 days)
       chmod +x "$LOG_FILE"
-      find /var/lib/pgsql/{{ postgresql_version }}/backups -type f -name "pgbackrest_backup*.log" -mtime +7 -exec rm {} \;
+      find {{ postgresql_home_dir }}/{{ postgresql_version }}/backups -type f -name "pgbackrest_backup*.log" -mtime +7 -exec rm {} \;
     owner: postgres
     group: postgres
     mode: "0750"
 
 - name: Ensure backups directory exists
   file:
-    path: "/var/lib/pgsql/{{ postgresql_version }}/backups"
+    path: "{{ postgresql_home_dir }}/{{ postgresql_version }}/backups"
     state: directory
     owner: postgres
     group: postgres
@@ -80,7 +80,7 @@
   cron:
     name: "pgBackRest Backup"
     user: root
-    job: "sudo -u postgres /var/lib/pgsql/{{ postgresql_version }}/scripts/backup.sh"
+    job: "sudo -u postgres {{ postgresql_home_dir }}/{{ postgresql_version }}/scripts/backup.sh"
     minute: "0"
     hour: "20"
     day: "*"

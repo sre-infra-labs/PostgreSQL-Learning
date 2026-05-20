@@ -13,7 +13,7 @@
   environment: "{{ proxy_env | default({}) }}"
   when: not (reinit_cluster is defined and reinit_cluster)
 
-- name: Install PostgreSQL packages and extensions
+- name: Install Common PostgreSQL packages and extensions available for all Versions
   ansible.builtin.package:
     name: "{{ item }}"
     state: present
@@ -34,9 +34,7 @@
     - pg_show_plans_{{ postgresql_version }}
     - pg_stat_monitor_{{ postgresql_version }}
     - pg_statement_rollback_{{ postgresql_version }}
-    - pg_statviz_extension_{{ postgresql_version }}
     - pgauditlogtofile_{{ postgresql_version }}
-    # - pgcopydb_{{ postgresql_version }}
     - pgexporter_ext_{{ postgresql_version }}
     - pgmeminfo_{{ postgresql_version }}
     - pgtap_{{ postgresql_version }}
@@ -50,6 +48,39 @@
   retries: 3
   environment: "{{ proxy_env | default({}) }}"
   when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: Install Non-Common PostgreSQL packages and extensions available for PG 16+
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - pgcopydb
+  register: package_status
+  until: package_status is success
+  delay: 5
+  retries: 3
+  environment: "{{ proxy_env | default({}) }}"
+  # fails_when: false
+  when:
+    - (postgresql_version | int >= 16)
+    - not (reinit_cluster is defined and reinit_cluster)
+
+- name: Install Non-Common PostgreSQL packages and extensions available below PG 16
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - pgcopydb_{{ postgresql_version }}
+    - pg_statviz_extension_{{ postgresql_version }}
+  register: package_status
+  until: package_status is success
+  delay: 5
+  retries: 3
+  environment: "{{ proxy_env | default({}) }}"
+  # fails_when: false
+  when:
+    - (postgresql_version | int < 16)
+    - not (reinit_cluster is defined and reinit_cluster)
 
 - name: Check user "{{ postgres_user }}" exists
   ansible.builtin.user:

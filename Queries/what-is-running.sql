@@ -1,0 +1,71 @@
+-- What is running right now
+WITH blocking_info AS (
+    SELECT 
+        pid,
+        string_agg(pg_blocking_pids(pid)::TEXT, ', ') AS locked_by
+    FROM pg_stat_activity
+    GROUP BY pid
+)
+SELECT age(clock_timestamp(), a.query_start) as query_duration,
+    a.datname AS database_name,
+    a.usename AS user_name,
+	a.wait_event_type,
+    a.wait_event,
+    a.pid AS process_id,
+    a.state,
+    a.backend_start,
+    a.xact_start,
+    a.query_start,
+    a.state_change,
+    now()::time - a.state_change::time AS locked_since,
+    a.backend_type,
+    a.client_addr,
+    blocking_info.locked_by,
+	a.query
+FROM pg_stat_activity AS a
+LEFT JOIN blocking_info ON a.pid = blocking_info.pid
+WHERE 1=1
+and a.wait_event_type not in ('Activity')
+and a.state != 'idle'
+AND query NOT ILIKE '%pg_stat_activity%'
+--AND wait_event_type IS NOT NULL
+ORDER BY a.state_change asc;
+--ORDER BY locked_since DESC;
+
+/*
+select l.*
+from pg_locks l
+join pg_stat_activity a
+    on a.pid = l.pid
+where 1=1
+and a.pid in (258887,89099)
+and 1=1;
+*/
+
+
+
+\x
+
+SELECT now() - query_start AS duration, pid,usename, datname, client_addr, application_name, state, backend_start, query_start, query
+FROM pg_stat_activity
+WHERE 1=1
+--and state = 'active'
+and state not in ('idle')
+AND usename not in ('postgres','replicator')
+ORDER BY duration DESC;
+
+
+/*
+-- Read data from big table, and discard same
+psql -d stackoverflow2013 -qAt -c "SELECT /* psql qAt */ * FROM posts;" > /dev/null
+
+
+-- in psql interactive
+\o /dev/null
+SELECT * FROM your_table;    -- result will be discarded
+\o                          -- reset output back to normal
+
+
+
+sudo -u postgres pg_activity -U postgres
+*/

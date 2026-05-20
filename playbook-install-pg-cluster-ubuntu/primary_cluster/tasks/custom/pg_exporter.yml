@@ -2,7 +2,6 @@
 - name: Download Postgres Exporter on localhost
   ansible.builtin.get_url:
     url: "https://github.com/prometheus-community/postgres_exporter/releases/download/v{{ postgres_exporter_version }}/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64.tar.gz"
-    # dest: "{{ postgresql_home_dir }}/{{ postgresql_version }}/scripts"
     dest: "/tmp/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64.tar.gz"
     mode: '0644'
   delegate_to: localhost
@@ -23,9 +22,9 @@
 - name: Extract postgres_exporter tar file
   ansible.builtin.unarchive:
     src: "/tmp/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64.tar.gz"
-    dest: "/tmp/postgres_exporter_unzip"
+    dest: "/tmp"
     remote_src: yes
-    creates: "/tmp/postgres_exporter_unzip/postgres_exporter"
+    creates: "/tmp/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64/postgres_exporter"
   delegate_to: localhost
   run_once: true
   become: false
@@ -33,7 +32,7 @@
 
 - name: Copy postgres_exporter binary to target hosts
   ansible.builtin.copy:
-    src: "/tmp/postgres_exporter_unzip/postgres_exporter"
+    src: "/tmp/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64/postgres_exporter"
     dest: "/usr/local/bin/postgres_exporter"
     mode: '0755'
     owner: root
@@ -41,27 +40,6 @@
     backup: yes
   become: true
   when: not (reinit_cluster is defined and reinit_cluster)
-
-# - name: Verify postgres_exporter binary exists after extraction
-#   ansible.builtin.stat:
-#     path: "{{ postgresql_home_dir }}/{{ postgresql_version }}/scripts/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64/postgres_exporter"
-#   register: extracted_binary_status
-
-# - name: Fail if postgres_exporter binary is missing after extraction
-#   ansible.builtin.fail:
-#     msg: "The postgres_exporter binary was not found after extracting the tar file."
-#   when:
-#     - not extracted_binary_status.stat.exists
-#     - not (reinit_cluster is defined and reinit_cluster)
-
-# - name: Move postgres_exporter binary to /usr/local/bin
-#   ansible.builtin.copy:
-#     src: "{{ postgresql_home_dir }}/{{ postgresql_version }}/scripts/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64/postgres_exporter"
-#     dest: /usr/local/bin/postgres_exporter
-#     mode: '0755'
-#     remote_src: yes
-#   become: true
-#   when: not (reinit_cluster is defined and reinit_cluster)
 
 - name: Verify postgres_exporter binary in /usr/local/bin
   ansible.builtin.stat:

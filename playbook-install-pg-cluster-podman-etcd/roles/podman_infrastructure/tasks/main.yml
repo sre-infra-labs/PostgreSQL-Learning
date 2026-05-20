@@ -1,0 +1,22 @@
+---
+- name: Inside podman_infrastructure/tasks/main.yml
+  ansible.builtin.debug:
+    msg: "Setting up Podman infrastructure — etcd runs inside each pg container"
+
+- name: Verify Podman daemon is running
+  ansible.builtin.command: podman info
+  changed_when: false
+  register: podman_info
+  failed_when: podman_info.rc != 0
+
+- name: Create or verify Podman network
+  include_tasks: custom/network.yml
+  tags: network
+
+- name: Build pg-cluster-node Podman image
+  include_tasks: custom/build_image.yml
+  tags: image
+
+- name: Create PostgreSQL node containers (etcd + patroni + postgres inside each)
+  include_tasks: custom/pg_containers.yml
+  tags: containers

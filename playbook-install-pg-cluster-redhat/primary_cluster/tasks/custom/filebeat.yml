@@ -14,7 +14,7 @@
         close_removed: true
         clean_removed: true
         fields:
-          topic: gpx-prod-patroni-cluster
+          topic: prod-patroni-cluster
           application_name: {{ patroni_cluster_name }}
 
     owner: root

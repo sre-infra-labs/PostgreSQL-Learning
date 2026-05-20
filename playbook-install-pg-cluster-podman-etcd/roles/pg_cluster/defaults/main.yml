@@ -1,0 +1,283 @@
+minimal_ansible_version: "2.16.0"
+patroni_install_version: "4.0.6"
+postgres_exporter_version: "0.17.1"
+etcd_version: "3.5.17"   # etcd binary version (downloaded from GitHub releases)
+
+# etcd cluster hosts — built dynamically from inventory IPs
+# Patroni connects to all 3 etcd members for HA DCS
+etcd_hosts: "{{ groups['all'] | map('extract', hostvars, 'ip') | product([':2379']) | map('join') | join(',') }}"
+
+# -------------------------------------------------------------------
+# Package lists
+# -------------------------------------------------------------------
+system_packages:
+  - python3
+  - python3-psycopg2
+  - python3-setuptools
+  - python3-pip
+  - python3-urllib3
+  - python3-dev
+  - less
+  - gcc
+  - jq
+  - acl
+  - libpq-dev
+  - curl
+  - gnupg2
+  - wget
+  - lsb-release
+  - ca-certificates
+
+patroni_packages:
+  - python3-etcd3
+  - python3-psutil
+
+# Required: base PG packages — must all succeed
+postgres_packages_required:
+  - postgresql-common
+  - postgresql-server-dev-{{ postgresql_version }}
+  - postgresql-client-{{ postgresql_version }}
+  - postgresql-{{ postgresql_version }}
+  - postgresql-contrib-{{ postgresql_version }}
+  - pgbackrest
+  - pgbouncer
+
+# Optional: PGDG extension packages — installed best-effort (skip if not yet in repo for this PG version)
+postgres_packages_optional:
+  - postgresql-{{ postgresql_version }}-cron
+  - postgresql-{{ postgresql_version }}-partman
+  - postgresql-{{ postgresql_version }}-repack
+  - postgresql-{{ postgresql_version }}-pgtap
+  - postgresql-{{ postgresql_version }}-plpgsql-check
+  - postgresql-{{ postgresql_version }}-pg-permissions
+  - postgresql-{{ postgresql_version }}-pg-qualstats
+  - postgresql-{{ postgresql_version }}-wait-sampling
+
+# pg_wait_tracer — compiled from source (optional, set to true only if containers have internet access)
+pg_wait_tracer_enabled: false
+pg_wait_tracer_repo: "https://github.com/agroal/pg_wait_tracer.git"
+pg_wait_tracer_branch: "main"
+
+# -------------------------------------------------------------------
+# System user
+# -------------------------------------------------------------------
+postgres_user: "postgres"
+
+# -------------------------------------------------------------------
+# DBA config — override via vars/dba_vars.yml (set at playbook level)
+# -------------------------------------------------------------------
+postgresql_port:     "5432"
+db_name:             "dba"
+db_user_rw:          "dba_rw"
+db_user_ro:          "dba_ro"
+
+pgbouncer_listen_port:      6432
+pgbouncer_pool_mode:        "transaction"
+pgbouncer_max_client_conn:  200
+pgbouncer_default_pool_size: 25
+
+# -------------------------------------------------------------------
+# Credentials (set via creds.yml / sensitive-values vault)
+# -------------------------------------------------------------------
+db_password:            "{{ creds.PG_SUPERUSER_PWD }}"
+db_user_rw_password:    "{{ creds.DB_USER_RW_PASSWORD }}"
+db_user_ro_password:    "{{ creds.DB_USER_RO_PASSWORD }}"
+
+# -------------------------------------------------------------------
+# PostgreSQL paths
+# -------------------------------------------------------------------
+postgresql_home_dir:      "/var/lib/postgresql"
+postgresql_data_dir:      "{{ postgresql_home_dir }}/{{ postgresql_version }}/main"
+postgresql_data_archive:  "{{ postgresql_home_dir }}/{{ postgresql_version }}/archive"
+postgresql_scripts_dir:   "{{ postgresql_home_dir }}/{{ postgresql_version }}/scripts"
+postgresql_conf_dir:      "{{ postgresql_data_dir }}"
+postgresql_bin_dir:       "/usr/lib/postgresql/{{ postgresql_version }}/bin"
+postgresql_log_dir:       "/var/log/postgresql"
+postgresql_unix_socket_dir: "/var/run/postgresql"
+postgresql_stats_temp_directory_path: "{{ postgresql_home_dir }}_stats_tmp"
+
+# -------------------------------------------------------------------
+# PostgreSQL initdb settings
+# -------------------------------------------------------------------
+postgresql_encoding: "UTF8"
+postgresql_locale: "en_US.UTF-8"
+postgresql_data_checksums: true
+postgresql_password_encryption_algorithm: "scram-sha-256"
+
+# -------------------------------------------------------------------
+# Replication / HA settings
+# -------------------------------------------------------------------
+synchronous_mode: true         # pg2 = Sync Standby; pg3 excluded via patroni_tag_nosync
+synchronous_mode_strict: false
+synchronous_node_count: 1
+
+# -------------------------------------------------------------------
+# PostgreSQL parameters (written into Patroni bootstrap DCS config)
+# -------------------------------------------------------------------
+postgresql_parameters:
+  - { option: "max_connections",               value: "200" }
+  - { option: "superuser_reserved_connections", value: "5" }
+  - { option: "password_encryption",           value: "{{ postgresql_password_encryption_algorithm }}" }
+  - { option: "max_locks_per_transaction",     value: "512" }
+  - { option: "max_prepared_transactions",     value: "0" }
+  - { option: "huge_pages",                    value: "off" }
+  - { option: "shared_buffers",                value: "{{ (ansible_memtotal_mb * 0.25) | int }}MB" }
+  - { option: "effective_cache_size",          value: "{{ (ansible_memtotal_mb * 0.75) | int }}MB" }
+  - { option: "work_mem",                      value: "{{ pg_params['work_mem'] }}" }
+  - { option: "maintenance_work_mem",          value: "{{ pg_params['maintenance_work_mem'] }}" }
+  - { option: "max_worker_processes",          value: "{{ server_hardware['cpu_count'] }}" }
+  - { option: "max_parallel_workers",          value: "{{ server_hardware['cpu_count'] }}" }
+  - { option: "max_parallel_workers_per_gather", value: "{{ (server_hardware['cpu_count'] / 2) | int }}" }
+  - { option: "max_parallel_maintenance_workers", value: "{{ (server_hardware['cpu_count'] / 2) | int }}" }
+  - { option: "checkpoint_timeout",            value: "5min" }
+  - { option: "checkpoint_completion_target",  value: "0.9" }
+  - { option: "min_wal_size",                  value: "512MB" }
+  - { option: "max_wal_size",                  value: "2GB" }
+  - { option: "wal_buffers",                   value: "16MB" }
+  - { option: "default_statistics_target",     value: "100" }
+  - { option: "seq_page_cost",                 value: "1" }
+  - { option: "random_page_cost",              value: "1.1" }
+  - { option: "effective_io_concurrency",      value: "200" }
+  - { option: "synchronous_commit",            value: "on" }
+  - { option: "autovacuum",                    value: "on" }
+  - { option: "autovacuum_max_workers",        value: "3" }
+  - { option: "autovacuum_vacuum_scale_factor", value: "0.2" }
+  - { option: "autovacuum_analyze_scale_factor", value: "0.1" }
+  - { option: "autovacuum_vacuum_cost_limit",  value: "-1" }
+  - { option: "max_files_per_process",         value: "4096" }
+  - { option: "archive_mode",                  value: "on" }
+  - { option: "archive_timeout",               value: "1800s" }
+  - { option: "archive_command",               value: "{{ pgbackrest_archive_command }}" }
+  - { option: "wal_level",                     value: "replica" }
+  - { option: "wal_keep_size",                 value: "512MB" }
+  - { option: "max_wal_senders",               value: "10" }
+  - { option: "max_replication_slots",         value: "10" }
+  - { option: "hot_standby",                   value: "on" }
+  - { option: "wal_log_hints",                 value: "on" }
+  - { option: "wal_compression",               value: "off" }
+  - { option: "shared_preload_libraries",      value: "pg_stat_statements,pg_cron" }
+  - { option: "pg_stat_statements.max",        value: "10000" }
+  - { option: "pg_stat_statements.track",      value: "all" }
+  - { option: "pg_stat_statements.track_utility", value: "false" }
+  - { option: "pg_stat_statements.save",       value: "true" }
+  - { option: "cron.database_name",            value: "postgres" }
+  - { option: "cron.timezone",                 value: "Asia/Kolkata" }
+  - { option: "cron.use_background_workers",   value: "on" }
+  - { option: "track_io_timing",               value: "on" }
+  - { option: "log_lock_waits",                value: "on" }
+  - { option: "log_temp_files",                value: "0" }
+  - { option: "track_activities",              value: "on" }
+  - { option: "track_activity_query_size",     value: "4096" }
+  - { option: "track_counts",                  value: "on" }
+  - { option: "track_functions",               value: "all" }
+  - { option: "log_checkpoints",               value: "on" }
+  - { option: "logging_collector",             value: "on" }
+  - { option: "log_truncate_on_rotation",      value: "on" }
+  - { option: "log_rotation_age",              value: "1d" }
+  - { option: "log_rotation_size",             value: "0" }
+  - { option: "log_line_prefix",               value: "'%t [%p-%l] %r %q%u@%d '" }
+  - { option: "log_filename",                  value: "postgresql-%a.log" }
+  - { option: "log_directory",                 value: "{{ postgresql_log_dir }}" }
+  - { option: "log_statement",                 value: "ddl" }
+  - { option: "hot_standby_feedback",          value: "on" }
+  - { option: "max_standby_streaming_delay",   value: "30s" }
+  - { option: "wal_receiver_status_interval",  value: "10s" }
+  - { option: "idle_in_transaction_session_timeout", value: "10min" }
+  - { option: "jit",                           value: "off" }
+
+# -------------------------------------------------------------------
+# Patroni
+# -------------------------------------------------------------------
+patroni_superuser_username: "{{ postgres_user }}"
+patroni_replication_username: "replicator"
+patroni_superuser_password:   "{{ creds.PG_SUPERUSER_PWD }}"
+patroni_replication_password: "{{ creds.PG_SUPERUSER_PWD }}"
+patroni_restapi_port: 8008
+patroni_ttl: 30
+patroni_loop_wait: 10
+patroni_retry_timeout: 10
+patroni_maximum_lag_on_failover: 1048576
+patroni_master_start_timeout: 300
+
+patroni_log_destination: logfile
+patroni_log_dir: /var/log/patroni
+patroni_log_level: info
+patroni_log_traceback_level: error
+patroni_log_format: "%(asctime)s %(levelname)s: %(message)s"
+patroni_log_dateformat: ""
+patroni_log_max_queue_size: 1000
+patroni_log_file_num: 4
+patroni_log_file_size: 25000000
+patroni_log_loggers_patroni_postmaster: warning
+patroni_log_loggers_urllib3: warning
+
+# Watchdog disabled — Docker containers have no /dev/watchdog
+patroni_watchdog_mode: "off"
+patroni_watchdog_device: /dev/watchdog
+
+patroni_postgresql_use_pg_rewind: true
+patroni_remove_data_directory_on_rewind_failure: false
+patroni_remove_data_directory_on_diverged_timelines: true
+
+patroni_cluster_bootstrap_method: "initdb"
+
+# Replica bootstrap methods (tried in order)
+patroni_create_replica_methods:
+  - pgbackrest
+  - basebackup
+
+pgbackrest:
+  - { option: "command", value: "/usr/bin/pgbackrest --stanza={{ pgbackrest_stanza_name }} --log-level-file=detail --delta restore" }
+  - { option: "keep_data", value: "true" }
+  - { option: "no_params", value: "true" }
+
+basebackup:
+  - { option: "max-rate", value: "100M" }
+  - { option: "checkpoint", value: "fast" }
+
+# -------------------------------------------------------------------
+# pgBackRest (POSIX local repo on shared Docker volume)
+# -------------------------------------------------------------------
+pgbackrest_repo1_type: posix
+pgbackrest_repo1_path: "{{ creds.PGBACKREST_REPO1_PATH | default('/var/lib/pgbackrest') }}"
+pgbackrest_repo1_retention_full: 7
+pgbackrest_compress_type: lz4
+pgbackrest_pg1_path: "{{ postgresql_data_dir }}"
+
+pgbackrest_archive_command: "pgbackrest --stanza={{ pgbackrest_stanza_name }} archive-push %p"
+postgresql_restore_command: "pgbackrest --stanza={{ pgbackrest_stanza_name }} archive-get %f %p"
+
+recovery_conf:
+  restore_command: "{{ postgresql_restore_command }}"
+
+# -------------------------------------------------------------------
+# HAProxy (installed on each pg container — port 5000/5001/7000 inside container)
+# -------------------------------------------------------------------
+haproxy_write_port: 5000        # TCP → Patroni primary only (health: GET /primary)
+haproxy_read_port: 5001         # TCP → healthy replicas (health: GET /replica)
+haproxy_stats_port: 7000        # HTTP stats page
+haproxy_stats_user: admin
+haproxy_stats_password: "{{ creds.PG_SUPERUSER_PWD }}"
+
+# -------------------------------------------------------------------
+# Keepalived VRRP (VIP follows Patroni primary inside the Docker network)
+# -------------------------------------------------------------------
+keepalived_vip: "172.18.0.10"          # primary/write VIP — follows Patroni leader
+keepalived_replica_vip: "172.18.0.9"  # replica/standby VIP — follows sync standby (or any replica)
+keepalived_vip_prefix: "24"
+keepalived_interface: "eth0"
+keepalived_virtual_router_id: 51      # VI_PRIMARY uses 51, VI_REPLICA uses 52
+keepalived_auth_pass: "pglabvr1"      # max 8 chars
+keepalived_check_interval: 2
+keepalived_check_rise: 2
+keepalived_check_fall: 3
+keepalived_weight: 100                # added to base priority when health check passes
+
+# -------------------------------------------------------------------
+# .pgpass entries
+# -------------------------------------------------------------------
+postgresql_pgpass:
+  - "localhost:*:*:{{ patroni_superuser_username }}:{{ patroni_superuser_password }}"
+  - "{{ inventory_hostname }}:*:*:{{ patroni_superuser_username }}:{{ patroni_superuser_password }}"
+  - "*:*:*:{{ patroni_replication_username }}:{{ patroni_replication_password }}"
+  - "*:*:*:{{ patroni_superuser_username }}:{{ patroni_superuser_password }}"

@@ -1,0 +1,197 @@
+---
+
+scope: pg-docker-cls1
+name: pg1
+namespace: /service
+
+log:
+  level: INFO
+  traceback_level: ERROR
+  format: "%(asctime)s %(levelname)s: %(message)s"
+  dateformat: ""
+  max_queue_size: 1000
+  dir: /var/log/patroni
+  file_num: 4
+  file_size: 25000000
+  loggers:
+    patroni.postmaster: WARNING
+    urllib3: WARNING
+
+restapi:
+  listen: 0.0.0.0:8008
+  connect_address: 172.18.0.11:8008
+
+# etcd3 DCS configuration
+etcd3:
+  # Primary cluster in Region A: 3-member etcd cluster (pg1, pg2, pg3)
+  hosts: 172.18.0.11:2379,172.18.0.12:2379,172.18.0.13:2379
+  protocol: http
+
+bootstrap:
+  method: initdb
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    master_start_timeout: 300
+    synchronous_mode: true
+    synchronous_mode_strict: false
+    synchronous_node_count: 1
+    postgresql:
+      use_pg_rewind: true
+      use_slots: true
+      parameters:
+        max_connections: "200"
+        superuser_reserved_connections: "5"
+        password_encryption: "scram-sha-256"
+        max_locks_per_transaction: "512"
+        max_prepared_transactions: "0"
+        huge_pages: "off"
+        shared_buffers: "1983MB"
+        effective_cache_size: "5951MB"
+        work_mem: "4MB"
+        maintenance_work_mem: "256MB"
+        max_worker_processes: "2"
+        max_parallel_workers: "2"
+        max_parallel_workers_per_gather: "1"
+        max_parallel_maintenance_workers: "1"
+        checkpoint_timeout: "5min"
+        checkpoint_completion_target: "0.9"
+        min_wal_size: "512MB"
+        max_wal_size: "2GB"
+        wal_buffers: "16MB"
+        default_statistics_target: "100"
+        seq_page_cost: "1"
+        random_page_cost: "1.1"
+        effective_io_concurrency: "200"
+        synchronous_commit: "on"
+        autovacuum: "on"
+        autovacuum_max_workers: "3"
+        autovacuum_vacuum_scale_factor: "0.2"
+        autovacuum_analyze_scale_factor: "0.1"
+        autovacuum_vacuum_cost_limit: "-1"
+        max_files_per_process: "4096"
+        archive_mode: "on"
+        archive_timeout: "1800s"
+        archive_command: "pgbackrest --stanza=pg-docker-cls1 archive-push %p"
+        wal_level: "replica"
+        wal_keep_size: "512MB"
+        max_wal_senders: "10"
+        max_replication_slots: "10"
+        hot_standby: "on"
+        wal_log_hints: "on"
+        wal_compression: "off"
+        shared_preload_libraries: "pg_stat_statements,pg_cron"
+        pg_stat_statements.max: "10000"
+        pg_stat_statements.track: "all"
+        pg_stat_statements.track_utility: "false"
+        pg_stat_statements.save: "true"
+        cron.database_name: "postgres"
+        cron.timezone: "Asia/Kolkata"
+        cron.use_background_workers: "on"
+        track_io_timing: "on"
+        log_lock_waits: "on"
+        log_temp_files: "0"
+        track_activities: "on"
+        track_activity_query_size: "4096"
+        track_counts: "on"
+        track_functions: "all"
+        log_checkpoints: "on"
+        logging_collector: "on"
+        log_truncate_on_rotation: "on"
+        log_rotation_age: "1d"
+        log_rotation_size: "0"
+        log_line_prefix: "'%t [%p-%l] %r %q%u@%d '"
+        log_filename: "postgresql-%a.log"
+        log_directory: "/var/log/postgresql"
+        log_statement: "ddl"
+        hot_standby_feedback: "on"
+        max_standby_streaming_delay: "30s"
+        wal_receiver_status_interval: "10s"
+        idle_in_transaction_session_timeout: "10min"
+        jit: "off"
+
+  initdb:
+    - encoding: UTF8
+    - locale: en_US.UTF-8
+    - data-checksums
+
+  pg_hba:
+    # Local connections (superuser via unix socket)
+    - local all postgres                           peer
+    - host  all all      127.0.0.1/32              scram-sha-256
+    # Cluster-internal replication (all container IPs)
+    - host replication replicator 172.18.0.11/32 scram-sha-256
+    - host replication replicator 172.18.0.12/32 scram-sha-256
+    - host replication replicator 172.18.0.13/32 scram-sha-256
+    - host replication replicator 172.18.0.14/32 scram-sha-256
+    # Wide-open for Docker learning environment — restrict in production
+    - host replication replicator 0.0.0.0/0        scram-sha-256
+    - host all          all       0.0.0.0/0         scram-sha-256
+    - host all          all       ::/0              scram-sha-256
+
+  users:
+    postgres:
+      password: "Pg@Lab2026!"
+      options:
+        - createrole
+        - createdb
+    replicator:
+      password: "Pg@Lab2026!"
+      options:
+        - replication
+
+
+postgresql:
+  listen: 0.0.0.0:5432
+  connect_address: 172.18.0.11:5432
+  use_unix_socket: true
+  data_dir: /var/lib/postgresql/18/main
+  bin_dir: /usr/lib/postgresql/18/bin
+  config_dir: /var/lib/postgresql/18/main
+  pgpass: /var/lib/postgresql/.pgpass
+
+  authentication:
+    replication:
+      username: replicator
+      password: "Pg@Lab2026!"
+    superuser:
+      username: postgres
+      password: "Pg@Lab2026!"
+
+  parameters:
+    unix_socket_directories: /var/run/postgresql
+
+  callbacks:
+    on_role_change: /usr/local/bin/patroni_pgbouncer_callback.sh
+
+  remove_data_directory_on_rewind_failure: false
+  remove_data_directory_on_diverged_timelines: true
+
+  create_replica_methods:
+    - pgbackrest
+    - basebackup
+
+  pgbackrest:
+    command: /usr/bin/pgbackrest --stanza=pg-docker-cls1 --log-level-file=detail --delta restore
+    keep_data: true
+    no_params: true
+
+  basebackup:
+    max-rate: '100M'
+    checkpoint: 'fast'
+
+  recovery_conf:
+    restore_command: "pgbackrest --stanza=pg-docker-cls1 archive-get %f %p"
+
+
+
+watchdog:
+  mode: off  # off — Docker containers have no /dev/watchdog
+
+tags:
+  nofailover: false
+  noloadbalance: false
+  clonefrom: false
+  nosync: false

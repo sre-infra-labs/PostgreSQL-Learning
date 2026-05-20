@@ -2,12 +2,19 @@
 # This file would be generate automatically from github workflow using environment variables
 
 creds:
+  # AWS S3 pgBackRest credentials (inactive — kept for reference)
   PG_BACKREST_REPO1_S3_ENDPOINT: "{{ PG_BACKREST_REPO1_S3_ENDPOINT }}"
   PG_BACKREST_REPO1_S3_REGION: "{{ PG_BACKREST_REPO1_S3_REGION }}"
   PG_BACKREST_REPO1_S3_BUCKET: "{{ PG_BACKREST_REPO1_S3_BUCKET }}"
   PG_BACKREST_REPO1_S3_PATH: "{{ PG_BACKREST_REPO1_S3_PATH }}"
   PG_BACKREST_REPO1_S3_KEY: "{{ PG_BACKREST_REPO1_S3_KEY }}"
   PG_BACKREST_REPO1_S3_KEY_SECRET: "{{ PG_BACKREST_REPO1_S3_KEY_SECRET }}"
+
+  # SMB / CIFS shared-folder credentials — NOT NEEDED
+  # The share-stalestorage usershare on ryzen9 is guest_ok=y / Everyone:F.
+  # Mounting uses the 'guest' CIFS option; no username/password required.
+  #SMB_USERNAME: "{{ SMB_USERNAME }}"
+  #SMB_PASSWORD: "{{ SMB_PASSWORD }}"
 
   PG_SUPERUSER_PWD: "{{ PG_SUPERUSER_PWD }}"
   DB_USER_RW_PASSWORD: "{{ DB_USER_RW_PASSWORD }}"

@@ -1,0 +1,50 @@
+# Ansible
+.ansible/
+*.retry
+*.pyc
+__pycache__/
+
+# Sensitive Data
+sensitive-values
+vault-pass
+
+# Docker Volumes & Data
+~/cdc-volumes/
+cdc-volumes/
+volumes/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+/tmp/
+/logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Runtime Files
+*.pid
+*.sock
+.cache/
+
+# Keep these important files
+!sensitive-values-sample
+!vault-pass
+!ansible.cfg
+!hosts.yml
+!vars/main.yml
+!playbook-*.yml
+!roles/
+!scripts/
+!README.md
+!QUICK_START.md
+!INDEX.md
+!DELIVERABLES.md

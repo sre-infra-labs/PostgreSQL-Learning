@@ -1,4 +1,73 @@
 ---
+# ---------------------------------------------------------------------------
+# SMB shared-folder pre-flight checks (only when using posix repository type)
+# ---------------------------------------------------------------------------
+- name: Verify SMB share is mounted at {{ pgbackrest_smb_share_mount }}
+  ansible.builtin.stat:
+    path: "{{ pgbackrest_smb_share_mount }}"
+  register: smb_mount_stat
+  when: pgbackrest_repo1_type | default('posix') == 'posix'
+
+- name: Fail if SMB share mount point does not exist or is not a directory
+  ansible.builtin.fail:
+    msg: >
+      SMB share mount point '{{ pgbackrest_smb_share_mount }}' does not exist
+      or is not a directory on {{ inventory_hostname }}.
+      Ensure the CIFS/SMB share is mounted before running this playbook.
+  when:
+    - pgbackrest_repo1_type | default('posix') == 'posix'
+    - not smb_mount_stat.stat.exists or not smb_mount_stat.stat.isdir
+
+- name: Verify SMB share is actually mounted (not just a local directory)
+  ansible.builtin.shell: |
+    findmnt --target "{{ pgbackrest_smb_share_mount }}" --noheadings \
+      | grep -E 'cifs|smb|nfs' || \
+    mountpoint -q "{{ pgbackrest_smb_share_mount }}"
+  register: smb_mount_check
+  changed_when: false
+  failed_when: false
+  when: pgbackrest_repo1_type | default('posix') == 'posix'
+
+- name: Warn if SMB share mount could not be confirmed as a network mount
+  ansible.builtin.debug:
+    msg: >
+      WARNING: Could not confirm '{{ pgbackrest_smb_share_mount }}' is a CIFS/SMB
+      network mount on {{ inventory_hostname }}. Proceeding, but verify manually.
+  when:
+    - pgbackrest_repo1_type | default('posix') == 'posix'
+    - smb_mount_check.rc is defined and smb_mount_check.rc != 0
+
+- name: Verify write access to SMB share as postgres user
+  ansible.builtin.shell: |
+    test_file="{{ pgbackrest_smb_share_mount }}/.ansible_write_test_{{ inventory_hostname }}"
+    touch "$test_file" && rm -f "$test_file"
+  become: true
+  become_user: postgres
+  changed_when: false
+  register: smb_write_check
+  failed_when: false
+  when: pgbackrest_repo1_type | default('posix') == 'posix'
+
+- name: Fail if postgres user cannot write to SMB share
+  ansible.builtin.fail:
+    msg: >
+      The postgres user cannot write to '{{ pgbackrest_smb_share_mount }}'
+      on {{ inventory_hostname }}. Check SMB share permissions and uid/gid mapping.
+  when:
+    - pgbackrest_repo1_type | default('posix') == 'posix'
+    - smb_write_check.rc is defined and smb_write_check.rc != 0
+
+- name: Create pgbackrest backup directory on SMB share
+  ansible.builtin.file:
+    path: "{{ pgbackrest_repo1_path }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: "0750"
+  when: pgbackrest_repo1_type | default('posix') == 'posix'
+
+# ---------------------------------------------------------------------------
+
 - name: Install pgBackRest package
   ansible.builtin.package:
     name: pgbackrest
@@ -16,37 +85,18 @@
   become_user: postgres
   changed_when: false
 
-- name: Create /var/log/pgbackrest directory
-  file:
-    path: /var/log/pgbackrest
+- name: Create pgBackRest directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
     state: directory
     owner: postgres
     group: postgres
-    mode: '0770'
-
-- name: Create /etc/pgbackrest directory
-  file:
-    path: /etc/pgbackrest
-    state: directory
-    owner: postgres
-    group: postgres
-    mode: '0740'
-
-- name: Create /var/spool/pgbackrest directory
-  file:
-    path: /var/spool/pgbackrest
-    state: directory
-    owner: postgres
-    group: postgres
-    mode: '0740'
-
-- name: Create /etc/pgbackrest/conf.d directory
-  file:
-    path: /etc/pgbackrest/conf.d
-    state: directory
-    owner: postgres
-    group: postgres
-    mode: '0740'
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /var/log/pgbackrest, mode: '0770' }
+    - { path: /etc/pgbackrest, mode: '0740' }
+    - { path: /var/spool/pgbackrest, mode: '0740' }
+    - { path: /etc/pgbackrest/conf.d, mode: '0740' }
 
 - name: Generate pgBackRest configuration file
   template:
@@ -78,7 +128,9 @@
   register: stanza_creation_result
   retries: 3
   delay: 10
-  when: "'leader' in group_names"
+  when:
+    - "'leader' in group_names"
+    - patroni_standby_cluster is not defined
   failed_when: false
   # failed_when:
   #   - stanza_creation_result.rc != 0
@@ -90,6 +142,7 @@
   when:
     - "'leader' in group_names"
     - stanza_creation_result is defined
+    - stanza_creation_result.rc is defined
     - stanza_creation_result.rc != 0
     - "'ERROR' in stanza_creation_result.stdout"
     - "'did an error occur during stanza-upgrade' not in stanza_creation_result.stdout"
@@ -105,6 +158,7 @@
   when:
     - "'leader' in group_names"
     - stanza_creation_result is defined
+    - stanza_creation_result.rc is defined
     - stanza_creation_result.rc != 0
     - "'did an error occur during stanza-upgrade' in stanza_creation_result.stdout"
   register: stanza_upgrade_result

@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: cdc-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: {{ zk_listen_port }}
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 5
+      ZOOKEEPER_INIT_LIMIT: 10
+    ports:
+      - "{{ zk_host_mapping_port }}:{{ zk_listen_port }}"
+    volumes:
+      - {{ docker_volumes_root }}/zookeeper/data:/var/lib/zookeeper/data
+      - {{ docker_volumes_root }}/zookeeper/log:/var/lib/zookeeper/log
+    networks:
+      {{ docker_network_name }}:
+        aliases:
+          - zookeeper
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "{{ zk_listen_port }}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: cdc-kafka
+    depends_on:
+      zookeeper:
+        condition: service_started
+    environment:
+      KAFKA_BROKER_ID: {{ kafka_broker_id }}
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:{{ zk_listen_port }}
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://{{ kafka_advertised_host }}:{{ kafka_advertised_port }}
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    ports:
+      - "{{ kafka_host_mapping_port }}:{{ kafka_advertised_port }}"
+    volumes:
+      - {{ docker_volumes_root }}/kafka/data:/var/lib/kafka/data
+    networks:
+      {{ docker_network_name }}:
+        aliases:
+          - kafka
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "{{ kafka_advertised_port }}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  debezium-connect:
+    image: debezium/connect:2.4
+    container_name: cdc-debezium
+    depends_on:
+      - kafka
+    environment:
+      BOOTSTRAP_SERVERS: kafka:{{ kafka_advertised_port }}
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: my_connect_configs
+      OFFSET_STORAGE_TOPIC: my_connect_offsets
+      STATUS_STORAGE_TOPIC: my_connect_statuses
+    ports:
+      - "{{ debezium_host_mapping_port }}:{{ debezium_listen_port }}"
+    networks:
+      {{ docker_network_name }}:
+        aliases:
+          - debezium-connect
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: cdc-kafka-ui
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_CLUSTERS_0_NAME: cdc-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:{{ kafka_advertised_port }}
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:{{ zk_listen_port }}
+    ports:
+      - "{{ kafka_ui_host_mapping_port }}:{{ kafka_ui_listen_port }}"
+    networks:
+      {{ docker_network_name }}:
+        aliases:
+          - kafka-ui
+
+networks:
+  {{ docker_network_name }}:
+    external: true

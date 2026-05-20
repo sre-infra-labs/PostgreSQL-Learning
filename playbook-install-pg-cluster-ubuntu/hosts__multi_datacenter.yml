@@ -3,6 +3,7 @@ all:
     dc1:
       vars:
         cluster_name: pg-cls1-prod
+        pgbackrest_smb_server: "192.168.100.1"   # ryzen9 hypervisor — DC1 subnet
       children:
         dc1_leader:
           hosts:
@@ -17,6 +18,7 @@ all:
     dc2:
       vars:
         cluster_name: pg-cls1-dr
+        pgbackrest_smb_server: "192.168.200.1"   # ryzen9 hypervisor — DC2 subnet
       children:
         dc2_leader:
           hosts:

@@ -1,0 +1,107 @@
+---
+- name: Begin pg_cluster/custom/etcd.yml
+  ansible.builtin.debug:
+    msg: "Installing etcd {{ etcd_version }} on {{ inventory_hostname }} ({{ ip }})"
+
+- name: Set etcd download architecture
+  ansible.builtin.set_fact:
+    etcd_arch: "{{ 'amd64' if ansible_facts['architecture'] == 'x86_64' else 'arm64' }}"
+
+- name: Download etcd {{ etcd_version }} tarball directly into container
+  ansible.builtin.get_url:
+    url: "https://github.com/etcd-io/etcd/releases/download/v{{ etcd_version }}/etcd-v{{ etcd_version }}-linux-{{ etcd_arch }}.tar.gz"
+    dest: "/tmp/etcd-v{{ etcd_version }}-linux-{{ etcd_arch }}.tar.gz"
+    mode: '0644'
+
+- name: Extract etcd binaries
+  ansible.builtin.unarchive:
+    src: "/tmp/etcd-v{{ etcd_version }}-linux-{{ etcd_arch }}.tar.gz"
+    dest: /tmp/
+    remote_src: true
+    creates: "/tmp/etcd-v{{ etcd_version }}-linux-{{ etcd_arch }}/etcd"
+
+- name: Install etcd and etcdctl to /usr/local/bin
+  ansible.builtin.copy:
+    src: "/tmp/etcd-v{{ etcd_version }}-linux-{{ etcd_arch }}/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    mode: '0755'
+    owner: root
+    group: root
+    remote_src: true
+  loop:
+    - etcd
+    - etcdctl
+
+- name: Create etcd system user
+  ansible.builtin.user:
+    name: etcd
+    system: yes
+    shell: /bin/false
+    home: /var/lib/etcd
+    create_home: no
+
+- name: Create etcd data directory
+  ansible.builtin.file:
+    path: /var/lib/etcd
+    state: directory
+    owner: etcd
+    group: etcd
+    mode: '0700'
+
+- name: Create etcd config directory
+  ansible.builtin.file:
+    path: /etc/etcd
+    state: directory
+    mode: '0755'
+
+- name: Generate /etc/etcd/etcd.env from template
+  ansible.builtin.template:
+    src: "{{ role_path }}/templates/etcd.env.j2"
+    dest: /etc/etcd/etcd.env
+    owner: etcd
+    group: etcd
+    mode: '0640'
+
+- name: Deploy etcd systemd service
+  ansible.builtin.template:
+    src: "{{ role_path }}/templates/etcd.service.j2"
+    dest: /etc/systemd/system/etcd.service
+    mode: '0644'
+  notify: reload systemd daemon
+
+- name: Reload systemd and enable etcd service
+  ansible.builtin.systemd:
+    name: etcd
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Wait for etcd client port on this node
+  ansible.builtin.wait_for:
+    host: localhost
+    port: 2379
+    state: started
+    timeout: 60
+    delay: 5
+  register: etcd_wait
+  ignore_errors: true
+
+- name: Check etcd service logs if port wait failed
+  ansible.builtin.shell: journalctl -xeu etcd.service 2>&1 | tail -30
+  when: etcd_wait is failed
+  ignore_errors: true
+
+- name: Verify etcd health on {{ inventory_hostname }}
+  ansible.builtin.uri:
+    url: "http://{{ ip }}:2379/health"
+    method: GET
+    status_code: 200
+  register: etcd_health
+  until: etcd_health.status == 200
+  retries: 15
+  delay: 3
+  ignore_errors: true
+
+- name: etcd is healthy on {{ inventory_hostname }}
+  ansible.builtin.debug:
+    msg: "etcd running on {{ inventory_hostname }} ({{ ip }}:2379)"

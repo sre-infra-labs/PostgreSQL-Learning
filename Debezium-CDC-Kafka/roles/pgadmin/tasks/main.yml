@@ -1,0 +1,73 @@
+---
+- name: pgAdmin Deployment
+  block:
+    - name: Remove old pgadmin4-cdc container if present (renamed to {{ pgadmin_container_name }})
+      shell: |
+        OLD="pgadmin4-cdc"
+        if [ "{{ pgadmin_container_name }}" != "$OLD" ] && docker inspect "$OLD" >/dev/null 2>&1; then
+          docker stop "$OLD" 2>/dev/null || true
+          docker rm "$OLD"
+          echo "Removed $OLD"
+        fi
+      changed_when: false
+
+    - name: Remove pgAdmin container if it is on the wrong network
+      shell: |
+        STATE=$(docker inspect --format='{{ "{{" }}.State.Status{{ "}}" }}' "{{ pgadmin_container_name }}" 2>/dev/null || echo "missing")
+        if [ "$STATE" = "missing" ]; then
+          echo "missing"
+          exit 0
+        fi
+        ON_NET=$(docker inspect "{{ pgadmin_container_name }}" 2>/dev/null | \
+          python3 -c "import json,sys; d=json.load(sys.stdin)[0]; print('yes' if '{{ docker_network_name }}' in d['NetworkSettings']['Networks'] else 'no')")
+        if [ "$ON_NET" = "no" ]; then
+          docker stop "{{ pgadmin_container_name }}" 2>/dev/null || true
+          docker rm "{{ pgadmin_container_name }}"
+          echo "removed_for_network_migration"
+        else
+          echo "network_ok"
+        fi
+      register: pgadmin_network_check
+      failed_when: false
+      changed_when: "'removed_for_network_migration' in pgadmin_network_check.stdout"
+
+    - name: Check pgAdmin container state
+      shell: |
+        docker inspect --format='{{ "{{" }}.State.Status{{ "}}" }}' "{{ pgadmin_container_name }}" 2>/dev/null || echo "missing"
+      register: pgadmin_state
+      failed_when: false
+      changed_when: false
+
+    - name: Deploy pgAdmin container (if missing)
+      # Single-quote PGADMIN_PASS to prevent $$ from being shell-expanded to PID
+      shell: |
+        PGADMIN_PASS='{{ PGADMIN_DEFAULT_PASSWORD }}'
+        docker run -d \
+          --name "{{ pgadmin_container_name }}" \
+          --network "{{ docker_network_name }}" \
+          --ip "{{ pgadmin_container_ip }}" \
+          -p "{{ pgadmin_host_mapping_port }}:{{ pgadmin_listen_port }}" \
+          -e "PGADMIN_DEFAULT_EMAIL={{ PGADMIN_DEFAULT_EMAIL }}" \
+          -e "PGADMIN_DEFAULT_PASSWORD=$PGADMIN_PASS" \
+          -v "{{ docker_volumes_root }}/pgadmin:/var/lib/pgadmin" \
+          dpage/pgadmin4:{{ pgadmin_version }}
+      when: pgadmin_state.stdout | trim == 'missing'
+
+    - name: Start stopped pgAdmin container (if exited)
+      shell: docker start "{{ pgadmin_container_name }}"
+      when: pgadmin_state.stdout | trim in ['exited', 'created', 'paused']
+
+    - name: Wait for pgAdmin container to be running
+      pause:
+        seconds: 10
+
+    - name: Display pgAdmin deployment status
+      ansible.builtin.debug:
+        msg: |
+          ✓ pgAdmin deployed successfully
+          Container: {{ pgadmin_container_name }}
+          IP: {{ pgadmin_container_ip }}:{{ pgadmin_listen_port }}
+          Exposed Port: localhost:{{ pgadmin_host_mapping_port }}
+          URL: http://localhost:{{ pgadmin_host_mapping_port }}
+          Email: {{ PGADMIN_DEFAULT_EMAIL }}
+          Note: Run the pgBadger playbook to enable Log Analysis portal

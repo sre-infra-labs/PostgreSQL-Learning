@@ -1,0 +1,93 @@
+---
+- name: Begin tasks/custom/set_patroni_cluster_leader.yml
+  debug:
+    msg: "Begin tasks/custom/set_patroni_cluster_leader.yml"
+  run_once: true
+
+- name: Query Patroni API to get cluster info
+  uri:
+    url: "http://{{ inventory_hostname }}:8008/cluster"
+    method: GET
+    return_content: yes
+  register: result_patroni_api_cluster
+  ignore_errors: true
+
+- name: Set fact are_cluster_nodes_failover_ready
+  ansible.builtin.set_fact:
+    is_cluster_online: >-
+      {{ true if patroni_api_cluster.json.members is defined else false | bool }}
+    are_cluster_nodes_failover_ready: >-
+      {{
+        (result_patroni_api_cluster.json.members | default([])) | length > 0
+        and
+        (
+          (result_patroni_api_cluster.json.members | selectattr('state', 'in', ['running', 'streaming'])) | list | length
+          ==
+          (result_patroni_api_cluster.json.members | list | length)
+        )
+      }}
+    are_cluster_nodes_healthy: >-
+      {{
+        (patroni_api_cluster.json.members | default([])) | length > 0
+        and
+        (
+          (patroni_api_cluster.json.members | selectattr('state', 'in', ['running', 'streaming', 'in archive recovery'])) | list | length
+          ==
+          (patroni_api_cluster.json.members | list | length)
+        )
+      }}
+  when:
+    - result_patroni_api_cluster.json.members is defined
+    - not (result_patroni_api_cluster.failed | default(false))
+  ignore_errors: true
+
+- name: Set facts patroni_cluster_leader_host & patroni_cluster_leader_name if patroni api is up
+  set_fact:
+    patroni_cluster_leader_host: >-
+      {{ (result_patroni_api_cluster.json.members
+          | selectattr('role', 'in', ['leader', 'standby_leader'])
+          | map(attribute='host')
+          | list)[0] }}
+    patroni_cluster_leader_name: >-
+      {{ (result_patroni_api_cluster.json.members
+          | selectattr('role', 'in', ['leader', 'standby_leader'])
+          | map(attribute='name')
+          | list)[0] }}
+  when:
+    - result_patroni_api_cluster.json.members is defined
+    - not (result_patroni_api_cluster.failed | default(false))
+    - are_cluster_nodes_failover_ready
+  ignore_errors: true
+
+- name: "Set desired leader for cluster if leader name does not match with current host"
+  vars:
+    patroni_member_name: "{{ inventory_hostname.split('.')[0] }}"
+  ansible.builtin.shell: |
+    patronictl -c /etc/patroni/patroni.yml failover --candidate {{ patroni_member_name }} --force
+  args:
+    executable: /bin/bash
+  become: true
+  register: result_set_cluster_leader_node
+  when:
+    - result_patroni_api_cluster.json.members is defined
+    - are_cluster_nodes_failover_ready
+    - patroni_cluster_leader_host is not defined or (inventory_hostname != patroni_cluster_leader_host)
+  failed_when: >
+    result_set_cluster_leader_node.rc != 0
+    and ('is already the leader of cluster' not in result_set_cluster_leader_node.stderr)
+
+- name: Wait for service to come up after leader election
+  pause:
+    seconds: 10
+  when:
+    - result_patroni_api_cluster.json.members is defined
+    - are_cluster_nodes_failover_ready
+    - inventory_hostname != patroni_cluster_leader_host
+  run_once: true
+
+- name: End tasks/custom/set_patroni_cluster_leader.yml
+  debug:
+    msg: "End tasks/custom/set_patroni_cluster_leader.yml"
+  run_once: true
+
+

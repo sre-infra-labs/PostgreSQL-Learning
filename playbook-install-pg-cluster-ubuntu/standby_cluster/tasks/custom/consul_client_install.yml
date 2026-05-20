@@ -3,11 +3,50 @@
   ansible.builtin.debug:
     msg: Begin tasks/custom/consul_client_install.yml
 
-- name: Install consul client on host
-  ansible.builtin.package:
-    name: "consul-{{ consul_version }}"
-    state: present
-  when: not (reinit_cluster is defined and reinit_cluster)
+# - name: Install consul client on host
+#   ansible.builtin.package:
+#     # name: "consul-{{ consul_version }}"
+#     name: "consul"
+#     state: present
+#   when: not (reinit_cluster is defined and reinit_cluster)
+
+- name: Download Consul zip on localhost
+  ansible.builtin.get_url:
+    url: "https://releases.hashicorp.com/consul/{{ consul_version }}/consul_{{ consul_version }}_linux_amd64.zip"
+    dest: "/tmp/consul_{{ consul_version }}_linux_amd64.zip"
+    mode: '0644'
+  delegate_to: localhost
+  run_once: true
+  become: false   # explicitly disable sudo
+
+- name: Create temporary unzip directory on localhost
+  ansible.builtin.file:
+    path: "/tmp/consul_unzip"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  run_once: true
+  become: false   # explicitly disable sudo
+
+- name: Unzip Consul binary on localhost
+  ansible.builtin.unarchive:
+    src: "/tmp/consul_{{ consul_version }}_linux_amd64.zip"
+    dest: "/tmp/consul_unzip"
+    remote_src: yes
+    creates: "/tmp/consul_unzip/consul"
+  delegate_to: localhost
+  run_once: true
+  become: false   # explicitly disable sudo
+
+- name: Copy Consul binary to target hosts
+  ansible.builtin.copy:
+    src: "/tmp/consul_unzip/consul"
+    dest: "/usr/local/bin/consul"
+    mode: '0755'
+    owner: root
+    group: root
+    backup: yes
+  become: true
 
 - name: Print consul token
   ansible.builtin.debug:
@@ -57,16 +96,54 @@
     mode: '0640'
   notify: restart consul
 
+- name: Create Consul systemd service file
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/consul.service
+    content: |
+      [Unit]
+      Description="HashiCorp Consul - A service mesh solution"
+      Documentation=https://www.consul.io/
+      Requires=network-online.target
+      After=network-online.target
+      ConditionFileNotEmpty=/etc/consul.d/consul.hcl
 
-- name: restart consul
-  ansible.builtin.service:
+      [Service]
+      EnvironmentFile=-/etc/consul.d/consul.env
+      User=consul
+      Group=consul
+      ExecStart=/usr/local/bin/consul agent -config-dir=/etc/consul.d/
+      ExecReload=/bin/kill --signal HUP $MAINPID
+      KillMode=process
+      KillSignal=SIGTERM
+      Restart=on-failure
+      LimitNOFILE=65536
+
+      [Install]
+      WantedBy=multi-user.target
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: yes
+
+- name: Enable and start Consul service
+  ansible.builtin.systemd:
     name: consul
-    state: restarted
+    enabled: yes
+    state: started
+
+# - name: restart consul
+#   ansible.builtin.service:
+#     name: consul
+#     state: restarted
   # listen: 'restart consul'
 
 - name: Configure Consul Client using custom/consul_client_config.yml
   include_tasks: custom/consul_client_config.yml
-  when: inventory_hostname == (groups['leader'] | default([]) | first | default(groups['leader'] | default([]) | first, ''))
+  when: inventory_hostname == (groups['leader'] | default([]) | first | default(groups['standby_leader'] | default([]) | first, ''))
 
 - name: Ensure Consul service is enabled and running
   ansible.builtin.service:

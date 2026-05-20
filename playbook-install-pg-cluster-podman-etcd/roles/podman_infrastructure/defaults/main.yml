@@ -1,0 +1,78 @@
+# Podman network — use the pre-existing lab-network shared by all lab containers
+# The playbook will NOT recreate this network; it attaches pg containers to it.
+# Ubuntu host (ryzen9 — Ubuntu 24.04): podman network create --driver bridge --subnet=172.18.0.0/16 lab-network
+podman_network_name: "lab-network"
+podman_network_subnet: "172.18.0.0/16"
+podman_network_gateway: "172.18.0.1"
+podman_network_driver: "bridge"
+
+# Container image — built from Dockerfile in the project root
+pg_node_image: "pg-cluster-node:latest"
+pg_node_dockerfile_path: "{{ playbook_dir }}"
+
+# etcd runs INSIDE each pg container (no separate etcd container)
+# etcd forms a 3-member cluster using container IPs over the podman network
+# Ports 2379 (client) and 2380 (peer) are container-internal only
+
+# Keepalived VIPs — float inside the podman bridge network
+keepalived_vip: "172.18.0.10"          # primary/write VIP → Patroni leader
+keepalived_replica_vip: "172.18.0.9"   # replica/standby VIP → sync standby or healthy replica
+
+# PostgreSQL node containers
+# IPs are in the 172.18.0.11-13 range (existing lab containers occupy .2-.8)
+# pg_port:            host-side port (5432 inside container)
+# patroni_port:       host-side port (8008 inside container)
+# pg_exporter_port:   host-side port (9194 inside container)
+# pgbouncer_port:     host-side port (6432 inside container)
+# haproxy_write_port: host-side port (5000 inside container) — primary-only write
+# haproxy_read_port:  host-side port (5001 inside container) — replica read
+# haproxy_stats_port: host-side port (7000 inside container) — HAProxy stats UI
+pg_containers:
+  - name: pg1
+    ip: "172.18.0.11"
+    ssh_port: 2221
+    pg_port: 5433
+    patroni_port: 8011
+    pg_exporter_port: 9194
+    pgbouncer_port: 6433
+    haproxy_write_port: 15000
+    haproxy_read_port: 15001
+    haproxy_stats_port: 17000
+  - name: pg2
+    ip: "172.18.0.12"
+    ssh_port: 2222
+    pg_port: 5434
+    patroni_port: 8012
+    pg_exporter_port: 9195
+    pgbouncer_port: 6434
+    haproxy_write_port: 25000
+    haproxy_read_port: 25001
+    haproxy_stats_port: 27000
+  - name: pg3
+    ip: "172.18.0.13"
+    ssh_port: 2223
+    pg_port: 5435
+    patroni_port: 8013
+    pg_exporter_port: 9196
+    pgbouncer_port: 6435
+    haproxy_write_port: 35000
+    haproxy_read_port: 35001
+    haproxy_stats_port: 37000
+  - name: pg4
+    ip: "172.18.0.14"
+    ssh_port: 2224
+    pg_port: 5437
+    patroni_port: 8014
+    pg_exporter_port: 9197
+    pgbouncer_port: 6436
+    haproxy_write_port: 45000
+    haproxy_read_port: 45001
+    haproxy_stats_port: 47000
+
+# Podman named volumes
+pg_data_volume_prefix: "pg-data"
+pg_log_volume_prefix: "pg-logs"
+pg_backup_volume: "pg-backups"
+
+# SSH key for Ansible access to containers
+ansible_ssh_public_key_path: "~/.ssh/id_ed25519.pub"

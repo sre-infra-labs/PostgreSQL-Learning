@@ -21,7 +21,9 @@
   register: stanza_creation_result
   retries: 3
   delay: 10
-  when: "'leader' in group_names"
+  when:
+    - "'leader' in group_names"
+    - patroni_standby_cluster is not defined
   failed_when: false
   # failed_when:
   #   - stanza_creation_result.rc != 0
@@ -33,6 +35,7 @@
   when:
     - "'leader' in group_names"
     - stanza_creation_result is defined
+    - stanza_creation_result.rc is defined
     - stanza_creation_result.rc != 0
     - "'ERROR' in stanza_creation_result.stdout"
     - "'did an error occur during stanza-upgrade' not in stanza_creation_result.stdout"
@@ -48,6 +51,7 @@
   when:
     - "'leader' in group_names"
     - stanza_creation_result is defined
+    - stanza_creation_result.rc is defined
     - stanza_creation_result.rc != 0
     - "'did an error occur during stanza-upgrade' in stanza_creation_result.stdout"
   register: stanza_upgrade_result

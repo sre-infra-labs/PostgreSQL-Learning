@@ -1,0 +1,142 @@
+---
+- name: Begin tasks/custom/s3keyrotation.yml
+  debug:
+    msg: "Begin tasks/custom/s3keyrotation.yml"
+
+- name: Check if new pgbackrest_repo1_s3_key and pgbackrest_repo1_s3_key_secret are defined
+  ansible.builtin.fail:
+    msg: "Required variable 'pgbackrest_repo1_s3_key' and 'pgbackrest_repo1_s3_key_secret' should be defined."
+  when: pgbackrest_repo1_s3_key is not defined or pgbackrest_repo1_s3_key_secret is not defined
+
+- name: Check if {{pgbackrest_conf_file_path}} exists
+  ansible.builtin.stat:
+    path: "{{ pgbackrest_conf_file_path }}"
+  register: pgbackrest_conf_stat
+
+- name: "Replace repo1-s3-key in {{pgbackrest_conf_file_path}}"
+  ansible.builtin.lineinfile:
+    path: "{{ pgbackrest_conf_file_path }}"
+    regexp: '^repo1-s3-key='
+    line: "repo1-s3-key={{ pgbackrest_repo1_s3_key }}"
+    backup: true
+  when: pgbackrest_conf_stat.stat.exists
+  register: replace_key
+
+- name: "Replace repo1-s3-key-secret in {{pgbackrest_conf_file_path}}"
+  ansible.builtin.lineinfile:
+    path: "{{ pgbackrest_conf_file_path }}"
+    regexp: '^repo1-s3-key-secret='
+    line: "repo1-s3-key-secret={{ pgbackrest_repo1_s3_key_secret }}"
+    backup: true
+  when: pgbackrest_conf_stat.stat.exists
+  register: replace_secret
+
+- name: Set fact repo1_s3_key_updated with result of bgbackrest.conf update operation
+  set_fact:
+    repo1_s3_key_updated: "{{ replace_key.changed or replace_secret.changed }}"
+  when: pgbackrest_conf_stat.stat.exists
+
+- name: Set fact if pgbackrest.conf file does not exists
+  set_fact:
+    repo1_s3_key_updated: false
+  when: not pgbackrest_conf_stat.stat.exists
+
+- name: Debug repo1_s3_key_updated
+  ansible.builtin.debug:
+    var: repo1_s3_key_updated
+  when: debug is true
+
+# - name: "Replace repo1-s3-key in {{pgbackrest_conf_file_path}}"
+#   ansible.builtin.lineinfile:
+#     path: "{{ pgbackrest_conf_file_path }}"
+#     regexp: "^repo1-s3-key\\s*=.*"
+#     line: "repo1-s3-key={{ pgbackrest_repo1_s3_key }}"
+#     backrefs: yes
+
+# - name: "Replace repo1-s3-key-secret in {{pgbackrest_conf_file_path}}"
+#   ansible.builtin.lineinfile:
+#     path: "{{ pgbackrest_conf_file_path }}"
+#     regexp: "^repo1-s3-key-secret\\s*=.*"
+#     line: "repo1-s3-key-secret={{ pgbackrest_repo1_s3_key_secret }}"
+#     backrefs: yes
+
+- name: Set actual host fact before delegation
+  set_fact:
+    my_host: "{{ ansible_host }}"
+
+- name: Build Slack Block when pgbackrest.conf does not exists.
+  set_fact:
+    slack_blocks_2:  >-
+      {{
+        [
+          {
+            "type": "context",
+            "elements": [
+              { "type": "mrkdwn", "text": ":white_check_mark: pgbackrest.conf does not exist for **{{ my_host }}**." }
+            ]
+          }
+        ] +
+        [ { "type": "divider" } ]
+      }}
+  when: pgbackrest_conf_stat.stat.exists is false
+
+- name: Build Slack Block for Updated s3 key
+  set_fact:
+    slack_blocks_2:  >-
+      {{
+        [
+          {
+            "type": "context",
+            "elements": [
+              { "type": "mrkdwn", "text": ":white_check_mark: s3keyrotation completed for **{{ my_host }}**." }
+            ]
+          }
+        ] +
+        [ { "type": "divider" } ]
+      }}
+  when: pgbackrest_conf_stat.stat.exists and repo1_s3_key_updated is defined and repo1_s3_key_updated is true
+
+- name: Build Slack Block for Skipped s3 key
+  set_fact:
+    slack_blocks_2:  >-
+      {{
+        [
+          {
+            "type": "context",
+            "elements": [
+              { "type": "mrkdwn", "text": ":white_check_mark: s3keyrotation skipped for **{{ my_host }}**." }
+            ]
+          }
+        ] +
+        [ { "type": "divider" } ]
+      }}
+  when: pgbackrest_conf_stat.stat.exists and repo1_s3_key_updated is defined and repo1_s3_key_updated is false
+
+- name: Randomized pause to stagger Slack API calls
+  pause:
+    seconds: "{{ 1 + (1000 | random(seed=inventory_hostname)) % 3 }}"
+  delegate_to: localhost
+  run_once: false
+  when: slack_blocks_2 is defined
+
+- name: Send slack message for {{ ansible_host }}
+  delegate_to: localhost
+  ignore_errors: yes
+  become: false
+  ansible.builtin.uri:
+    url: https://slack.com/api/chat.postMessage
+    method: POST
+    headers:
+      Authorization: "Bearer {{ slack_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      channel: "{{ slack_channel }}"
+      thread_ts: "{{ slack_message_ts }}"
+      text: "s3keyrotation completed for {{ my_host }}"  # fallback plain-text
+      blocks: "{{ slack_blocks_2 }}"
+  when: slack_blocks_2 is defined
+
+- name: End tasks/custom/s3keyrotation.yml
+  debug:
+    msg: "End tasks/custom/s3keyrotation.yml"

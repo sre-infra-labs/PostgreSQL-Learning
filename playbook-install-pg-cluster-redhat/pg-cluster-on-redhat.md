@@ -1,6 +1,25 @@
-# Install PostgreSQL Cluster
+# Install PostgreSQL Cluster (RHEL)
 - [Patroni and pgBackRest combined](https://pgstef.github.io/2022/07/12/patroni_and_pgbackrest_combined.html)
-> PostgreSQL + Patroni + pgBackRest + Conul + s3/local repo
+> PostgreSQL 16 + Patroni + pgBackRest + Consul + SMB shared storage (posix repo)
+
+## Architecture
+
+| Component | DC1 (prod) | DC2 (dr) |
+|-----------|-----------|---------|
+| Consul / HAProxy | `pg-consul-rhel` (192.168.100.41) | — |
+| Primary Cluster | `pg-cls2-prod0/1/2` (192.168.100.47-49) | — |
+| Standby Cluster | — | `pg-cls2-dr0/1/2` (192.168.200.47-49) |
+| Hypervisor / SMB host | `ryzen9` (192.168.100.1) | `ryzen9` (192.168.200.1) |
+| SMB share path | `//192.168.100.1/share-stalestorage` | `//192.168.200.1/share-stalestorage` |
+| Mount point | `/stale-storage/share-stalestorage` | `/stale-storage/share-stalestorage` |
+| pgBackRest backup path | `/stale-storage/share-stalestorage/pgbackrest_backups` | same |
+| pgBackRest stanza | `pg-cls2` | `pg-cls2` |
+| pgBackRest repo type | `posix` (CIFS/SMB mount) | `posix` (CIFS/SMB mount) |
+
+> **Note on cifs-utils:** RHEL nodes have no internet access. The RPM
+> `cifs-utils-7.5-2.el9.x86_64.rpm` must be pre-downloaded on the Ansible controller
+> at `/tmp/cifs-rpms/` before running the playbooks. Download it from:
+> `https://mirror.stream.centos.org/9-stream/BaseOS/x86_64/os/Packages/cifs-utils-7.5-2.el9.x86_64.rpm`
 
 # [Patroni - HA multi datacenter](https://patroni.readthedocs.io/en/latest/ha_multi_dc.html#asynchronous-replication)
 
@@ -13,6 +32,36 @@
 ## Does all replicas in multi dc cluster setup has same system identifier
 ```
 ansible all -i hosts__multi_datacenter.yml -u ansible -b -m shell -a "/usr/pgsql-16/bin/pg_controldata -D /var/lib/pgsql/16/data | grep system"
+```
+
+# pgBackRest — SMB / Posix Repository Setup
+
+The cluster uses a CIFS/SMB share on the hypervisor (`ryzen9`) instead of S3.
+Run `playbook-update-pgbackrest-smb.yml` to (re-)apply the configuration to a running cluster:
+
+```bash
+# Pre-requisite: RPM must exist on the controller
+sudo mkdir -p /tmp/cifs-rpms
+sudo curl -fsSL \
+  https://mirror.stream.centos.org/9-stream/BaseOS/x86_64/os/Packages/cifs-utils-7.5-2.el9.x86_64.rpm \
+  -o /tmp/cifs-rpms/cifs-utils-7.5-2.el9.x86_64.rpm
+
+# Run the migration playbook
+cd playbook-install-pg-cluster-redhat
+ansible-playbook -i hosts__multi_datacenter.yml playbook-update-pgbackrest-smb.yml \
+  --vault-password-file=vault-pass
+
+# After the playbook succeeds — create the stanza on the primary leader
+ansible dc1_leader -i hosts__multi_datacenter.yml -u ansible -b -m shell \
+  -a "sudo -u postgres pgbackrest --stanza=pg-cls2 --log-level-console=info stanza-create"
+
+# Take a full backup
+ansible dc1_leader -i hosts__multi_datacenter.yml -u ansible -b -m shell \
+  -a "sudo -u postgres pgbackrest --stanza=pg-cls2 --type=full backup"
+
+# Verify
+ansible dc1_leader -i hosts__multi_datacenter.yml -u ansible -b -m shell \
+  -a "sudo -u postgres pgbackrest --stanza=pg-cls2 info"
 ```
 
 # Failover from dc1 (`pg-cls2-prod`) to dc2 (`pg-cls2-dr`)
@@ -158,14 +207,15 @@ sudo ss -lntp | grep 8008
 dig @192.168.100.41 -p 8600 master.pg-cls2-prod.service.consul
 dig master.pg-cls2-prod.service.dc1.lab.com
 
-
-# check file settings. (2 lines before and 3 lines after)
+# check consul config
 sudo grep -B 2 -A 3 "agent" /etc/consul.d/consul.hcl
 
-# create pgbackrest stanza
-sudo su - postgres
-pgbackrest --stanza=pg-cls2 stanza-create
+# create pgbackrest stanza (run on primary leader only)
+sudo -u postgres pgbackrest --stanza=pg-cls2 --log-level-console=info stanza-create
 
+# check pgbackrest archive and backup status
+sudo -u postgres pgbackrest --stanza=pg-cls2 --log-level-console=info check
+sudo -u postgres pgbackrest --stanza=pg-cls2 info
 
 SELECT pid, client_addr, state, sync_state, write_lag, replay_lag
 FROM pg_stat_replication;
@@ -176,27 +226,49 @@ tail -n 1000 -f postgresql-Thu.log  | grep redo
 # On Standby Cluster leader, Check what WAL it is waiting for
 grep "requested" postgresql-Thu.log
 
-
 # for consul error, its better to remove Key/Value for service in consul
 
+# -------------------------------------------------------
+# SMB share troubleshooting
+# -------------------------------------------------------
 
-# Check if aws s3 bucket is accessible
-sudo dnf install -y awscli
+# Check if the SMB share is mounted on a node
+mount | grep stale-storage
+df -h /stale-storage/share-stalestorage
 
-ansible dc1 -i hosts__multi_datacenter.yml -m service -a "name=patroni state=stopped" -u ansible -b
-ansible dc1 -i hosts__multi_datacenter.yml -m service -a "name=patroni state=stopped" -u ansible -b
+# Re-mount if missing (DC1)
+sudo mount -t cifs //192.168.100.1/share-stalestorage /stale-storage/share-stalestorage \
+  -o guest,uid=$(id -u postgres),gid=$(id -g postgres),file_mode=0770,dir_mode=0770,mfsymlinks
 
+# Re-mount if missing (DC2)
+sudo mount -t cifs //192.168.200.1/share-stalestorage /stale-storage/share-stalestorage \
+  -o guest,uid=$(id -u postgres),gid=$(id -g postgres),file_mode=0770,dir_mode=0770,mfsymlinks
 
-export AWS_ACCESS_KEY_ID=XXXXXXXXXXXXXXXXXXXXXXX
-export AWS_SECRET_ACCESS_KEY=XXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+# Test write access as postgres
+sudo -u postgres touch /stale-storage/share-stalestorage/.write_test && echo "OK"
 
-# now test connectivity. Should return all existing backup folders
-aws s3 ls s3://s3bucketname/pg-backups/backup/
-aws s3 ls s3://s3bucketname/pg-backups/archive/
+# List backup contents on the SMB share
+ls -lh /stale-storage/share-stalestorage/pgbackrest_backups/backup/pg-cls2/
+ls -lh /stale-storage/share-stalestorage/pgbackrest_backups/archive/pg-cls2/
 
-# cleanup older backup/archive for pgbackrest-stanza
-aws s3 rm s3://s3bucketname/pg-backups/backup/pg-cls2/ --recursive
-aws s3 rm s3://s3bucketname/pg-backups/archive/pg-cls2/ --recursive
+# Clean up backup/archive on SMB share (use with caution!)
+sudo rm -rf /stale-storage/share-stalestorage/pgbackrest_backups/backup/pg-cls2/
+sudo rm -rf /stale-storage/share-stalestorage/pgbackrest_backups/archive/pg-cls2/
+
+# -------------------------------------------------------
+# Install cifs-utils offline (RHEL nodes have no internet)
+# -------------------------------------------------------
+# On the Ansible controller — download the RPM once:
+sudo mkdir -p /tmp/cifs-rpms
+sudo curl -fsSL \
+  https://mirror.stream.centos.org/9-stream/BaseOS/x86_64/os/Packages/cifs-utils-7.5-2.el9.x86_64.rpm \
+  -o /tmp/cifs-rpms/cifs-utils-7.5-2.el9.x86_64.rpm
+
+# Push and install via Ansible:
+ansible all -i hosts__multi_datacenter.yml -u ansible -b \
+  -m copy -a "src=/tmp/cifs-rpms/cifs-utils-7.5-2.el9.x86_64.rpm dest=/tmp/ mode=0644"
+ansible all -i hosts__multi_datacenter.yml -u ansible -b \
+  -m shell -a "rpm -q cifs-utils || rpm -i /tmp/cifs-utils-7.5-2.el9.x86_64.rpm"
 
 ```
 

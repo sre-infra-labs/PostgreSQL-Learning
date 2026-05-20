@@ -1,0 +1,104 @@
+---
+- name: Begin tasks/custom/get_postgresql_version.yml
+  debug:
+    msg: "Begin tasks/custom/get_postgresql_version.yml"
+
+- name: Find PostgreSQL major version by querying using psql
+  become: true
+  ansible.builtin.shell: |
+    sudo -u postgres psql -t -A -c "SELECT split_part(current_setting('server_version'), '.', 1);"
+  register: pg_version_result
+  changed_when: false
+  ignore_errors: true
+  when: postgresql_version is not defined
+
+- name: Set fact for PostgreSQL version
+  ansible.builtin.set_fact:
+    postgresql_version: "{{ pg_version_result.stdout }}"
+  when:
+    - postgresql_version is not defined
+    - pg_version_result is defined
+    - pg_version_result.stdout is defined and (pg_version_result.stdout | trim) != ""
+
+- name: Check if /etc/patroni/patroni.yml exists
+  ansible.builtin.stat:
+    path: /etc/patroni/patroni.yml
+  register: patroni_yml_stat
+  when: postgresql_version is not defined
+
+- name: Read patroni.yml
+  ansible.builtin.slurp:
+    src: /etc/patroni/patroni.yml
+  register: patroni_file_raw
+  when:
+    - postgresql_version is not defined
+    - patroni_yml_stat.stat.exists
+
+- name: Decode patroni.yml content
+  ansible.builtin.set_fact:
+    patroni_file_content: "{{ patroni_file_raw.content | b64decode }}"
+  when:
+    - postgresql_version is not defined
+    - patroni_yml_stat.stat.exists
+    - patroni_file_raw.content is defined
+
+- name: Debug patroni.yml content
+  ansible.builtin.debug:
+    var: patroni_file_content
+  when:
+    - postgresql_version is not defined
+    - patroni_file_content is defined
+
+- name: Extract PostgreSQL version from data_dir option in patroni.yml
+  ansible.builtin.set_fact:
+    postgresql_version: "{{ (patroni_file_content | regex_search('\\s+data_dir:\\s+/var/lib/pgsql/(\\d+)/data', '\\1'))[0] }}"
+  when:
+    - postgresql_version is not defined
+    - patroni_file_raw is defined
+    - patroni_file_content is defined
+
+
+- name: Check if /etc/pgbackrest/pgbackrest.conf exists
+  ansible.builtin.stat:
+    path: /etc/pgbackrest/pgbackrest.conf
+  register: pgbackrest_conf_stat
+  when: postgresql_version is not defined
+
+- name: Read pgbackrest.conf
+  ansible.builtin.slurp:
+    src: /etc/pgbackrest/pgbackrest.conf
+  register: pgbackrest_file_raw
+  when:
+    - postgresql_version is not defined
+    - pgbackrest_conf_stat.stat.exists
+
+- name: Decode pgbackrest.conf content
+  ansible.builtin.set_fact:
+    pgbackrest_file_content: "{{ pgbackrest_file_raw.content | b64decode }}"
+  when:
+    - postgresql_version is not defined
+    - pgbackrest_conf_stat.stat.exists
+    - pgbackrest_file_raw.content is defined
+
+- name: Debug pgbackrest.conf content
+  ansible.builtin.debug:
+    var: pgbackrest_file_content
+  when:
+    - postgresql_version is not defined
+    - pgbackrest_file_content is defined
+
+- name: Extract PostgreSQL version from [pg1-path] option in pgbackrest.conf
+  ansible.builtin.set_fact:
+    postgresql_version: "{{ (pgbackrest_file_content | regex_search('\\s+pg1-path=\\s+/var/lib/pgsql/(\\d+)/data', '\\1'))[0] }}"
+  when:
+    - postgresql_version is not defined
+    - pgbackrest_file_raw is defined
+    - pgbackrest_file_content is defined
+
+- name: Debug version
+  ansible.builtin.debug:
+    msg: "PostgreSQL version: '{{ postgresql_version }}'"
+
+- name: End tasks/custom/get_postgresql_version.yml
+  debug:
+    msg: "End tasks/custom/get_postgresql_version.yml"

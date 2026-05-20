@@ -24,15 +24,6 @@
     msg: "Cluster reinitialization aborted by user."
   when: reinit_cluster is defined and reinit_cluster | bool and reinit_confirmation.user_input != "yes"
 
-
-# - name: Use the defaults/creds.yml file variables for testing
-#   ansible.builtin.debug:
-#     var: creds
-
-# - name: Debug Consul SecretID obtained from vars file
-#   ansible.builtin.debug:
-#     msg: "Consul SecretID: {{ consul_secret_id }}"
-
 - name: Include custom/prechecks.yml
   include_tasks: custom/prechecks.yml
 
@@ -48,7 +39,6 @@
 
 - name: Generate consul Secret
   include_tasks: custom/consul_client_install.yml
-  # when: inventory_hostname == (groups['leader'] | default([]) | first | default(groups['standby_leader'] | default([]) | first, ''))
 
 - name: Read Consul Secret from vars file
   include_vars:
@@ -59,14 +49,16 @@
 
 - name: Include custom/firewall.yml
   include_tasks: custom/firewall.yml
-  # when: not (reinit_cluster is defined and reinit_cluster)
 
 - name: Include custom/pgpass.yml
   include_tasks: custom/pgpass.yml
-  # when: not (reinit_cluster is defined and reinit_cluster)
 
 - name: Include install patroni
   include_tasks: custom/patroni.yml
+
+- name: Include custom/smb_mount.yml
+  include_tasks: custom/smb_mount.yml
+  when: pgbackrest_repo1_type | default('posix') == 'posix'
 
 - name: Include custom/pgbackrest.yml
   include_tasks: custom/pgbackrest.yml

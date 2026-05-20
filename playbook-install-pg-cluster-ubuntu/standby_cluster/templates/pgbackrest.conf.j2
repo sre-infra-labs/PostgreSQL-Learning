@@ -15,7 +15,22 @@ compress-level=3
 archive-async=y
 spool-path=/var/spool/pgbackrest
 
-repo1-type={{ pgbackrest_repo1_type | default('s3') }}
+# ---- Active repository: posix (SMB shared folder) ----
+{% if pgbackrest_repo1_type | default('posix') == 'posix' %}
+repo1-type=posix
+repo1-path={{ pgbackrest_repo1_path }}
+{% else %}
+# ---- AWS S3 repository (inactive - set pgbackrest_repo1_type: s3 in defaults to re-enable) ----
+#repo1-type=s3
+#repo1-s3-uri-style=path
+#repo1-s3-endpoint={{ pgbackrest_repo1_s3_endpoint | default('s3.us-east-1.amazonaws.com') }}
+#repo1-s3-region={{ pgbackrest_repo1_s3_region | default('us-east-1') }}
+#repo1-s3-bucket={{ pgbackrest_repo1_s3_bucket | default('demo-bucket') }}
+#repo1-path={{ pgbackrest_repo1_s3_path | default('/pg-backups') }}
+#repo1-s3-key={{ pgbackrest_repo1_s3_key | default('') }}
+#repo1-s3-key-secret={{ pgbackrest_repo1_s3_key_secret | default('') }}
+#repo1-s3-verify-tls=n
+repo1-type=s3
 repo1-s3-uri-style=path
 repo1-s3-endpoint={{ pgbackrest_repo1_s3_endpoint | default('s3.us-east-1.amazonaws.com') }}
 repo1-s3-region={{ pgbackrest_repo1_s3_region | default('us-east-1') }}
@@ -24,9 +39,10 @@ repo1-path={{ pgbackrest_repo1_s3_path | default('/pg-backups') }}
 repo1-s3-key={{ pgbackrest_repo1_s3_key }}
 repo1-s3-key-secret={{ pgbackrest_repo1_s3_key_secret }}
 repo1-s3-verify-tls=n
+{% endif %}
 
 [{{ pgbackrest_stanza_name }}]
-pg1-path={{ pgbackrest_pg1_path | default('/var/lib/pgsql/16/data') }}
+pg1-path={{ pgbackrest_pg1_path | default('{{ postgresql_home_dir }}/16/data') }}
 
 
 
