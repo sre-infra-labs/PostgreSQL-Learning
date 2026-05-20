@@ -8,6 +8,12 @@
     file: "{{ role_path }}/defaults/creds.yml"
   tags: always
 
+- name: Override patroni_cluster_name to pgbackrest_stanza_name when use_single_etcd_cluster=true
+  ansible.builtin.set_fact:
+    patroni_cluster_name: "{{ pgbackrest_stanza_name }}"
+  when: use_single_etcd_cluster | bool
+  tags: always
+
 - name: Confirm before reinitializing cluster
   ansible.builtin.pause:
     prompt: "WARNING: Reinitializing the cluster will delete all data. Type 'yes' to continue:"

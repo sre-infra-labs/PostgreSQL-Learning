@@ -3,11 +3,8 @@
 
 debug: true
 
-# Cluster name — defined per group in hosts.yml (primary_cluster.vars / standby_cluster.vars).
-# When use_single_etcd_cluster=true both DCs share one Patroni cluster; the name is taken from
-# pgbackrest_stanza_name (also defined per group in hosts.yml, e.g. "pg-docker").
-# When false, patroni_cluster_name falls back to the per-group value in hosts.yml.
-patroni_cluster_name: "{{ pgbackrest_stanza_name if use_single_etcd_cluster | bool else patroni_cluster_name }}"
+# patroni_cluster_name and pgbackrest_stanza_name are defined per group in hosts.yml.
+# use_single_etcd_cluster=true override is applied via set_fact in roles/pg_cluster/tasks/main.yml.
 
 # Replica cloning — skip pgbackrest (replicas have no local repo backup) and go straight to
 # pg_basebackup. checkpoint=spread is safe for basebackup from both a primary and a standby
