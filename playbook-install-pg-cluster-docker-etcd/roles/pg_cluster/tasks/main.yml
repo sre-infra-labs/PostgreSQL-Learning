@@ -8,12 +8,6 @@
     file: "{{ role_path }}/defaults/creds.yml"
   tags: always
 
-- name: Override patroni_cluster_name to pgbackrest_stanza_name when use_single_etcd_cluster=true
-  ansible.builtin.set_fact:
-    patroni_cluster_name: "{{ pgbackrest_stanza_name }}"
-  when: use_single_etcd_cluster | bool
-  tags: always
-
 - name: Confirm before reinitializing cluster
   ansible.builtin.pause:
     prompt: "WARNING: Reinitializing the cluster will delete all data. Type 'yes' to continue:"
@@ -67,9 +61,18 @@
       tags: etcd
   tags: etcd
 
+- name: Install and configure Patroni
+  include_tasks:
+    file: custom/patroni.yml
+    apply:
+      tags: patroni
+  tags: patroni
+
 - name: Create standby cluster replication slot on primary
-  # Must exist before pg4 starts streaming; creates it only if absent (idempotent).
-  # Delegates to pg1 (primary leader) and runs once per standby cluster deployment.
+  # Patroni has already started PostgreSQL above, so the socket is available.
+  # Only runs during the standby cluster playbook (inventory_hostname in standby_cluster).
+  # Delegates to pg1 so the physical slot exists on the primary before pg4 starts streaming.
+  # Idempotent — skips silently if the slot already exists.
   become_user: postgres
   ansible.builtin.shell: |
     psql -U postgres -tAc "
@@ -83,15 +86,7 @@
   delegate_to: "{{ groups['primary_cluster_leader'] | first }}"
   run_once: true
   when:
-    - groups['standby_cluster_leader'] is defined
-    - groups['standby_cluster_leader'] | length > 0
-  tags: patroni
-
-- name: Install and configure Patroni
-  include_tasks:
-    file: custom/patroni.yml
-    apply:
-      tags: patroni
+    - inventory_hostname in groups['standby_cluster']
   tags: patroni
 
 - name: Configure pgBackRest
