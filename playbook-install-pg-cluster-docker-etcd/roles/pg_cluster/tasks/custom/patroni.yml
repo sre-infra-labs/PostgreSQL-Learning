@@ -13,10 +13,14 @@
   notify: restart patroni
 
 # ---------------------------------------------------------------------------
-# patronictl convenience — export PATRONICTL_CONFIG_FILE so -c flag is not needed.
-# Covers interactive sessions (ssh, docker exec -it ... bash).
-# For direct docker exec (docker exec pg1 patronictl ...) use:
-#   docker exec -e PATRONICTL_CONFIG_FILE=/etc/patroni/patroni.yml pg1 patronictl list
+# PATRONICTL_CONFIG_FILE — set across all shell entry points:
+#   /etc/environment          → PAM / systemd services
+#   /etc/profile.d/           → login shells (ssh, su -, bash --login)
+#   /root/.bashrc             → interactive docker exec sessions as root
+#   postgresql_home_dir/.bashrc → interactive docker exec sessions as postgres
+#
+# Note: /etc/bash.bashrc is NOT used — Ubuntu's default has [ -z "$PS1" ] && return
+# at the top, so it exits early in non-interactive shells (e.g. bash -c "...").
 # ---------------------------------------------------------------------------
 - name: Set PATRONICTL_CONFIG_FILE in /etc/environment
   ansible.builtin.lineinfile:
@@ -25,11 +29,27 @@
     create: true
     mode: "0644"
 
-- name: Set PATRONICTL_CONFIG_FILE for interactive shell sessions
+- name: Set PATRONICTL_CONFIG_FILE for login shells (all users)
   ansible.builtin.copy:
     dest: /etc/profile.d/patroni-env.sh
     content: "export PATRONICTL_CONFIG_FILE=/etc/patroni/patroni.yml\n"
     mode: "0644"
+
+- name: Set PATRONICTL_CONFIG_FILE in root .bashrc
+  ansible.builtin.lineinfile:
+    path: /root/.bashrc
+    line: "export PATRONICTL_CONFIG_FILE=/etc/patroni/patroni.yml"
+    create: true
+    mode: "0644"
+
+- name: Set PATRONICTL_CONFIG_FILE in postgres .bashrc
+  ansible.builtin.lineinfile:
+    path: "{{ postgresql_home_dir }}/.bashrc"
+    line: "export PATRONICTL_CONFIG_FILE=/etc/patroni/patroni.yml"
+    create: true
+    owner: postgres
+    group: postgres
+    mode: "0640"
 
 - name: Create Patroni log directory
   ansible.builtin.file:
