@@ -122,8 +122,9 @@ def parse_patroni_slots(patroni_config):
             m2 = re.match(r'^\s{4}(\w+):\s*["\']?(.+?)["\']?\s*$', line)
             if m2 and current_slot:
                 slots[current_slot][m2.group(1)] = m2.group(2)
-    # Filter: only return logical slots; physical slots (e.g. standby_cluster_slot) are excluded
-    return {name: props for name, props in slots.items() if props.get("type", "logical") == "logical"}
+    # Ajay Dwivedi - TS-XXXXX - Filter: only include slots with explicit type=logical.
+    # Do NOT default to logical — a slot without a type field (e.g. physical standby slot) must be excluded.
+    return {name: props for name, props in slots.items() if props.get("type") == "logical"}
 
 def get_wal_level_became_logical_time():
     """Returns the datetime when the current consecutive WAL_LEVEL_PG=LOGICAL streak started.
@@ -348,10 +349,11 @@ def main():
                 scenario_triggered = "Scenario 01 (SLOT_REMOVED_BUFFER)"
                 if len(patroni_slots) > 0:
                     plog("INFO", f"Scenario 01 (SLOT_REMOVED_BUFFER): Removing {len(patroni_slots)} logical slot(s) from Patroni config immediately...")
-                    patronictl_edit(args.patronictl_config, cluster_name, "--set 'slots={}'")
-                    slots_removed = len(patroni_slots)
-                    for sn in patroni_slots:
+                    # Ajay Dwivedi - TS-XXXXX - Remove logical slots individually to preserve physical slots (e.g. standby_cluster_slot).
+                    for sn in list(patroni_slots.keys()):
+                        patronictl_edit(args.patronictl_config, cluster_name, f'--set "slots.{sn}="')
                         DL("SLOT_REMOVED", f"Slot '{sn}' removed from Patroni DCS config immediately (slot-removed buffer: wal_level revert deferred).", slot_name=sn, scenario=scenario_triggered)
+                    slots_removed = len(patroni_slots)
                 else:
                     plog("INFO", "Scenario 01 (SLOT_REMOVED_BUFFER): No logical slots in Patroni config to remove.")
                 msg = (f"Scenario 01 condition met but wal_level revert DEFERRED: "
@@ -371,10 +373,11 @@ def main():
                 DL("WAL_LEVEL_REVERTED", "wal_level reverted to replica in Patroni DCS config.", wal_level="replica", scenario=scenario_triggered)
                 if len(patroni_slots) > 0:
                     plog("INFO", f"Scenario 01: Removing {len(patroni_slots)} logical slot(s) from Patroni config...")
-                    patronictl_edit(args.patronictl_config, cluster_name, "--set 'slots={}'")
-                    slots_removed = len(patroni_slots)
-                    for sn in patroni_slots:
+                    # Ajay Dwivedi - TS-XXXXX - Remove logical slots individually to preserve physical slots (e.g. standby_cluster_slot).
+                    for sn in list(patroni_slots.keys()):
+                        patronictl_edit(args.patronictl_config, cluster_name, f'--set "slots.{sn}="')
                         DL("SLOT_REMOVED", f"Slot '{sn}' removed from Patroni DCS config (Scenario 01 revert).", slot_name=sn, scenario=scenario_triggered)
+                    slots_removed = len(patroni_slots)
                 else:
                     plog("INFO", "Scenario 01: No logical slots in Patroni config to remove.")
                 plog("RESULT", "Scenario 01: wal_level reverted to replica. Patroni logical slots cleared.")
