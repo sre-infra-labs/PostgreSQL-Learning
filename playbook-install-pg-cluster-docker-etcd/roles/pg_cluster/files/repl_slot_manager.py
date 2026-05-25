@@ -81,15 +81,21 @@ def get_cluster_name(config_file):
                 return m.group(1).strip()
     raise ValueError("Could not find 'scope' in patroni config.")
 
-def is_leader(config_file, cluster_name):
+def get_node_role(config_file, cluster_name):
+    """Returns the Patroni role of the current node: 'Leader', 'Standby Leader', or None.
+    Ajay Dwivedi - TS-XXXXX - Multi-DC support: distinguish Leader from Standby Leader
+    so that DB writes (log table) are skipped on read-only standby leaders.
+    """
     out, _ = run(f"patronictl -c {config_file} list {cluster_name} --format=tsv")
     hostname = socket.gethostname()
     for line in out.splitlines():
         parts = line.split("\t")
         # TSV columns: Cluster(0) Member(1) Host(2) Role(3) ...
-        if len(parts) >= 4 and parts[1].strip() == hostname and parts[3].strip() == "Leader":
-            return True
-    return False
+        if len(parts) >= 4 and parts[1].strip() == hostname:
+            role = parts[3].strip()
+            if role in ("Leader", "Standby Leader"):
+                return role
+    return None
 
 def get_wal_level():
     out, _ = run("psql -U postgres -tAc 'SHOW wal_level;'")
@@ -236,8 +242,15 @@ def main():
     # cluster_name resolved after config file is read; placeholder until then.
     cluster_name = "unknown"
 
+    # node_role is set after the role check; DL() reads it via closure.
+    node_role = None
+
     def DL(event_type, message, **kwargs):
-        """Write one row to dba.replication_slot_config_log (best-effort; never raises)."""
+        """Write one row to dba.replication_slot_config_log (best-effort; never raises).
+        Skipped on Standby Leader nodes — the log table is read-only there (replica DC).
+        """
+        if node_role != "Leader":
+            return
         try:
             db_log(run_id, hostname, cluster_name, event_type, message, **kwargs)
         except Exception as ex:
@@ -250,22 +263,29 @@ def main():
         cluster_name = get_cluster_name(args.patronictl_config)
         plog("INFO", f"Patroni cluster name: {cluster_name}")
 
-        plog("INFO", "Checking if current node is Patroni cluster leader...")
-        if not is_leader(args.patronictl_config, cluster_name):
-            plog("INFO", "Current node is not the cluster leader. Exiting."); sys.exit(0)
-        plog("INFO", "Current node is the cluster leader. Proceeding.")
+        plog("INFO", "Checking if current node is Patroni cluster leader or standby leader...")
+        node_role = get_node_role(args.patronictl_config, cluster_name)
+        if node_role is None:
+            plog("INFO", "Current node is not the cluster leader or standby leader. Exiting."); sys.exit(0)
+        plog("INFO", f"Current node role: {node_role}. Proceeding.")
+        if node_role == "Standby Leader":
+            plog("INFO", "Standby Leader: log table writes are skipped (read-only replica DC).")
         DL("START", f"Script run started. [config={args.patronictl_config}, "
                     f"db_log_days_to_keep={args.db_log_days_to_keep}, "
                     f"wal_level_buffer_hours={args.wal_level_buffer_hours}, run_id={run_id}]")
 
         # --- Purge old log entries from dba.replication_slot_config_log ---
-        plog("INFO", f"Purging dba.replication_slot_config_log entries older than {args.db_log_days_to_keep} days...")
-        purge_sql = f"DELETE FROM dba.replication_slot_config_log WHERE logged_at < now() - interval '{args.db_log_days_to_keep} days';"
-        _, purge_rc = run(f"psql -U postgres -d postgres -c \"{purge_sql}\"")
-        if purge_rc == 0:
-            plog("INFO", "Purge of old log entries completed.")
+        # Ajay Dwivedi - TS-XXXXX - Skip purge on Standby Leader: log table is read-only on replica DC.
+        if node_role == "Leader":
+            plog("INFO", f"Purging dba.replication_slot_config_log entries older than {args.db_log_days_to_keep} days...")
+            purge_sql = f"DELETE FROM dba.replication_slot_config_log WHERE logged_at < now() - interval '{args.db_log_days_to_keep} days';"
+            _, purge_rc = run(f"psql -U postgres -d postgres -c \"{purge_sql}\"")
+            if purge_rc == 0:
+                plog("INFO", "Purge of old log entries completed.")
+            else:
+                plog("INFO", "WARNING: Purge of old log entries failed.")
         else:
-            plog("INFO", "WARNING: Purge of old log entries failed.")
+            plog("INFO", "Standby Leader: skipping log table purge (read-only replica DC).")
 
         # --- Observe: wal_level from PostgreSQL ---
         plog("INFO", "Fetching wal_level from PostgreSQL...")
