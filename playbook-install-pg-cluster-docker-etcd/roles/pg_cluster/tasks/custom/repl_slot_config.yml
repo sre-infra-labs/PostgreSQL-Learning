@@ -1,0 +1,80 @@
+---
+- name: Begin pg_cluster/custom/repl_slot_config.yml
+  ansible.builtin.debug:
+    msg: "Creating replication slot config objects in postgres db on {{ inventory_hostname }}"
+
+- name: Create citext extension in postgres database
+  community.postgresql.postgresql_ext:
+    db: postgres
+    name: citext
+    state: present
+    login_user: postgres
+  become_user: postgres
+  when: inventory_hostname in groups['primary_cluster_leader']
+
+- name: Create dba schema in postgres database
+  community.postgresql.postgresql_schema:
+    db: postgres
+    name: dba
+    state: present
+    login_user: postgres
+  become_user: postgres
+  when: inventory_hostname in groups['primary_cluster_leader']
+
+- name: Create dba.replication_slot_config table
+  community.postgresql.postgresql_query:
+    db: postgres
+    login_user: postgres
+    query: |
+      CREATE TABLE IF NOT EXISTS dba.replication_slot_config (
+          slot_name   citext      PRIMARY KEY,
+          plugin      citext      NOT NULL,
+          database    citext      NOT NULL,
+          desired     boolean     NOT NULL DEFAULT true,
+          created_by  text        NOT NULL DEFAULT current_user,
+          created_at  timestamptz NOT NULL DEFAULT now(),
+          updated_at  timestamptz NOT NULL DEFAULT now()
+      );
+  become_user: postgres
+  when: inventory_hostname in groups['primary_cluster_leader']
+
+- name: Create dba.replication_slot_config_log table
+  community.postgresql.postgresql_query:
+    db: postgres
+    login_user: postgres
+    query: |
+      CREATE TABLE IF NOT EXISTS dba.replication_slot_config_log (
+          id           bigserial    PRIMARY KEY,
+          run_id       uuid         NOT NULL,
+          logged_at    timestamptz  NOT NULL DEFAULT now(),
+          hostname     text         NOT NULL,
+          cluster_name text         NOT NULL,
+          event_type   text         NOT NULL,
+          slot_name    citext,
+          plugin       citext,
+          database     citext,
+          wal_level    text,
+          desired      boolean,
+          scenario     text,
+          message      text         NOT NULL
+      );
+  become_user: postgres
+  when: inventory_hostname in groups['primary_cluster_leader']
+
+- name: Create indexes on dba.replication_slot_config_log
+  community.postgresql.postgresql_query:
+    db: postgres
+    login_user: postgres
+    query: |
+      CREATE INDEX IF NOT EXISTS replication_slot_config_log_run_id_idx
+          ON dba.replication_slot_config_log (run_id);
+      CREATE INDEX IF NOT EXISTS replication_slot_config_log_logged_at_idx
+          ON dba.replication_slot_config_log (logged_at);
+      CREATE INDEX IF NOT EXISTS replication_slot_config_log_event_type_idx
+          ON dba.replication_slot_config_log (event_type);
+  become_user: postgres
+  when: inventory_hostname in groups['primary_cluster_leader']
+
+- name: End pg_cluster/custom/repl_slot_config.yml
+  ansible.builtin.debug:
+    msg: "replication slot config objects created successfully on {{ inventory_hostname }}"

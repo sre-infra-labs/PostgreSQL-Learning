@@ -66,3 +66,45 @@
   become_user: postgres
   when: inventory_hostname in groups['primary_cluster_leader']
 
+# -------------------------------------------------------------------
+# Cluster management users and roles
+# -------------------------------------------------------------------
+- name: Create db user 'master' (superuser + login)
+  community.postgresql.postgresql_user:
+    name: master
+    password: "{{ patroni_superuser_password }}"
+    role_attr_flags: SUPERUSER,LOGIN
+    state: present
+    login_user: postgres
+  become_user: postgres
+  when: inventory_hostname in groups['primary_cluster_leader']
+
+- name: Create db user 'replication_admin' (login + replication + bypassrls)
+  community.postgresql.postgresql_user:
+    name: replication_admin
+    password: "{{ patroni_superuser_password }}"
+    role_attr_flags: LOGIN,REPLICATION,BYPASSRLS
+    state: present
+    login_user: postgres
+  become_user: postgres
+  when: inventory_hostname in groups['primary_cluster_leader']
+
+- name: Create role 'replication_group' (no login — group role)
+  community.postgresql.postgresql_user:
+    name: replication_group
+    role_attr_flags: NOLOGIN
+    state: present
+    login_user: postgres
+  become_user: postgres
+  when: inventory_hostname in groups['primary_cluster_leader']
+
+- name: Configure replication_group membership and privileges
+  community.postgresql.postgresql_query:
+    login_user: postgres
+    query: |
+      GRANT replication_group TO replication_admin WITH ADMIN OPTION;
+      GRANT replication_group TO master WITH ADMIN OPTION;
+      GRANT pg_create_subscription TO replication_group;
+  become_user: postgres
+  when: inventory_hostname in groups['primary_cluster_leader']
+

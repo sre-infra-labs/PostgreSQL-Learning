@@ -53,6 +53,10 @@ bootstrap:
       {% for parameter in postgresql_parameters if parameter is mapping and 'option' in parameter and 'value' in parameter %}
         {{ parameter.option }}: "{{ parameter.value }}"
       {% endfor %}
+      pg_hba:
+      {% for rule in postgresql_pg_hba %}
+        - {{ rule }}
+      {% endfor %}
     {% if patroni_standby_cluster is defined and patroni_standby_cluster.host is defined and patroni_standby_cluster.host | length > 0 %}
     standby_cluster:
       host: {{ patroni_standby_cluster.host }}
@@ -80,17 +84,9 @@ bootstrap:
     - data-checksums
 
   pg_hba:
-    # Local connections (superuser via unix socket)
-    - local all postgres                           peer
-    - host  all all      127.0.0.1/32              {{ postgresql_password_encryption_algorithm }}
-    # Cluster-internal replication (all container IPs)
-    {% for host in groups['all'] %}
-    - host replication replicator {{ hostvars[host].ip }}/32 scram-sha-256
+    {% for rule in postgresql_pg_hba %}
+    - {{ rule }}
     {% endfor %}
-    # Wide-open for Docker learning environment — restrict in production
-    - host replication replicator 0.0.0.0/0        scram-sha-256
-    - host all          all       0.0.0.0/0         scram-sha-256
-    - host all          all       ::/0              scram-sha-256
 
   users:
     {{ patroni_superuser_username }}:

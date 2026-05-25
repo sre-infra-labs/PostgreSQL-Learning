@@ -117,6 +117,20 @@
       tags: users
   tags: users
 
+- name: Create replication slot config objects in postgres db
+  include_tasks:
+    file: custom/repl_slot_config.yml
+    apply:
+      tags: repl_slot_config
+  tags: repl_slot_config
+
+- name: Deploy repl_slot_manager.sh and cron job
+  include_tasks:
+    file: custom/repl_slot_manager.yml
+    apply:
+      tags: repl_slot_manager
+  tags: repl_slot_manager
+
 - name: Install and configure HAProxy
   include_tasks:
     file: custom/haproxy.yml
