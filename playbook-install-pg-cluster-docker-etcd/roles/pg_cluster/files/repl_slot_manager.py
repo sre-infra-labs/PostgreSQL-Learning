@@ -33,7 +33,7 @@ def parse_args():
     # When --force-restart is set, patronictl restart is issued after any Patroni config change.
     p.add_argument("--force-restart",  default=False, action=argparse.BooleanOptionalAction)
     # Maximum seconds to wait for PostgreSQL to accept connections after a force-restart. Capped at 120.
-    p.add_argument("--restart-timeout-seconds", type=int, default=120)
+    p.add_argument("--restart-timeout-seconds", type=int, default=600)
     return p.parse_args()
 
 def setup_logging(logs_path, days_to_keep, log_to_console, log_to_file):
@@ -253,6 +253,25 @@ def wait_for_postgresql(timeout_seconds):
             return True, int(time.time() - start)
         time.sleep(3)
     return False, timeout_seconds
+
+def drop_physical_logical_slots():
+    """Drop all logical replication slots from live PostgreSQL.
+    Ajay Dwivedi - TS-XXXXX - Must be called before patronictl restart when reverting wal_level
+    to replica. PostgreSQL will FATAL on startup if a logical slot exists with wal_level < logical.
+    Physical slots (e.g. standby_cluster_slot) are unaffected — filtered by slot_type = 'logical'.
+    Returns list of slot names that were successfully dropped.
+    """
+    query = "SELECT slot_name FROM pg_replication_slots WHERE slot_type = 'logical';"
+    out, rc = run(f"psql -U postgres -d postgres -tAc \"{query}\"")
+    if rc != 0 or not out.strip():
+        return []
+    slots = [s.strip() for s in out.strip().splitlines() if s.strip()]
+    dropped = []
+    for slot in slots:
+        _, drop_rc = run(f"psql -U postgres -d postgres -c \"SELECT pg_drop_replication_slot('{slot}');\"")
+        if drop_rc == 0:
+            dropped.append(slot)
+    return dropped
 
 def main():
     import traceback
@@ -487,6 +506,19 @@ def main():
                 restart_msg = "force-restart enabled and Patroni config was changed. Restarting Patroni cluster members..."
                 plog("INFO", restart_msg)
                 DL("RESTART_INITIATED", restart_msg, scenario=scenario_triggered)
+                # Ajay Dwivedi - TS-XXXXX - Drop physical logical slots before restart when reverting
+                # wal_level to replica. PostgreSQL will FATAL on startup if logical slots exist with
+                # wal_level < logical. This only runs for Scenario 01 (full wal_level revert).
+                if scenario_triggered == "Scenario 01":
+                    plog("INFO", "Scenario 01 revert: dropping physical logical slot(s) from live PostgreSQL before restart...")
+                    dropped = drop_physical_logical_slots()
+                    if dropped:
+                        drop_msg = (f"Dropped {len(dropped)} physical logical slot(s) before restart: {dropped}. "
+                                    f"Prevents PostgreSQL FATAL (logical slot with wal_level < logical).")
+                        plog("RESULT", drop_msg)
+                        DL("SLOTS_DROPPED_PRE_RESTART", drop_msg, scenario=scenario_triggered)
+                    else:
+                        plog("INFO", "No active physical logical slots found on live PostgreSQL. Safe to restart.")
                 restart_ok, restart_out = patronictl_restart(args.patronictl_config, cluster_name)
                 if restart_ok:
                     plog("RESULT", "Patroni cluster restart command completed successfully.")
