@@ -7,7 +7,7 @@ Usage: python3 repl_slot_manager.py [--patronictl-config=] [--db-log-days-to-kee
                                      [--log-to-console] [--no-log-to-console]
                                      [--log-to-file]    [--no-log-to-file]
 """
-import argparse, glob, os, re, socket, subprocess, sys, uuid
+import argparse, glob, os, re, socket, subprocess, sys, time, uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -28,8 +28,12 @@ def parse_args():
     # Log destination toggles: use --no-log-to-console / --no-log-to-file to disable each sink.
     p.add_argument("--log-to-console", default=True,  action=argparse.BooleanOptionalAction)
     p.add_argument("--log-to-file",    default=True,  action=argparse.BooleanOptionalAction)
-    # When --force is set, both buffer windows are bypassed and immediate action is taken.
-    p.add_argument("--force",          default=False, action=argparse.BooleanOptionalAction)
+    # When --skip-buffer is set, both buffer windows are bypassed and immediate action is taken.
+    p.add_argument("--skip-buffer",    default=False, action=argparse.BooleanOptionalAction)
+    # When --force-restart is set, patronictl restart is issued after any Patroni config change.
+    p.add_argument("--force-restart",  default=False, action=argparse.BooleanOptionalAction)
+    # Maximum seconds to wait for PostgreSQL to accept connections after a force-restart. Capped at 120.
+    p.add_argument("--restart-timeout-seconds", type=int, default=120)
     return p.parse_args()
 
 def setup_logging(logs_path, days_to_keep, log_to_console, log_to_file):
@@ -228,6 +232,28 @@ def patronictl_edit(config_file, cluster_name, args_str):
     _, rc = run(cmd)
     return rc == 0
 
+def patronictl_restart(config_file, cluster_name):
+    """Restart all Patroni cluster members non-interactively. Returns (success, output).
+    Ajay Dwivedi - TS-XXXXX - Triggered only when --force-restart is set and a config change was made.
+    """
+    cmd = f"patronictl -c {config_file} restart {cluster_name} --force"
+    out, rc = run(cmd)
+    return rc == 0, out
+
+def wait_for_postgresql(timeout_seconds):
+    """Poll until PostgreSQL accepts a connection or timeout_seconds expires.
+    Ajay Dwivedi - TS-XXXXX - Called after force-restart to confirm PostgreSQL is up before proceeding.
+    Returns (is_up: bool, elapsed_seconds: int).
+    """
+    start = time.time()
+    deadline = start + timeout_seconds
+    while time.time() < deadline:
+        _, rc = run("psql -U postgres -d postgres -tAc 'SELECT 1'")
+        if rc == 0:
+            return True, int(time.time() - start)
+        time.sleep(3)
+    return False, timeout_seconds
+
 def main():
     import traceback
     args = parse_args()
@@ -328,7 +354,7 @@ def main():
         # --- Decide and act ---
         # Slot lifecycle is managed exclusively via Patroni DCS config (patronictl edit-config).
         # Patroni itself creates/drops physical slots on the leader node based on DCS config.
-        slots_added = 0; slots_removed = 0; scenario_triggered = "None"
+        slots_added = 0; slots_removed = 0; scenario_triggered = "None"; wal_level_changed = False
         desired_slot_names_set = {s["slot_name"] for s in desired_slots}
 
         plog("INFO", f"Evaluating scenario: wal_level={wal_level}, wal_level_patroni={wal_level_patroni}, config_desired={len(desired_slots)}, patroni_logical_slots={len(patroni_slots)}")
@@ -337,9 +363,9 @@ def main():
         # even if live PostgreSQL has already restarted into REPLICA mode (e.g. after a prior revert).
         if (wal_level == "LOGICAL" or wal_level_patroni == "LOGICAL") and len(desired_slots) == 0:
             # Ajay Dwivedi - TS-XXXXX - Buffer window: two independent guards before reverting wal_level.
-            # Both guards are skipped when --force is passed; immediate action is taken instead.
-            if args.force:
-                plog("INFO", "Force mode enabled: bypassing buffer windows. Taking immediate action.")
+            # Both guards are skipped when --skip-buffer is passed; immediate action is taken instead.
+            if args.skip_buffer:
+                plog("INFO", "skip-buffer enabled: bypassing buffer windows. Taking immediate action.")
                 wal_in_buffer  = False
                 slot_in_buffer = False
             else:
@@ -390,6 +416,7 @@ def main():
                 plog("INFO", "Scenario 01 triggered: wal_level=LOGICAL and no desired slots in config table. Reverting.")
                 plog("INFO", "Scenario 01: Reverting wal_level to replica in Patroni config...")
                 patronictl_edit(args.patronictl_config, cluster_name, '--pg "wal_level=replica"')
+                wal_level_changed = True
                 DL("WAL_LEVEL_REVERTED", "wal_level reverted to replica in Patroni DCS config.", wal_level="replica", scenario=scenario_triggered)
                 if len(patroni_slots) > 0:
                     plog("INFO", f"Scenario 01: Removing {len(patroni_slots)} logical slot(s) from Patroni config...")
@@ -422,6 +449,7 @@ def main():
                     ' --set "postgresql.use_pg_rewind=true"'
                     ' --set "postgresql.use_slots=true"')
                 plog("RESULT", "Scenario 03: Patroni config wal_level set to LOGICAL with all required CDC parameters.")
+                wal_level_changed = True
                 DL("WAL_LEVEL_SET_LOGICAL", "Full CDC parameters applied to Patroni DCS config (wal_level=logical, wal_log_hints=on, max_replication_slots=10, max_wal_senders=10, use_pg_rewind=true, use_slots=true).", wal_level="logical", scenario=scenario_triggered)
             else:
                 plog("INFO", "Scenario 03: Patroni config wal_level is already LOGICAL. No wal_level update needed.")
@@ -450,6 +478,39 @@ def main():
                     plog("INFO", f"Scenario 03: Patroni logical slot '{patroni_slot}' exists in desired config. No action required.")
             if slots_added == 0 and slots_removed == 0:
                 plog("INFO", "Scenario 03: Config table desired slots and Patroni config are already in sync. No changes made.")
+
+        # --- Restart Patroni cluster members if --force-restart is set and config changed ---
+        # Ajay Dwivedi - TS-XXXXX - Restart is skipped when no config change was made this run.
+        config_changed = wal_level_changed or slots_added > 0 or slots_removed > 0
+        if args.force_restart:
+            if config_changed:
+                restart_msg = "force-restart enabled and Patroni config was changed. Restarting Patroni cluster members..."
+                plog("INFO", restart_msg)
+                DL("RESTART_INITIATED", restart_msg, scenario=scenario_triggered)
+                restart_ok, restart_out = patronictl_restart(args.patronictl_config, cluster_name)
+                if restart_ok:
+                    plog("RESULT", "Patroni cluster restart command completed successfully.")
+                    DL("RESTART_DONE", "Patroni cluster restart command completed successfully.", scenario=scenario_triggered)
+                else:
+                    fail_msg = f"WARNING: Patroni cluster restart command may have failed. Output: {restart_out}"
+                    plog("INFO", fail_msg)
+                    DL("RESTART_FAILED", fail_msg, scenario=scenario_triggered)
+                # Ajay Dwivedi - TS-XXXXX - Poll for PostgreSQL to be up after restart; cap timeout at 120s.
+                timeout = min(args.restart_timeout_seconds, 120)
+                poll_msg = f"Polling for PostgreSQL to accept connections after restart (timeout={timeout}s, interval=3s)..."
+                plog("INFO", poll_msg)
+                DL("RESTART_POLL_START", poll_msg, scenario=scenario_triggered)
+                pg_up, elapsed = wait_for_postgresql(timeout)
+                if pg_up:
+                    up_msg = f"PostgreSQL is up and accepting connections (elapsed={elapsed}s). Proceeding."
+                    plog("RESULT", up_msg)
+                    DL("RESTART_PG_UP", up_msg, scenario=scenario_triggered)
+                else:
+                    timeout_msg = f"WARNING: PostgreSQL did not respond within {timeout}s after restart. Proceeding anyway."
+                    plog("INFO", timeout_msg)
+                    DL("RESTART_PG_TIMEOUT", timeout_msg, scenario=scenario_triggered)
+            else:
+                plog("INFO", "force-restart enabled but no Patroni config changes were made this run. Skipping restart.")
 
         scenario_summaries = {
             "Scenario 01": "wal_level=LOGICAL with no desired slots -> reverted wal_level to replica and cleared Patroni logical slots.",
