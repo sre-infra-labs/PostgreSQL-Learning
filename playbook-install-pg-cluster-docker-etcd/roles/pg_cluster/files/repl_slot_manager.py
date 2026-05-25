@@ -28,6 +28,8 @@ def parse_args():
     # Log destination toggles: use --no-log-to-console / --no-log-to-file to disable each sink.
     p.add_argument("--log-to-console", default=True,  action=argparse.BooleanOptionalAction)
     p.add_argument("--log-to-file",    default=True,  action=argparse.BooleanOptionalAction)
+    # When --force is set, both buffer windows are bypassed and immediate action is taken.
+    p.add_argument("--force",          default=False, action=argparse.BooleanOptionalAction)
     return p.parse_args()
 
 def setup_logging(logs_path, days_to_keep, log_to_console, log_to_file):
@@ -308,18 +310,26 @@ def main():
         slots_added = 0; slots_removed = 0; scenario_triggered = "None"
         desired_slot_names_set = {s["slot_name"] for s in desired_slots}
 
-        plog("INFO", f"Evaluating scenario: wal_level={wal_level}, config_desired={len(desired_slots)}, patroni_logical_slots={len(patroni_slots)}")
+        plog("INFO", f"Evaluating scenario: wal_level={wal_level}, wal_level_patroni={wal_level_patroni}, config_desired={len(desired_slots)}, patroni_logical_slots={len(patroni_slots)}")
 
-        if wal_level == "LOGICAL" and len(desired_slots) == 0:
+        # Ajay Dwivedi - TS-XXXXX - Also trigger revert when Patroni DCS still has wal_level=LOGICAL
+        # even if live PostgreSQL has already restarted into REPLICA mode (e.g. after a prior revert).
+        if (wal_level == "LOGICAL" or wal_level_patroni == "LOGICAL") and len(desired_slots) == 0:
             # Ajay Dwivedi - TS-XXXXX - Buffer window: two independent guards before reverting wal_level.
-            wal_logical_since = get_wal_level_became_logical_time()
-            last_slot_removed = get_last_slot_removed_time()
-            buffer_seconds = args.wal_level_buffer_hours * 3600
-            now = datetime.now()
-            wal_in_buffer  = (wal_logical_since is not None and
-                              (now - wal_logical_since).total_seconds() < buffer_seconds)
-            slot_in_buffer = (last_slot_removed is not None and
-                              (now - last_slot_removed).total_seconds() < buffer_seconds)
+            # Both guards are skipped when --force is passed; immediate action is taken instead.
+            if args.force:
+                plog("INFO", "Force mode enabled: bypassing buffer windows. Taking immediate action.")
+                wal_in_buffer  = False
+                slot_in_buffer = False
+            else:
+                wal_logical_since = get_wal_level_became_logical_time()
+                last_slot_removed = get_last_slot_removed_time()
+                buffer_seconds = args.wal_level_buffer_hours * 3600
+                now = datetime.now()
+                wal_in_buffer  = (wal_logical_since is not None and
+                                  (now - wal_logical_since).total_seconds() < buffer_seconds)
+                slot_in_buffer = (last_slot_removed is not None and
+                                  (now - last_slot_removed).total_seconds() < buffer_seconds)
 
             if wal_in_buffer:
                 # wal_level just became LOGICAL but no slots added yet — skip everything.
@@ -369,15 +379,17 @@ def main():
                     plog("INFO", "Scenario 01: No logical slots in Patroni config to remove.")
                 plog("RESULT", "Scenario 01: wal_level reverted to replica. Patroni logical slots cleared.")
         else:
-            if wal_level != "LOGICAL":
-                plog("INFO", f"Condition not met for Scenario 01: wal_level={wal_level} (not LOGICAL).")
+            if wal_level != "LOGICAL" and wal_level_patroni != "LOGICAL":
+                plog("INFO", f"Condition not met for Scenario 01: wal_level={wal_level}, wal_level_patroni={wal_level_patroni} (neither is LOGICAL).")
             else:
-                plog("INFO", f"Condition not met for Scenario 01: {len(desired_slots)} desired slot(s) in config table (wal_level=LOGICAL).")
+                plog("INFO", f"Condition not met for Scenario 01: {len(desired_slots)} desired slot(s) in config table (wal_level={wal_level}, wal_level_patroni={wal_level_patroni}).")
             scenario_triggered = "Scenario 03"
             DL("SCENARIO", "Scenario 03 triggered: Syncing config table desired slots with Patroni DCS config.", scenario=scenario_triggered)
             plog("INFO", "Scenario 03 triggered: Syncing config table desired slots with Patroni config.")
             # When setting wal_level=logical, always apply the full set of required CDC parameters.
-            if wal_level_patroni != "LOGICAL":
+            # Guard: only promote wal_level when there are actually desired slots to create.
+            # Without this guard, Scenario 03 would set wal_level=logical even with no desired slots.
+            if wal_level_patroni != "LOGICAL" and len(desired_slots) > 0:
                 plog("INFO", f"Scenario 03: Patroni config wal_level is {wal_level_patroni}. Updating to LOGICAL with all required parameters...")
                 patronictl_edit(args.patronictl_config, cluster_name,
                     '--set "postgresql.parameters.wal_level=logical"'
