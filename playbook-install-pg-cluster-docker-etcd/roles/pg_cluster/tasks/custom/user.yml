@@ -1,0 +1,110 @@
+---
+- name: Create application database '{{ db_name }}'
+  community.postgresql.postgresql_db:
+    name: "{{ db_name }}"
+    state: present
+    login_user: postgres
+  become_user: postgres
+  when: inventory_hostname in groups['primary_cluster_leader']
+
+- name: Create read-write user '{{ db_user_rw }}'
+  community.postgresql.postgresql_user:
+    name: "{{ db_user_rw }}"
+    password: "{{ db_user_rw_password }}"
+    role_attr_flags: LOGIN
+    state: present
+    login_user: postgres
+  become_user: postgres
+  when: inventory_hostname in groups['primary_cluster_leader']
+
+- name: Grant read-write privileges to '{{ db_user_rw }}'
+  community.postgresql.postgresql_query:
+    db: "{{ db_name }}"
+    login_user: postgres
+    query: |
+      GRANT ALL PRIVILEGES ON DATABASE "{{ db_name }}" TO "{{ db_user_rw }}";
+      GRANT pg_read_all_data, pg_write_all_data TO "{{ db_user_rw }}";
+      GRANT pg_read_all_stats TO "{{ db_user_rw }}";
+  become_user: postgres
+  when: inventory_hostname in groups['primary_cluster_leader']
+
+- name: Create read-only user '{{ db_user_ro }}'
+  community.postgresql.postgresql_user:
+    name: "{{ db_user_ro }}"
+    password: "{{ db_user_ro_password }}"
+    role_attr_flags: LOGIN
+    state: present
+    login_user: postgres
+  become_user: postgres
+  when: inventory_hostname in groups['primary_cluster_leader']
+
+- name: Grant read-only privileges to '{{ db_user_ro }}'
+  community.postgresql.postgresql_query:
+    db: "{{ db_name }}"
+    login_user: postgres
+    query: |
+      GRANT CONNECT ON DATABASE "{{ db_name }}" TO "{{ db_user_ro }}";
+      GRANT pg_read_all_data TO "{{ db_user_ro }}";
+  become_user: postgres
+  when: inventory_hostname in groups['primary_cluster_leader']
+
+- name: Create pg_stat_statements extension
+  community.postgresql.postgresql_ext:
+    db: "{{ db_name }}"
+    name: pg_stat_statements
+    state: present
+    login_user: postgres
+  become_user: postgres
+  when: inventory_hostname in groups['primary_cluster_leader']
+
+- name: Create dblink extension
+  community.postgresql.postgresql_ext:
+    db: "{{ db_name }}"
+    name: dblink
+    state: present
+    login_user: postgres
+  become_user: postgres
+  when: inventory_hostname in groups['primary_cluster_leader']
+
+# -------------------------------------------------------------------
+# Cluster management users and roles
+# -------------------------------------------------------------------
+- name: Create db user 'master' (superuser + login)
+  community.postgresql.postgresql_user:
+    name: master
+    password: "{{ patroni_superuser_password }}"
+    role_attr_flags: SUPERUSER,LOGIN
+    state: present
+    login_user: postgres
+  become_user: postgres
+  when: inventory_hostname in groups['primary_cluster_leader']
+
+- name: Create db user 'replication_admin' (login + replication + bypassrls)
+  community.postgresql.postgresql_user:
+    name: replication_admin
+    password: "{{ patroni_superuser_password }}"
+    role_attr_flags: LOGIN,REPLICATION,BYPASSRLS
+    state: present
+    login_user: postgres
+  become_user: postgres
+  when: inventory_hostname in groups['primary_cluster_leader']
+
+- name: Create role 'replication_group' (no login — group role)
+  community.postgresql.postgresql_user:
+    name: replication_group
+    role_attr_flags: NOLOGIN
+    state: present
+    login_user: postgres
+  become_user: postgres
+  when: inventory_hostname in groups['primary_cluster_leader']
+
+- name: Configure replication_group membership and privileges
+  community.postgresql.postgresql_query:
+    login_user: postgres
+    query: |
+      GRANT replication_group TO replication_admin WITH ADMIN OPTION;
+      GRANT replication_group TO master WITH ADMIN OPTION;
+      GRANT pg_create_subscription TO replication_group;
+  become_user: postgres
+  when: inventory_hostname in groups['primary_cluster_leader']
+

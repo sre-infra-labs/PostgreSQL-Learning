@@ -27,6 +27,7 @@ __pycache__/
 Untitled*.ipynb
 .DS_Store
 consul_secret.yml
+course-udemy-amazon-aurora-postgres/*
 
 vault-pass
 .venv

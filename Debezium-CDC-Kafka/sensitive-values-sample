@@ -1,0 +1,19 @@
+# ============================================================================
+# PostgreSQL Passwords
+# ============================================================================
+PG_SUPERUSER_PASSWORD: "Pg@Superuser#2024!"
+PG_REPLICATION_PASSWORD: "Pg@Replication#2024!"
+PG_APP_USER_PASSWORD: "Pg@AppUser#2024!"
+
+# ============================================================================
+# pgAdmin Credentials
+# ============================================================================
+PGADMIN_DEFAULT_EMAIL: "admin@debezium-cdc.local"
+PGADMIN_DEFAULT_PASSWORD: "PgAdmin@2024!"
+
+# ============================================================================
+# Debezium & Kafka Credentials
+# ============================================================================
+KAFKA_BROKER_USERNAME: "kafka_connector"
+KAFKA_BROKER_PASSWORD: "Kafka@Broker#2024!"
+DEBEZIUM_CONNECTOR_USERNAME: "debezium_serDEBEZIUM_CONNECTOR_USERNAME: "debezium_serDEBEZIUM_CONNECTOR_USERNAME: "debezium_serDEBEZIUM_CONNECTOR_USERNAME: "debe==DEBEZIUM_CONNECTOR_USERNAME: "debezium_serDEBEZIUM_CONNECTOR_USERNAME: "debez=========================DEBEZIUM_CONNECTOR_USERNAME: "debezium_serDEBEZIUM_CONNECTOR_USERNAME: "debezble"

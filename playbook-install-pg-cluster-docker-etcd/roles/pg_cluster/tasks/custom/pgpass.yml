@@ -1,0 +1,23 @@
+---
+# Write .pgpass as root — do NOT set owner/group in the copy module.
+# The postgres OS user may not exist yet (packages skipped in reinit mode).
+# A separate shell step chowns only when the user exists.
+- name: Configure {{ postgresql_home_dir }}/.pgpass
+  ansible.builtin.copy:
+    content: |
+      {% for entry in postgresql_pgpass %}
+      {{ entry }}
+      {% endfor %}
+    dest: "{{ postgresql_home_dir }}/.pgpass"
+    mode: "0600"
+  when:
+    - postgresql_pgpass is defined
+    - postgresql_pgpass | length > 0
+
+- name: Set .pgpass ownership to postgres (if user exists)
+  ansible.builtin.shell: |
+    id postgres &>/dev/null && chown postgres:postgres {{ postgresql_home_dir }}/.pgpass || true
+  changed_when: false
+  when:
+    - postgresql_pgpass is defined
+    - postgresql_pgpass | length > 0

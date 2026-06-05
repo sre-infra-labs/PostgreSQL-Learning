@@ -1,0 +1,49 @@
+---
+- name: Begin pg_cluster/custom/repl_slot_manager.yml
+  ansible.builtin.debug:
+    msg: "Deploying repl_slot_manager.py on {{ inventory_hostname }} to {{ postgresql_scripts_dir }}"
+
+- name: Ensure PostgreSQL scripts directory exists
+  ansible.builtin.file:
+    path: "{{ postgresql_scripts_dir }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0750'
+
+- name: Copy repl_slot_manager.py to node
+  ansible.builtin.copy:
+    src: "repl_slot_manager.py"
+    dest: "{{ postgresql_scripts_dir }}/repl_slot_manager.py"
+    owner: postgres
+    group: postgres
+    mode: '0750'
+
+- name: Install cron package
+  ansible.builtin.apt:
+    name: cron
+    state: present
+    update_cache: false
+
+- name: Ensure cron service is running
+  ansible.builtin.service:
+    name: cron
+    state: started
+    enabled: true
+
+- name: Deploy /etc/cron.d/repl_slot_manager (runs every 10 min as postgres)
+  ansible.builtin.copy:
+    dest: /etc/cron.d/repl_slot_manager
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      # Managed by Ansible — manages logical replication slots in Patroni DCS
+      */10 * * * * postgres python3 {{ postgresql_scripts_dir }}/repl_slot_manager.py >> /var/log/postgresql/repl_slot_manager.log 2>&1
+
+- name: End pg_cluster/custom/repl_slot_manager.yml
+  ansible.builtin.debug:
+    msg: >-
+      repl_slot_manager.py deployed on {{ inventory_hostname }}:
+      {{ postgresql_scripts_dir }}/repl_slot_manager.py
+      (cron: /etc/cron.d/repl_slot_manager, every 10 min as postgres, log: /var/log/postgresql/repl_slot_manager.log)

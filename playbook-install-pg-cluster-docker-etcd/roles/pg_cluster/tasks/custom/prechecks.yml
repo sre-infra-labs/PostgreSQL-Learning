@@ -1,0 +1,102 @@
+---
+- name: Begin pg_cluster/custom/prechecks.yml
+  ansible.builtin.debug:
+    msg: "Running pre-installation checks"
+
+- name: Check Ansible version
+  ansible.builtin.fail:
+    msg: "Ansible {{ minimal_ansible_version }} or higher is required (found {{ ansible_version.full }})"
+  delegate_to: localhost
+  when: ansible_version.full is version(minimal_ansible_version, '<')
+
+# -------------------------------------------------------------------
+#  FRESH INSTALL GUARDS — skip these on reinit
+# -------------------------------------------------------------------
+- name: Check if data directory is already initialized
+  ansible.builtin.stat:
+    path: "{{ postgresql_data_dir }}/PG_VERSION"
+  register: pgdata_initialized
+  when: not (reinit_cluster is defined and reinit_cluster | bool)
+
+- name: Fail if data directory is already initialized
+  ansible.builtin.fail:
+    msg: "Data directory {{ postgresql_data_dir }} is already initialized. Use -e reinit_cluster=true to reinitialize."
+  when:
+    - not (reinit_cluster is defined and reinit_cluster | bool)
+    - pgdata_initialized.stat is defined
+    - pgdata_initialized.stat.exists | default(false)
+
+# -------------------------------------------------------------------
+#  REINIT CLEANUP — only runs when reinit_cluster=true
+#  etcd must already be running (from a previous install) for these
+# -------------------------------------------------------------------
+- name: Stop Patroni service (reinit mode)
+  ansible.builtin.shell: systemctl stop patroni 2>/dev/null || true
+  changed_when: false
+  when: reinit_cluster is defined and reinit_cluster | bool
+
+- name: Remove PostgreSQL data directory (reinit mode)
+  ansible.builtin.file:
+    path: "{{ postgresql_data_dir }}"
+    state: absent
+  when: reinit_cluster is defined and reinit_cluster | bool
+
+- name: Remove etcd data directory (reinit mode)
+  ansible.builtin.file:
+    path: /var/lib/etcd
+    state: absent
+  when: reinit_cluster is defined and reinit_cluster | bool
+
+- name: Clear log and spool directories (reinit mode)
+  ansible.builtin.shell: "rm -rf {{ item }}/*"
+  loop:
+    - "{{ postgresql_log_dir }}"
+    - "{{ patroni_log_dir }}"
+    - "/var/log/pgbackrest"
+    - "/var/spool/pgbackrest"
+  ignore_errors: true
+  when: reinit_cluster is defined and reinit_cluster | bool
+
+- name: Remove pgBackRest archives (reinit + cleanup mode)
+  become_user: postgres
+  ansible.builtin.shell: |
+    pgbackrest --stanza={{ pgbackrest_stanza_name }} expire --repo1-retention-full=0 2>/dev/null || true
+  ignore_errors: true
+  run_once: true
+  delegate_to: "{{ groups['primary_cluster_leader'] | first }}"
+  when:
+    - reinit_cluster is defined and reinit_cluster | bool
+    - cleanup_pgbackrest_backups is defined and cleanup_pgbackrest_backups | bool
+
+- name: Check etcd is reachable before clearing keys (reinit mode)
+  ansible.builtin.uri:
+    url: "http://{{ hostvars[groups['all'][0]]['ip'] }}:2379/health"
+    method: GET
+    status_code: 200
+  register: etcd_check
+  failed_when: false
+  run_once: true
+  when: reinit_cluster is defined and reinit_cluster | bool
+
+- name: Remove Patroni cluster keys from etcd (reinit mode)
+  ansible.builtin.uri:
+    url: "http://{{ hostvars[groups['all'][0]]['ip'] }}:2379/v3/kv/deleterange"
+    method: POST
+    body_format: json
+    body:
+      key: "{{ ('/service/' + patroni_cluster_name + '/') | b64encode }}"
+      range_end: "{{ ('/service/' + patroni_cluster_name + '0') | b64encode }}"
+    status_code: [200, 204]
+  register: etcd_delete
+  # Only fail on a real HTTP error (4xx/5xx); connection refused (status -1)
+  # is expected when etcd hasn't started yet on a fresh reinit.
+  failed_when: etcd_delete.status | default(-1) | int > 0 and
+               etcd_delete.status | default(-1) | int not in [200, 204]
+  run_once: true
+  when:
+    - reinit_cluster is defined and reinit_cluster | bool
+    - etcd_check.status | default(-1) | int == 200
+
+- name: End pg_cluster/custom/prechecks.yml
+  ansible.builtin.debug:
+    msg: "Pre-installation checks passed"

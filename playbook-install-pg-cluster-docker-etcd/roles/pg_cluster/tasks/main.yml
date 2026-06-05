@@ -1,0 +1,156 @@
+---
+- name: Inside pg_cluster/tasks/main.yml
+  ansible.builtin.debug:
+    msg: "Installing PostgreSQL {{ postgresql_version }} cluster with Patroni + etcd + pgbackrest + pgbouncer"
+
+- name: Include defaults/creds.yml
+  include_vars:
+    file: "{{ role_path }}/defaults/creds.yml"
+  tags: always
+
+- name: Confirm before reinitializing cluster
+  ansible.builtin.pause:
+    prompt: "WARNING: Reinitializing the cluster will delete all data. Type 'yes' to continue:"
+  register: reinit_confirmation
+  when:
+    - reinit_cluster is defined and reinit_cluster | bool
+    - not (skip_confirm is defined and skip_confirm | bool)
+  delegate_to: localhost
+  run_once: true
+
+- name: Abort if user did not confirm reinit
+  ansible.builtin.fail:
+    msg: "Cluster reinitialization aborted by user."
+  when:
+    - reinit_cluster is defined and reinit_cluster | bool
+    - not (skip_confirm is defined and skip_confirm | bool)
+    - reinit_confirmation.user_input | default('') != "yes"
+
+- name: Run prechecks
+  include_tasks:
+    file: custom/prechecks.yml
+    apply:
+      tags: prechecks
+  tags: prechecks
+
+- name: Setup PGDG repository
+  include_tasks:
+    file: custom/repository.yml
+    apply:
+      tags: repository
+  tags: repository
+
+- name: Install packages
+  include_tasks:
+    file: custom/packages.yml
+    apply:
+      tags: packages
+  tags: packages
+
+- name: Configure .pgpass
+  include_tasks:
+    file: custom/pgpass.yml
+    apply:
+      tags: pgpass
+  tags: pgpass
+
+- name: Install and configure etcd (inside container, 3-member cluster)
+  include_tasks:
+    file: custom/etcd.yml
+    apply:
+      tags: etcd
+  tags: etcd
+
+- name: Install and configure Patroni
+  include_tasks:
+    file: custom/patroni.yml
+    apply:
+      tags: patroni
+  tags: patroni
+
+- name: Register permanent replication slot in Patroni DCS
+  # bootstrap.dcs.slots seeds the slot only on first initdb.
+  # This PATCH keeps the DCS in sync on every playbook run (idempotent).
+  # PATCH merges — it never overwrites unrelated DCS settings.
+  # Targets the primary VIP so the request always reaches the current leader.
+  ansible.builtin.uri:
+    url: "http://{{ keepalived_vip }}:{{ patroni_restapi_port }}/config"
+    method: PATCH
+    body_format: json
+    body:
+      slots:
+        "{{ patroni_standby_primary_slot_name }}":
+          type: physical
+    status_code: [200, 201]
+  run_once: true
+  when:
+    - inventory_hostname in groups['primary_cluster']
+    - groups['standby_cluster'] | default([]) | length > 0
+    - patroni_standby_primary_slot_name | default('') | length > 0
+  tags: patroni
+
+- name: Configure pgBackRest
+  include_tasks:
+    file: custom/pgbackrest.yml
+    apply:
+      tags: pgbackrest
+  tags: pgbackrest
+
+- name: Install and configure pgBouncer
+  include_tasks:
+    file: custom/pgbouncer.yml
+    apply:
+      tags: pgbouncer
+  tags: pgbouncer
+
+- name: Install pg_exporter
+  include_tasks:
+    file: custom/pg_exporter.yml
+    apply:
+      tags: pg_exporter
+  tags: pg_exporter
+
+- name: Create application database and users
+  include_tasks:
+    file: custom/user.yml
+    apply:
+      tags: users
+  tags: users
+
+- name: Create replication slot config objects in postgres db
+  include_tasks:
+    file: custom/repl_slot_config.yml
+    apply:
+      tags: repl_slot_config
+  tags: repl_slot_config
+
+- name: Deploy repl_slot_manager.sh and cron job
+  include_tasks:
+    file: custom/repl_slot_manager.yml
+    apply:
+      tags: repl_slot_manager
+  tags: repl_slot_manager
+
+- name: Install and configure HAProxy
+  include_tasks:
+    file: custom/haproxy.yml
+    apply:
+      tags: haproxy
+  tags: haproxy
+
+- name: Install and configure Keepalived
+  include_tasks:
+    file: custom/keepalived.yml
+    apply:
+      tags: keepalived
+  tags: keepalived
+
+- name: Show Patroni cluster status
+  include_tasks:
+    file: custom/patronictl_list.yml
+    apply:
+      tags: patronictl_list
+  tags: patronictl_list
+  when: >-
+    inventory_hostname in groups['primary_cluster_leader'] or
+    inventory_hostname in groups['standby_cluster_leader']

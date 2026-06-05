@@ -1,0 +1,71 @@
+---
+# Debezium CDC Learning Infrastructure - Component-by-Component Deployment
+# Deploy individual components for modular testing and learning
+#
+# Usage - Deploy specific component:
+#   ansible-playbook -i hosts.yml playbook-deploy-component.yml \
+#     --vault-password-file=vault-pass \
+#     -e component=docker_infra
+#   
+#   ansible-playbook -i hosts.yml playbook-deploy-component.yml \
+#     --vault-password-file=vault-pass \
+#     -e component=zookeeper
+#
+# Valid components:
+#   - docker_infra
+#   - zookeeper
+#   - kafka
+#   - postgres
+#   - debezium
+#   - pgadmin
+#   - kafka_ui
+
+- name: Deploy Individual Component
+  hosts: localhost
+  gather_facts: true
+  vars_files:
+    - sensitive-values
+    - vars/main.yml
+
+  vars:
+    valid_components:
+      - docker_infra
+      - kafka_ecosystem
+      - postgres
+      - pgadmin
+
+  pre_tasks:
+    - name: Validate component parameter
+      ansible.builtin.fail:
+        msg: "ERROR: component variable not set. Use -e component=<name>. Valid: {{ valid_components | join(', ') }}"
+      when: component is not defined
+
+    - name: Validate component value
+      ansible.builtin.fail:
+        msg: "ERROR: Invalid component '{{ component }}'. Valid: {{ valid_components | join(', ') }}"
+      when: component not in valid_components
+
+    - name: Display deployment start message
+      ansible.builtin.debug:
+        msg: |
+          Deploying component: {{ component | upper }}
+          Configuration: vars/main.yml
+          Sensitive values: sensitive-values (vault encrypted)
+
+  roles:
+    - role: roles/docker_infrastructure
+      when: component == "docker_infra"
+
+    - role: roles/kafka_ecosystem
+      when: component == "kafka_ecosystem"
+
+    - role: roles/postgres_source
+      when: component == "postgres"
+
+    - role: roles/pgadmin
+      when: component == "pgadmin"
+
+  post_tasks:
+    - name: Component deployment completed
+      ansible.builtin.debug:
+        msg: "✓ Component '{{ component }}' deployed successfully"

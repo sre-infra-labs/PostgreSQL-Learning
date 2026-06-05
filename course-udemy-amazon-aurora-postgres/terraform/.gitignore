@@ -1,0 +1,17 @@
+# ── Vault password - NEVER commit this ───────────────────────────────────────
+vault-pass
+
+# ── Terraform state (may contain sensitive data in plaintext) ─────────────────
+*.tfstate
+*.tfstate.backup
+
+# ── Terraform working directory ───────────────────────────────────────────────
+.terraform/
+.terraform.lock.hcl
+
+# ── Variable overrides (if you keep a decrypted local copy) ──────────────────
+*.tfvars.decrypted
+
+# ── Crash logs ────────────────────────────────────────────────────────────────
+crash.log
+crash.*.log

@@ -1,0 +1,25 @@
+# Kafka Ecosystem Configuration
+# Zookeeper, Kafka, Debezium, Kafka UI coordinated deployment
+
+kafka_ecosystem_container_name: "kafka-ecosystem-cdc"
+kafka_ecosystem_container_ip: "172.20.0.2"
+
+# Zookeeper ports
+zk_host_mapping_port: 2181
+
+# Kafka ports
+kafka_broker_id: 1
+kafka_advertised_host: "kafka"
+kafka_advertised_port: 9092
+kafka_host_mapping_port: 29092
+
+# Debezium Connect REST API
+debezium_listen_port: 8083
+debezium_host_mapping_port: 8083
+
+# Kafka UI
+kafka_ui_listen_port: 8080
+kafka_ui_host_mapping_port: 8080
+
+docker_network_name: "cdc-network"
+debug: false

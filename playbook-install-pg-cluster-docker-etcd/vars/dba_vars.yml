@@ -1,0 +1,78 @@
+# DBA Input Variables for Docker-based PostgreSQL 18 Cluster
+# Modify these values before running the playbook
+
+debug: true
+
+# patroni_cluster_name and pgbackrest_stanza_name are defined per group in hosts.yml.
+
+# Replica cloning — skip pgbackrest (replicas have no local repo backup) and go straight to
+# pg_basebackup. checkpoint=spread is safe for basebackup from both a primary and a standby
+# leader (checkpoint=fast requires the source to coordinate with the primary, which can fail
+# when cloning from a standby in archive recovery).
+patroni_create_replica_methods:
+  - basebackup
+
+basebackup:
+  - { option: "max-rate", value: "100M" }
+  - { option: "checkpoint", value: "spread" }
+
+# ReInit Standby — set to true ONLY when rebuilding after a failure (skips package install)
+# reinit_cluster: true
+# cleanup_pgbackrest_backups: true
+
+# PostgreSQL version (PGDG repo)
+postgresql_version: "18"
+postgresql_port: "5432"
+
+# Hardware info (Docker container resources — adjust based on your Mac's allocation)
+server_hardware:
+  cpu_count: 2
+  ram_gb: 4
+  disk_gb: 20
+
+# postgresql.conf tuning params
+pg_params:
+  work_mem: "4MB"
+  maintenance_work_mem: "256MB"
+
+# Application database and users
+db_name: "dba"
+db_user_rw: dba_rw
+db_user_ro: dba_ro
+
+# Docker network — pre-existing lab-network (172.18.0.0/16)
+# All lab containers (postgres, mongo, cadvisor, etc.) already use this network
+docker_network_name: "lab-network"
+
+# etcd DCS — runs INSIDE each pg container (3-member cluster)
+# etcd_hosts is auto-built from inventory IPs in defaults/main.yml — no override needed
+etcd_version: "3.5.17"
+
+# pgBouncer settings (installed inside each pg container)
+pgbouncer_listen_port: 6432
+pgbouncer_pool_mode: "transaction"
+pgbouncer_max_client_conn: 200
+pgbouncer_default_pool_size: 25
+
+# HAProxy settings (installed inside each pg container)
+# Port 5000 → primary-only write traffic (checks GET /primary on Patroni REST API)
+# Port 5001 → replica read traffic     (checks GET /replica on Patroni REST API)
+# Port 7000 → HAProxy stats HTTP UI
+haproxy_write_port: 5000
+haproxy_read_port: 5001
+haproxy_stats_port: 7000
+haproxy_stats_user: admin
+
+# Keepalived VRRP settings (installed inside each pg container)
+# VIP 172.18.0.10 floats to whichever node is the Patroni primary
+# Connect via VIP:5000 (write) or VIP:5001 (read) for fully HA access
+keepalived_vip: "172.18.0.10"          # primary/write VIP → always points to Patroni leader
+keepalived_replica_vip: "172.18.0.9"  # replica VIP → sync standby (sync mode) or any healthy replica
+keepalived_vip_prefix: "24"
+keepalived_interface: "eth0"
+keepalived_virtual_router_id: 51      # VI_PRIMARY=51, VI_REPLICA=52
+keepalived_auth_pass: "pglabvr1"
+keepalived_check_interval: 2
+keepalived_check_rise: 2
+keepalived_check_fall: 3
+keepalived_weight: 100
