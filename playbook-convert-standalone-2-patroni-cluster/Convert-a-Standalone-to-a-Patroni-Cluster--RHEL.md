@@ -3,7 +3,7 @@
 Host - sqlred (192.168.100.55)
 postgres user home directory - /var/lib/postgresql/
 password to be managed by ~/.pgpass files in postgres user home directory
-pgbackrest backup path - /var/lib/pgbackrest/
+pgbackrest backup path - saanvi@ryzen9:/stale-storage/share-stalestorage/pgbackrest_backups
 
 # Tools to use
 - postgresql 18
@@ -110,7 +110,6 @@ export PATH=/usr/pgsql-18/bin:$PATH
 export PGDATA=/var/lib/postgresql/18/main
 export PGPORT=5432
 export PGPASSFILE=/var/lib/postgresql/.pgpass
-export PGBACKREST_CONFIG=/var/lib/postgresql/.config/pgbackrest/pgbackrest.conf
 export PATRONICTL_CONFIG_FILE=/var/lib/postgresql/patroni.yml
 EOF
 
@@ -125,12 +124,26 @@ sudo -u postgres bash -c "source /var/lib/postgresql/.bash_profile"
 ## 1. Install PostgreSQL 18 from the PGDG Repository
 
 ```bash
+# Detect the RHEL major version automatically (works on RHEL 9, 10, …)
+EL_VER=$(rpm -E %{rhel})
+
 # Add the PostgreSQL Global Development Group (PGDG) repository
 sudo dnf install -y \
-  https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+  https://download.postgresql.org/pub/repos/yum/reporpms/EL-${EL_VER}-x86_64/pgdg-redhat-repo-latest.noarch.rpm
 
 # Disable the built-in postgresql module to avoid conflicts
 sudo dnf -qy module disable postgresql
+
+# Enable CodeReady Builder (CRB) – required by EPEL as a dependency source
+sudo subscription-manager repos --enable codeready-builder-for-rhel-${EL_VER}-$(arch)-rpms
+
+# Install EPEL for the detected RHEL major version
+# (on RHEL 10 'epel-release' is not a DNF package; install directly from Fedora)
+sudo dnf install -y \
+  https://dl.fedoraproject.org/pub/epel/epel-release-latest-${EL_VER}.noarch.rpm
+
+# Install libssh2 – required by pgbackrest >= 2.55 for remote SFTP repository support
+sudo dnf install -y libssh2
 
 # Install PostgreSQL 18 server and common extensions
 sudo dnf install -y postgresql18-server postgresql18 postgresql18-contrib postgresql18-libs
@@ -175,8 +188,10 @@ wal_keep_size = 4GB
 
 # Archive (managed by pgbackrest via Patroni DCS config)
 archive_mode = on
-archive_command = 'pgbackrest --stanza=main archive-push %p'
-restore_command = 'pgbackrest --stanza=main archive-get %f %p'
+#archive_command = 'pgbackrest --config=/etc/pgbackrest/pgbackrest.conf --stanza=sqlred archive-push %p'
+#restore_command = 'pgbackrest --config=/etc/pgbackrest/pgbackrest.conf --stanza=sqlred archive-get %f %p'
+archive_command = 'pgbackrest --stanza=sqlred archive-push %p'
+restore_command = 'pgbackrest --stanza=sqlred archive-get %f %p'
 
 # Logging – log files stored inside postgres home
 logging_collector = on
@@ -255,12 +270,177 @@ sudo systemctl start postgresql-18
 sudo systemctl status postgresql-18
 ```
 
+## 7. Install pgbackrest on sqlred
+
+```bash
+# pgbackrest is available in the PGDG repository added above
+sudo dnf install -y pgbackrest
+
+pgbackrest version
+```
+
+## 8. Configure pgbackrest on sqlred (Remote Repository on ryzen9)
+
+pgbackrest uses SSH to communicate with the repository host. The config below tells pgbackrest that the backup repository lives on `ryzen9` at `/stale-storage/share-stalestorage/pgbackrest_backups/`.
+
+### Add ryzen9 for known hosts in /etc/hosts
+```bash
+192.168.100.1 ryzen9
+```
+
+The pgbackrest configuration on `sqlred` is stored at `/etc/pgbackrest/pgbackrest.conf` — the system-wide default location that pgbackrest reads without requiring any environment variable. This is preferred over the XDG user config (`~/.config/pgbackrest/pgbackrest.conf`) because the PostgreSQL archiver process does **not** source `.bash_profile`, so environment variables like `PGBACKREST_CONFIG` are never available to it.
+
+```bash
+# Create /etc/pgbackrest and write the config (requires root)
+sudo mkdir -p /etc/pgbackrest
+
+sudo tee /etc/pgbackrest/pgbackrest.conf > /dev/null << 'EOF'
+[global]
+# Remote repository host
+repo1-host=ryzen9
+repo1-host-user=postgres
+repo1-path=/stale-storage/share-stalestorage/pgbackrest_backups
+repo1-retention-full=2
+repo1-retention-diff=7
+log-level-console=info
+log-level-file=detail
+log-path=/var/lib/postgresql/log
+
+[sqlred]
+pg1-path=/var/lib/postgresql/18/main
+pg1-port=5432
+pg1-user=postgres
+EOF
+
+# Directory must be traversable and file readable by the postgres user
+sudo chmod 755 /etc/pgbackrest/
+sudo chmod 644 /etc/pgbackrest/pgbackrest.conf
+```
+
+## 9. Set Up SSH Key Trust Between sqlred and ryzen9 postgres Users
+
+pgbackrest requires passwordless SSH in **both directions** between the `postgres` user on the PostgreSQL host and the `postgres` user on the repository host.
+
+### Enable passwordless ssh for ryzen9
+```bash
+# Run as postgres user
+sudo -i -u postgres
+ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519
+ssh-copy-id -i ~/.ssh/id_ed25519.pub postgres@ryzen9
+```
+
+### On sqlred – generate key and copy to ryzen9
+
+```bash
+# Create .ssh directory for the postgres user
+sudo -u postgres mkdir -p /var/lib/postgresql/.ssh
+sudo -u postgres chmod 0700 /var/lib/postgresql/.ssh
+
+# Generate an ed25519 key pair (no passphrase)
+sudo -u postgres ssh-keygen -t ed25519 -N "" \
+  -f /var/lib/postgresql/.ssh/id_ed25519 \
+  -C "postgres@sqlred"
+
+# Display the public key – paste this into ryzen9 in the next step
+sudo -u postgres cat /var/lib/postgresql/.ssh/id_ed25519.pub
+
+# Copy sqlred's postgres public key to ryzen9's authorized_keys
+sudo -u postgres ssh-copy-id -i /var/lib/postgresql/.ssh/id_ed25519.pub \
+  postgres@ryzen9
+
+# Verify connectivity: sqlred → ryzen9
+sudo -u postgres ssh postgres@ryzen9 "hostname && id"
+```
+
+### On ryzen9 – generate key and copy to sqlred
+
+```bash
+# Create .ssh directory for the postgres user on ryzen9
+sudo mkdir -p /var/lib/postgresql/.ssh
+sudo chmod 0700 /var/lib/postgresql/.ssh
+sudo chown postgres:postgres /var/lib/postgresql/.ssh
+
+# Generate an ed25519 key pair for ryzen9's postgres user
+sudo -u postgres ssh-keygen -t ed25519 -N "" \
+  -f /var/lib/postgresql/.ssh/id_ed25519 \
+  -C "postgres@ryzen9"
+
+# Copy ryzen9's postgres public key to sqlred's authorized_keys
+sudo -u postgres ssh-copy-id -i /var/lib/postgresql/.ssh/id_ed25519.pub \
+  postgres@192.168.100.55
+
+# Verify connectivity: ryzen9 → sqlred
+sudo -u postgres ssh postgres@192.168.100.55 "hostname && id"
+```
+
+## 10. Install and Configure pgbackrest on ryzen9 (Repository Host)
+
+> Run the following on **ryzen9**.
+
+```bash
+# Install pgbackrest (ryzen9 is Ubuntu)
+sudo apt-get install -y pgbackrest
+
+# apt creates /etc/pgbackrest/pgbackrest.conf owned by root (mode 600).
+# The postgres user cannot read it, causing a remote "Permission denied" error
+# when sqlred initiates stanza-create.
+#
+# Since backups are always initiated FROM sqlred (the db host), ryzen9 only needs
+# to know repo1-path so its remote pgbackrest process can write backup files locally.
+# pg1-host / pg1-path are NOT needed here – sqlred handles the PostgreSQL connection.
+sudo tee /etc/pgbackrest/pgbackrest.conf > /dev/null << 'EOF'
+[global]
+repo1-path=/stale-storage/share-stalestorage/pgbackrest_backups
+
+[sqlred]
+EOF
+
+sudo chmod 755 /etc/pgbackrest/
+sudo chmod 644 /etc/pgbackrest/pgbackrest.conf
+
+# Create the backup repository directory
+sudo mkdir -p /stale-storage/share-stalestorage/pgbackrest_backups
+sudo chown postgres:postgres /stale-storage/share-stalestorage/pgbackrest_backups
+sudo chmod 0755 /stale-storage/share-stalestorage/pgbackrest_backups
+
+# Create pgbackrest log directory on ryzen9
+sudo mkdir -p /var/log/pgbackrest
+sudo chown postgres:postgres /var/log/pgbackrest
+```
+
+## 11. Create the pgbackrest Stanza and Take the Initial Backup
+
+> Run on **sqlred** — PostgreSQL must be running as a standalone service at this point.
+
+> **Why `sudo -i -u postgres`**: The config is at `/etc/pgbackrest/pgbackrest.conf` — a system default that pgbackrest finds without any environment variable. `sudo -i -u postgres` is still preferred here because it sources `.bash_profile`, making `PATH`, `PGDATA`, and other env vars available for the `psql` commands that follow.
+
+```bash
+# Switch to a full postgres login shell (sources .bash_profile)
+sudo -i -u postgres
+
+# Create the stanza (initialises the repository structure on ryzen9)
+pgbackrest --stanza=sqlred stanza-create
+
+# Run a configuration check end-to-end
+pgbackrest --stanza=sqlred check
+
+# Take the first full backup (data is stored on ryzen9)
+pgbackrest --stanza=sqlred --type=full backup
+
+# Confirm backup is visible
+pgbackrest --stanza=sqlred info
+
+# Exit the postgres shell when done
+exit
+```
+
 > **Important**: Once Patroni is running it manages the PostgreSQL process. **Do not** start `postgresql-18.service` directly — keep it **disabled**.
 
 ```bash
 sudo systemctl disable postgresql-18
 ```
 
+---
 ---
 
 # Convert Standalone PostgreSQL to Patroni Cluster with Single Node
@@ -306,16 +486,9 @@ sudo pip3 install patroni[etcd3]
 patroni --version
 ```
 
-## 3. Install pgbackrest
+## 3. Install postgres_exporter
 
-```bash
-# pgbackrest is available in the PGDG repository added earlier
-sudo dnf install -y pgbackrest
-
-pgbackrest version
-```
-
-## 4. Install postgres_exporter
+> **Note**: pgbackrest was already installed and configured in **Steps 7–11** of the *Install PostgreSQL 18 on RHEL* section above (remote repository on ryzen9). No further pgbackrest installation or configuration is needed here.
 
 ```bash
 # Fetch the latest release tag from GitHub
@@ -393,8 +566,8 @@ bootstrap:
         max_replication_slots: 10
         checkpoint_timeout: 30
         archive_mode: "on"
-        archive_command: "pgbackrest --stanza=main archive-push %p"
-        restore_command: "pgbackrest --stanza=main archive-get %f %p"
+        archive_command: "pgbackrest --stanza=sqlred archive-push %p"
+        restore_command: "pgbackrest --stanza=sqlred archive-get %f %p"
 
   initdb:
     - encoding: UTF8
@@ -479,43 +652,11 @@ EOF
 sudo systemctl daemon-reload
 ```
 
-## 7. Configure pgbackrest
+## 7. pgbackrest
 
-pgbackrest automatically reads `~/.config/pgbackrest/pgbackrest.conf` for the running user (XDG convention), which resolves to `/var/lib/postgresql/.config/pgbackrest/pgbackrest.conf` for the `postgres` user.
-
-```bash
-# Create the XDG config directory inside postgres home
-sudo -u postgres mkdir -p /var/lib/postgresql/.config/pgbackrest
-
-sudo -u postgres tee /var/lib/postgresql/.config/pgbackrest/pgbackrest.conf > /dev/null << 'EOF'
-[global]
-repo1-path=/var/lib/pgbackrest
-repo1-retention-full=2
-repo1-retention-diff=7
-log-level-console=info
-log-level-file=detail
-log-path=/var/lib/postgresql/log
-
-[main]
-pg1-path=/var/lib/postgresql/18/main
-pg1-port=5432
-pg1-user=postgres
-EOF
-
-# Create the backup repository directory
-sudo mkdir -p /var/lib/pgbackrest
-sudo chown postgres:postgres /var/lib/pgbackrest
-sudo chmod 0750 /var/lib/pgbackrest
-
-# Initialise the stanza (run after PostgreSQL is started)
-sudo -u postgres pgbackrest --stanza=main stanza-create
-
-# Take the first full backup
-sudo -u postgres pgbackrest --stanza=main --type=full backup
-
-# Verify
-sudo -u postgres pgbackrest --stanza=main info
-```
+> pgbackrest is already installed, configured, and tested in **Steps 7–11** of the *Install PostgreSQL 18 on RHEL* section.
+> The configuration at `/etc/pgbackrest/pgbackrest.conf` points to the remote repository on `ryzen9` at `/stale-storage/share-stalestorage/pgbackrest_backups/`.
+> The `archive_command` and `restore_command` hard-code `--config=/etc/pgbackrest/pgbackrest.conf`, so pgbackrest finds its settings even when called from the PostgreSQL archiver process (which does not source `.bash_profile`).
 
 ## 8. Configure postgres_exporter
 
@@ -622,7 +763,6 @@ export PATH=/usr/pgsql-18/bin:$PATH
 export PGDATA=/var/lib/postgresql/18/main
 export PGPORT=5432
 export PGPASSFILE=/var/lib/postgresql/.pgpass
-export PGBACKREST_CONFIG=/var/lib/postgresql/.config/pgbackrest/pgbackrest.conf
 export PATRONICTL_CONFIG_FILE=/var/lib/postgresql/patroni.yml
 EOF
 ```
@@ -687,8 +827,8 @@ bootstrap:
         max_replication_slots: 10
         checkpoint_timeout: 30
         archive_mode: "on"
-        archive_command: "pgbackrest --stanza=main archive-push %p"
-        restore_command: "pgbackrest --stanza=main archive-get %f %p"
+        archive_command: "pgbackrest --stanza=sqlred archive-push %p"
+        restore_command: "pgbackrest --stanza=sqlred archive-get %f %p"
 
   pg_hba:
     - "local   all             postgres                            peer"
@@ -773,27 +913,33 @@ sudo journalctl -u patroni -f
 
 ## 5. Configure pgbackrest on Replica
 
-```bash
-sudo -u postgres mkdir -p /var/lib/postgresql/.config/pgbackrest
+Each replica needs its own pgbackrest config pointing to the same remote repository on `ryzen9`. SSH trust from this replica's `postgres` user to `ryzen9`'s `postgres` user must also be established (follow the same SSH key exchange procedure from **Step 9** of the *Install PostgreSQL 18 on RHEL* section, substituting this replica's IP).
 
-sudo -u postgres tee /var/lib/postgresql/.config/pgbackrest/pgbackrest.conf > /dev/null << 'EOF'
+```bash
+# Create /etc/pgbackrest and write the config (requires root)
+sudo mkdir -p /etc/pgbackrest
+
+sudo tee /etc/pgbackrest/pgbackrest.conf > /dev/null << 'EOF'
 [global]
-repo1-path=/var/lib/pgbackrest
+# Remote repository host (same as primary)
+repo1-host=ryzen9
+repo1-host-user=postgres
+repo1-path=/stale-storage/share-stalestorage/pgbackrest_backups
 repo1-retention-full=2
 repo1-retention-diff=7
 log-level-console=info
 log-level-file=detail
 log-path=/var/lib/postgresql/log
 
-# Primary host for backup operations
-pg1-host=192.168.100.55
-pg1-host-user=postgres
-
-[main]
+[sqlred]
 pg1-path=/var/lib/postgresql/18/main
 pg1-port=5432
 pg1-user=postgres
 EOF
+
+# Directory must be traversable and file readable by the postgres user
+sudo chmod 755 /etc/pgbackrest/
+sudo chmod 644 /etc/pgbackrest/pgbackrest.conf
 ```
 
 ## 6. Verify the Replica Joined the Cluster
