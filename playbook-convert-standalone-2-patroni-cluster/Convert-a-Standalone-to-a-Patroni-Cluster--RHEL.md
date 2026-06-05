@@ -403,6 +403,13 @@ sudo mkdir -p /stale-storage/share-stalestorage/pgbackrest_backups
 sudo chown postgres:postgres /stale-storage/share-stalestorage/pgbackrest_backups
 sudo chmod 0755 /stale-storage/share-stalestorage/pgbackrest_backups
 
+# Set default ACLs so every file and directory pgbackrest creates in the future
+# automatically inherits world-readable permissions — no manual chmod needed after backups.
+# -d  → default ACL (inherited by new children)
+# -m o::rx → others get read + traverse on directories; files inherit read (no exec)
+sudo setfacl -R  -m o::rx /stale-storage/share-stalestorage/pgbackrest_backups
+sudo setfacl -R -d -m o::rx /stale-storage/share-stalestorage/pgbackrest_backups
+
 # Create pgbackrest log directory on ryzen9
 sudo mkdir -p /var/log/pgbackrest
 sudo chown postgres:postgres /var/log/pgbackrest
@@ -433,6 +440,21 @@ pgbackrest --stanza=sqlred info
 # Exit the postgres shell when done
 exit
 ```
+
+## 12. Incase backup directory should be accessed with anybody apart from postgres user
+  This enables other to read & traverse through backup directory and files.
+```
+# Fix existing directories/files right now
+sudo setfacl -R  -m o::rx /stale-storage/share-stalestorage/pgbackrest_backups
+
+# Set default ACL — inherited automatically by every future file and directory
+sudo setfacl -R -d -m o::rx /stale-storage/share-stalestorage/pgbackrest_backups
+
+# Verify (look for 'other::r-x' in default section)
+getfacl /stale-storage/share-stalestorage/pgbackrest_backups
+getfacl /stale-storage/share-stalestorage/pgbackrest_backups/backup/sqlred/
+```
+
 
 > **Important**: Once Patroni is running it manages the PostgreSQL process. **Do not** start `postgresql-18.service` directly — keep it **disabled**.
 
