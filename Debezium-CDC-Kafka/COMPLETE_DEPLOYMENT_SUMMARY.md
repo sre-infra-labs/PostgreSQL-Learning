@@ -19,8 +19,8 @@
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| PostgreSQL | localhost:5433 | postgres / Pa$$w0rd (cdc_db) |
-| pgAdmin | http://localhost:5050 | admin@cdc-learning.local / Pa$$w0rd |
+| PostgreSQL | localhost:5433 | postgres / YourStrongSuperUserPassword (cdc_db) |
+| pgAdmin | http://localhost:5050 | admin@cdc-learning.local / YourStrongSuperUserPassword |
 | Kafka UI | http://localhost:8080 | Open browser |
 | Debezium API | http://localhost:8083 | curl commands |
 | Kafka Topics | Via Kafka UI | postgres.public.users/orders/products |

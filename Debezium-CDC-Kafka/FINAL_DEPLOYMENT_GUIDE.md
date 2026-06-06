@@ -161,7 +161,7 @@ After successful deployment, you should see:
 
 - **deploy.sh** - Master deployment script
 - **playbook-deploy-all.yml** - Ansible playbook
-- **vault-pass** - Vault password (Pa$$w0rd)
+- **vault-pass** - Vault password (YourStrongSuperUserPassword)
 - **sensitive-values** - Encrypted credentials
 - **vars/main.yml** - Configuration
 

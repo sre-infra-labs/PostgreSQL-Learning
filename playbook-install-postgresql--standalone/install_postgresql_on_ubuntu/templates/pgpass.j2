@@ -1,3 +1,5 @@
-{% for entry in pgpass_entries %}
+{# Only include entries that belong to the linux user whose file is being written. #}
+{# current_linux_user is set as a task-level var in pgpass_file.yml.            #}
+{% for entry in pgpass_entries | selectattr('linux_user', 'equalto', current_linux_user) %}
 {{ entry.hostname }}:{{ entry.port }}:{{ entry.database }}:{{ entry.pg_role }}:{{ entry.pg_role_pwd }}
 {% endfor %}

@@ -142,7 +142,7 @@ Kafka UI        → 8080
 ## 📞 Quick Help
 
 **Forgot the PostgreSQL password?**
-→ Pa$$w0rd
+→ YourStrongSuperUserPassword
 
 **Need Debezium REST API?**
 → http://localhost:8083

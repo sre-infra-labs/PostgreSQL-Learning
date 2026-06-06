@@ -6,9 +6,9 @@
 
 ## Quick Facts
 
-- **Vault Password**: Pa$$w0rd (in vault-pass)
+- **Vault Password**: YourStrongSuperUserPassword (in vault-pass)
 - **Sudo Password**: Tessell@123
-- **Localhost PostgreSQL**: Pa$$w0rd (postgres user)
+- **Localhost PostgreSQL**: YourStrongSuperUserPassword (postgres user)
 - **Sensitive Values**: Encrypted in sensitive-values (view: `ansible-vault view sensitive-values --vault-password-file=vault-pass`)
 
 ## File Structure

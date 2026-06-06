@@ -76,7 +76,7 @@ cat > /tmp/debezium-postgres-connector.json << 'EOF'
     "database.hostname": "postgres-cdc",
     "database.port": "5432",
     "database.user": "replication",
-    "database.password": "Pa$$w0rd",
+    "database.password": "YourStrongSuperUserPassword",
     "database.dbname": "cdc_db",
     "database.server.name": "postgres",
     "plugin.name": "pgoutput",

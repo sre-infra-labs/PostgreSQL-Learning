@@ -10,13 +10,13 @@ pg_superuser_pwd: "{{ PG_SUPERUSER_PWD}}"
 pgpass_entries:
   - linux_user: ansible
     pg_role: postgres
-    pg_role_pwd: "{{ pg_superuser_pwd}}"
+    pg_role_pwd: "{{ pg_superuser_pwd }}"
     database: "*"
     hostname: "*"
     port: "*"
   - linux_user: postgres
     pg_role: postgres
-    pg_role_pwd: "{{ pg_superuser_pwd}}"
+    pg_role_pwd: "{{ pg_superuser_pwd }}"
     database: "*"
     hostname: "*"
     port: "*"

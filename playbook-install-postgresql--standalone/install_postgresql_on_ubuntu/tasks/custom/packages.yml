@@ -4,12 +4,13 @@
     msg: "Begin {{ role_name }}/custom/pre_tasks.yml"
 
 - name: Update apt cache
-  ansible.builtin.package:
+  ansible.builtin.apt:
     update_cache: yes
+    cache_valid_time: 3600
   when: ansible_os_family == "Debian"
 
 - name: Install PostgreSQL and related packages
-  ansible.builtin.package:
+  ansible.builtin.apt:
     name:
       - postgresql-common
       - python3-psycopg2
@@ -21,13 +22,27 @@
       - lsb-release
       - ca-certificates
       - pgbackrest
-      - pgloader
       - postgresql-server-dev-{{ postgresql_version }}
       - postgresql-client-{{ postgresql_version }}
       - postgresql-{{ postgresql_version }}
       - postgresql-contrib-{{ postgresql_version }}
     state: present
-  # when: ansible_os_family == "Debian"
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  when: ansible_os_family == "Debian"
+
+# pgloader pulls in SBCL (Steel Bank Common Lisp) and runs Lisp compilation at install
+# time, which can take 20-40 minutes on some systems. Isolate it with a generous timeout
+# so a slow pgloader install never blocks or masks failures in the core PG packages above.
+- name: Install pgloader (may take several minutes — compiles Lisp at install time)
+  ansible.builtin.apt:
+    name: pgloader
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  async: 2400   # allow up to 40 minutes
+  poll: 30      # check every 30 seconds
+  when: ansible_os_family == "Debian"
 
 - name: "End {{ role_name }}/custom/pre_tasks.yml"
   debug:
