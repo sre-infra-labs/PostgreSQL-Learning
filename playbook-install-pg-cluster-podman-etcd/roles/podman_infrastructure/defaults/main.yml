@@ -28,7 +28,7 @@ keepalived_replica_vip: "172.18.0.9"   # replica/standby VIP → sync standby or
 # haproxy_read_port:  host-side port (5001 inside container) — replica read
 # haproxy_stats_port: host-side port (7000 inside container) — HAProxy stats UI
 pg_containers:
-  - name: pg1
+  - name: podpg-cls1-pg1
     ip: "172.18.0.11"
     ssh_port: 2221
     pg_port: 5433
@@ -38,7 +38,7 @@ pg_containers:
     haproxy_write_port: 15000
     haproxy_read_port: 15001
     haproxy_stats_port: 17000
-  - name: pg2
+  - name: podpg-cls1-pg2
     ip: "172.18.0.12"
     ssh_port: 2222
     pg_port: 5434
@@ -48,7 +48,7 @@ pg_containers:
     haproxy_write_port: 25000
     haproxy_read_port: 25001
     haproxy_stats_port: 27000
-  - name: pg3
+  - name: podpg-cls1-pg3
     ip: "172.18.0.13"
     ssh_port: 2223
     pg_port: 5435
@@ -58,7 +58,7 @@ pg_containers:
     haproxy_write_port: 35000
     haproxy_read_port: 35001
     haproxy_stats_port: 37000
-  - name: pg4
+  - name: podpg-cls1-pg4
     ip: "172.18.0.14"
     ssh_port: 2224
     pg_port: 5437

@@ -33,8 +33,11 @@
 
   vars:
     # --- what to clean (override with -e) ---
-    remove_containers: true    # stop + remove pg1, pg2, pg3, pg4
-    remove_volumes:    true    # remove all named Podman volumes (pg-data-*, pg-logs-*, pg-backups)
+    remove_containers: true    # stop + remove podpg-cls1-pg1, podpg-cls1-pg2, podpg-cls1-pg3, podpg-cls1-pg4
+    remove_volumes:    true    # remove per-node named Podman volumes (pg-data-*, pg-logs-*)
+                               # NOTE: pgbackrest backups are on the host shared dir
+                               # /stale-storage/share-stalestorage/pgbackrest_backups
+                               # and are intentionally NOT deleted by this playbook.
     remove_image:      false   # remove pg-cluster-node:latest (slow to rebuild — off by default)
     skip_confirm:      false   # set true to bypass the confirmation prompt
 
@@ -44,20 +47,20 @@
 
     # --- derived from podman_infrastructure defaults ---
     _all_containers:
-      - pg1
-      - pg2
-      - pg3
-      - pg4
+      - podpg-cls1-podpg-cls1-pg1
+      - podpg-cls1-podpg-cls1-pg2
+      - podpg-cls1-podpg-cls1-pg3
+      - podpg-cls1-podpg-cls1-pg4
 
     _all_volumes:
-      - pg-data-pg1
-      - pg-data-pg2
-      - pg-data-pg3
-      - pg-data-pg4
-      - pg-logs-pg1
-      - pg-logs-pg2
-      - pg-logs-pg3
-      - pg-logs-pg4
+      - pg-data-podpg-cls1-podpg-cls1-pg1
+      - pg-data-podpg-cls1-podpg-cls1-pg2
+      - pg-data-podpg-cls1-podpg-cls1-pg3
+      - pg-data-podpg-cls1-podpg-cls1-pg4
+      - pg-logs-podpg-cls1-podpg-cls1-pg1
+      - pg-logs-podpg-cls1-podpg-cls1-pg2
+      - pg-logs-podpg-cls1-podpg-cls1-pg3
+      - pg-logs-podpg-cls1-podpg-cls1-pg4
       - pg-backups
 
     _podman_image:   "pg-cluster-node:latest"
@@ -168,10 +171,10 @@
           - "  Step 1 — Podman infra:"
           - "    ansible-playbook playbook-setup-podman.yml"
           - ""
-          - "  Step 2 — Primary cluster install (pg1, pg2, pg3):"
+          - "  Step 2 — Primary cluster install (podpg-cls1-podpg-cls1-pg1, podpg-cls1-podpg-cls1-pg2, podpg-cls1-podpg-cls1-pg3):"
           - "    ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass"
           - ""
-          - "  Step 3 — Standby cluster install (pg4 — optional):"
+          - "  Step 3 — Standby cluster install (podpg-cls1-podpg-cls1-pg4 — optional):"
           - "    ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass"
           - ""
           - "  Or run primary cluster steps in one command:"

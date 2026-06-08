@@ -24,8 +24,8 @@
   failed_when: false
   changed_when: "'Error' not in backup_volume_result.stdout and backup_volume_result.rc == 0"
 
-- name: Remove stale pg4 container if deploying standby only
-  ansible.builtin.command: podman rm -f pg4
+- name: Remove stale podpg-cls1-pg4 container if deploying standby only
+  ansible.builtin.command: podman rm -f podpg-cls1-pg4
   ignore_errors: true
   when: target_hosts is defined and target_hosts == 'standby'
 

@@ -4,8 +4,8 @@
 debug: true
 
 # Cluster name — must be unique across all clusters
-patroni_cluster_name: "pg-podman-cls1"
-pgbackrest_stanza_name: "pg-podman-cls1"
+patroni_cluster_name: "podpg-cls1"
+pgbackrest_stanza_name: "podpg-cls1"
 
 # ReInit Standby — set to true ONLY when rebuilding after a failure (skips package install)
 # reinit_cluster: true

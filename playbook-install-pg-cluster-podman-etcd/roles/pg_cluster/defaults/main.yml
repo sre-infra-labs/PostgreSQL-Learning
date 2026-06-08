@@ -107,7 +107,7 @@ postgresql_password_encryption_algorithm: "scram-sha-256"
 # -------------------------------------------------------------------
 # Replication / HA settings
 # -------------------------------------------------------------------
-synchronous_mode: true         # pg2 = Sync Standby; pg3 excluded via patroni_tag_nosync
+synchronous_mode: true         # podpg-cls1-podpg-cls1-pg2 = Sync Standby; podpg-cls1-podpg-cls1-pg3 excluded via patroni_tag_nosync
 synchronous_mode_strict: false
 synchronous_node_count: 1
 

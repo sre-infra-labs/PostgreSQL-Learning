@@ -46,9 +46,9 @@
    - [DR Test Execution Guide](#dr-test-execution-guide)
 
 ### Multi-Datacenter (Standby Cluster)
-17. [Multi-DC Standby Cluster Setup (pg4 — Region B)](#multi-dc-standby-cluster-setup-pg4--region-b)
+17. [Multi-DC Standby Cluster Setup (podpg-cls1-pg4 — Region B)](#multi-dc-standby-cluster-setup-podpg-cls1-pg4--region-b)
    - [Standby Cluster Overview](#standby-cluster-overview)
-   - [Setup pg4 Container](#setup-pg4-container)
+   - [Setup podpg-cls1-pg4 Container](#setup-podpg-cls1-pg4-container)
    - [Install Standby Cluster](#install-standby-cluster)
    - [Verify Standby Streaming](#verify-standby-streaming)
    - [Multi-DC DR: Promote Standby](#multi-dc-dr-promote-standby)
@@ -75,29 +75,31 @@
 ## Quick Start (Podman)
 
 This setup uses **Podman** on Ubuntu 24.04 with a **multi-datacenter** architecture:
-- **Region A (Primary DC)**: pg1, pg2, pg3 — full HA cluster with Patroni + etcd + HAProxy + Keepalived
-- **Region B (Secondary DC)**: pg4 — single-node standby cluster streaming from primary DC
+- **Region A (Primary DC)**: podpg-cls1-pg1, podpg-cls1-pg2, podpg-cls1-pg3 — full HA cluster with Patroni + etcd + HAProxy + Keepalived
+- **Region B (Secondary DC)**: podpg-cls1-pg4 — single-node standby cluster streaming from primary DC
 
 ```bash
-cd playbook-install-pg-cluster-podman/
+cd playbook-install-pg-cluster-podman-etcd/
 
-# ── PRIMARY CLUSTER (Region A: pg1, pg2, pg3) ────────────────────────────────
+# ── PRIMARY CLUSTER (Region A: podpg-cls1-pg1, podpg-cls1-pg2, podpg-cls1-pg3) ────────────────────────────────
 # Phase 1: Create Podman containers
-ansible-playbook playbook-setup-podman.yml
+export ANSIBLE_FORCE_COLOR=1
+ansible-playbook playbook-setup-podman.yml 2>&1 | tee logs/playbook-setup-podman.yml.log
 
 # Phase 2: Install PostgreSQL 18 primary cluster
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
+export ANSIBLE_FORCE_COLOR=1
+ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass 2>&1 | tee logs/playbook-install-pg-cluster.yml.log
 
 # Verify primary cluster status
-podman exec pg1 patronictl -c /etc/patroni/patroni.yml list
+podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
 
-# ── STANDBY CLUSTER (Region B: pg4) ─────────────────────────────────────────
-# pg4 container is created together with pg1-pg3 in Phase 1.
+# ── STANDBY CLUSTER (Region B: podpg-cls1-pg4) ─────────────────────────────────────────
+# podpg-cls1-pg4 container is created together with podpg-cls1-pg1/pg2/pg3 in Phase 1.
 # Only pg_cluster installation is separate:
-ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass
+ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass 2>&1 | tee logs/playbook-install-standby-cluster.yml.log
 
-# Verify pg4 is streaming from primary
-podman exec pg4 patronictl -c /etc/patroni/patroni.yml list
+# Verify podpg-cls1-pg4 is streaming from primary
+podman exec podpg-cls1-pg4 patronictl -c /etc/patroni/patroni.yml list
 ```
 
 ### Network Architecture: Podman Shared Network
@@ -109,7 +111,7 @@ All containers share the same `lab-network` (172.18.0.0/16):
 podman network create --driver bridge --subnet=172.18.0.0/16 lab-network
 
 # All pg containers run on lab-network
-podman ps  # pg1, pg2, pg3 (primary DC) + pg4 (secondary DC)
+podman ps  # podpg-cls1-pg1, podpg-cls1-pg2, podpg-cls1-pg3 (primary DC) + podpg-cls1-pg4 (secondary DC)
 ```
 
 The network is persistent across podman restarts. Other lab containers (sqlserver, mongo, etc.) can also share this network.
@@ -122,8 +124,8 @@ Each pg container runs the full stack — PostgreSQL, Patroni, etcd, pgBouncer, 
 Keepalived — in a single privileged container. There is no separate proxy or DCS container.
 
 This is a **multi-datacenter setup** with:
-- **Region A (Primary DC)**: pg1, pg2, pg3 — full 3-node HA cluster
-- **Region B (Secondary DC)**: pg4 — single-node standby cluster (Patroni `standby_cluster` mode)
+- **Region A (Primary DC)**: podpg-cls1-pg1, podpg-cls1-pg2, podpg-cls1-pg3 — full 3-node HA cluster
+- **Region B (Secondary DC)**: podpg-cls1-pg4 — single-node standby cluster (Patroni `standby_cluster` mode)
 
 ```
 Host (ryzen9 — Ubuntu 24.04)
@@ -133,15 +135,15 @@ Host (ryzen9 — Ubuntu 24.04)
 │   ├── ─── Region A: Primary Datacenter ──────────────────────────────────────
 │   │   ├── 172.18.0.9  ← Keepalived Replica VIP  (floats to sync standby)
 │   │   ├── 172.18.0.10 ← Keepalived Primary VIP  (floats to Patroni leader)
-│   │   ├── pg1  (172.18.0.11)  — Leader or Sync Standby  (designed: Leader)
-│   │   ├── pg2  (172.18.0.12)  — Leader or Sync Standby  (designed: Sync Standby)
-│   │   └── pg3  (172.18.0.13)  — Replica (nosync: true)
+│   │   ├── podpg-cls1-pg1  (172.18.0.11)  — Leader or Sync Standby  (designed: Leader)
+│   │   ├── podpg-cls1-pg2  (172.18.0.12)  — Leader or Sync Standby  (designed: Sync Standby)
+│   │   └── podpg-cls1-pg3  (172.18.0.13)  — Replica (nosync: true)
 │   │
 │   └── ─── Region B: Secondary Datacenter (Standby Cluster) ─────────────────
-│       └── pg4  (172.18.0.14)  — Standby Cluster Leader (streams from primary VIP)
+│       └── podpg-cls1-pg4  (172.18.0.14)  — Standby Cluster Leader (streams from primary VIP)
 │
 └── podman Named Volumes: pg-backups (shared pgBackRest POSIX repo)
-                          pg-data-pg4, pg-logs-pg4 (standby data)
+                          pg-data-podpg-cls1-pg4, pg-logs-podpg-cls1-pg4 (standby data)
 ```
 
 ### Replication Topology
@@ -150,19 +152,19 @@ Host (ryzen9 — Ubuntu 24.04)
 
 | Node | Designed Role   | Patroni Tag     | Notes                                    |
 |------|-----------------|-----------------|------------------------------------------|
-| pg1  | Leader          | —               | Primary; writes committed only after pg2 acks WAL |
-| pg2  | Sync Standby    | —               | `synchronous_node_count=1`; zero data loss on pg1 failure |
-| pg3  | Replica         | `nosync: true`  | Always async; never elected Sync Standby |
+| podpg-cls1-pg1  | Leader          | —               | Primary; writes committed only after podpg-cls1-pg2 acks WAL |
+| podpg-cls1-pg2  | Sync Standby    | —               | `synchronous_node_count=1`; zero data loss on podpg-cls1-pg1 failure |
+| podpg-cls1-pg3  | Replica         | `nosync: true`  | Always async; never elected Sync Standby |
 
 **Standby Cluster (Region B)**
 
 | Node | Designed Role          | Notes                                                          |
 |------|------------------------|----------------------------------------------------------------|
-| pg4  | Standby Cluster Leader | Streams from primary VIP (172.18.0.10); read-only until promoted |
+| podpg-cls1-pg4  | Standby Cluster Leader | Streams from primary VIP (172.18.0.10); read-only until promoted |
 
-Roles in Region A are dynamic — Patroni may promote pg2 or pg3 on failover. The designed topology is
-restored via `patronictl switchover` after recovery. pg3 can become leader in a disaster but will never
-hold the Sync Standby role. pg4 stays in standby mode until a Region A DC failure triggers promotion.
+Roles in Region A are dynamic — Patroni may promote podpg-cls1-pg2 or podpg-cls1-pg3 on failover. The designed topology is
+restored via `patronictl switchover` after recovery. podpg-cls1-pg3 can become leader in a disaster but will never
+hold the Sync Standby role. podpg-cls1-pg4 stays in standby mode until a Region A DC failure triggers promotion.
 
 ### Port Mapping (host → container)
 
@@ -171,14 +173,14 @@ hold the Sync Standby role. pg4 stays in standby mode until a Region A DC failur
 │ Container│ SSH  │ PG   │ Patroni │ pg_exporter │ pgBouncer│ HAProxy (host ports — needs new    │
 │          │      │      │ REST    │             │          │  container creation to take effect) │
 ├──────────┼──────┼──────┼─────────┼─────────────┼──────────┼────────┬──────────┬───────────────┤
-│ pg1      │ 2221 │ 5433 │ 8011    │ 9194        │ 6433     │ 15000  │ 15001    │ 17000         │
-│ pg2      │ 2222 │ 5434 │ 8012    │ 9195        │ 6434     │ 25000  │ 25001    │ 27000         │
-│ pg3      │ 2223 │ 5435 │ 8013    │ 9196        │ 6435     │ 35000  │ 35001    │ 37000         │
-│ pg4 *    │ 2224 │ 5437 │ 8014    │ —           │ 6436     │ 45000  │ 45001    │ 47000         │
+│ podpg-cls1-pg1      │ 2221 │ 5433 │ 8011    │ 9194        │ 6433     │ 15000  │ 15001    │ 17000         │
+│ podpg-cls1-pg2      │ 2222 │ 5434 │ 8012    │ 9195        │ 6434     │ 25000  │ 25001    │ 27000         │
+│ podpg-cls1-pg3      │ 2223 │ 5435 │ 8013    │ 9196        │ 6435     │ 35000  │ 35001    │ 37000         │
+│ podpg-cls1-pg4 *    │ 2224 │ 5437 │ 8014    │ —           │ 6436     │ 45000  │ 45001    │ 47000         │
 └──────────┴──────┴──────┴─────────┴─────────────┴──────────┴────────┴──────────┴───────────────┘
                                                              write    read      stats
                                                              port     port      UI
-* pg4 is read-only (standby mode). HAProxy write port (45000) will fail until pg4 is promoted.
+* podpg-cls1-pg4 is read-only (standby mode). HAProxy write port (45000) will fail until podpg-cls1-pg4 is promoted.
 
 HAProxy container-internal ports (always available via podman exec):
   :5000 → write   (routes to Patroni primary only, health: GET /primary  → 200)
@@ -187,11 +189,11 @@ HAProxy container-internal ports (always available via podman exec):
 
 etcd cluster (inter-container, no host port mapping needed):
   Primary DC (3-node etcd cluster):
-    pg1: 172.18.0.11:2379 (client) / :2380 (peer)
-    pg2: 172.18.0.12:2379 (client) / :2380 (peer)
-    pg3: 172.18.0.13:2379 (client) / :2380 (peer)
+    podpg-cls1-pg1: 172.18.0.11:2379 (client) / :2380 (peer)
+    podpg-cls1-pg2: 172.18.0.12:2379 (client) / :2380 (peer)
+    podpg-cls1-pg3: 172.18.0.13:2379 (client) / :2380 (peer)
   Secondary DC (single-node etcd — for standby Patroni only):
-    pg4: 172.18.0.14:2379 (client) / :2380 (peer)
+    podpg-cls1-pg4: 172.18.0.14:2379 (client) / :2380 (peer)
 ```
 
 ### Traffic Flow
@@ -202,16 +204,16 @@ Primary DC (Region A):
   Application read   →  VIP 172.18.0.9:5001   →  HAProxy (any node)  →  <replica> :5432
 
 Secondary DC (Region B — standby streaming):
-  pg4 streams WAL from primary VIP 172.18.0.10:5432 continuously
-  pg4 is read-only until promoted. Direct access: localhost:5437
+  podpg-cls1-pg4 streams WAL from primary VIP 172.18.0.10:5432 continuously
+  podpg-cls1-pg4 is read-only until promoted. Direct access: localhost:5437
 
 Notes:
   - VIPs are inside the podman network. From the host (ryzen9), use HAProxy host-mapped ports:
     localhost:15000/25000/35000 for writes; :15001/25001/35001 for reads (primary DC)
-    localhost:45001 for reads from pg4 standby (when operational)
-  - After Region A failover (e.g. pg2 promoted after pg1 failure):
-    Keepalived detects /primary passes on pg2 → primary VIP (172.18.0.10) migrates to pg2
-    pg4 automatically reconnects to new primary via the VIP — no reconfiguration needed
+    localhost:45001 for reads from podpg-cls1-pg4 standby (when operational)
+  - After Region A failover (e.g. podpg-cls1-pg2 promoted after podpg-cls1-pg1 failure):
+    Keepalived detects /primary passes on podpg-cls1-pg2 → primary VIP (172.18.0.10) migrates to podpg-cls1-pg2
+    podpg-cls1-pg4 automatically reconnects to new primary via the VIP — no reconfiguration needed
 ```
 
 ---
@@ -242,24 +244,24 @@ Run these steps once on your ryzen9 host to enable password-free named connectio
 sudo tee -a /etc/hosts << 'EOF'
 
 # PostgreSQL podman cluster — lab-network 172.18.0.0/16
-127.0.0.1  pg1    # PostgreSQL :5433  pgBouncer :6433  Patroni :8011  (Region A)
-127.0.0.1  pg2    # PostgreSQL :5434  pgBouncer :6434  Patroni :8012  (Region A)
-127.0.0.1  pg3    # PostgreSQL :5435  pgBouncer :6435  Patroni :8013  (Region A)
-127.0.0.1  pg4    # PostgreSQL :5437  pgBouncer :6436  Patroni :8014  (Region B standby)
+127.0.0.1  podpg-cls1-pg1    # PostgreSQL :5433  pgBouncer :6433  Patroni :8011  (Region A)
+127.0.0.1  podpg-cls1-pg2    # PostgreSQL :5434  pgBouncer :6434  Patroni :8012  (Region A)
+127.0.0.1  podpg-cls1-pg3    # PostgreSQL :5435  pgBouncer :6435  Patroni :8013  (Region A)
+127.0.0.1  podpg-cls1-pg4    # PostgreSQL :5437  pgBouncer :6436  Patroni :8014  (Region B standby)
 EOF
 ```
 
-Verify: `ping -c1 pg1` should resolve to `127.0.0.1`.
+Verify: `ping -c1 podpg-cls1-pg1` should resolve to `127.0.0.1`.
 
 ### 2. ~/.pgpass — password file
 
 File: `~/.pgpass` (permissions must be `chmod 600`)
 
 ```
-pg1:*:*:*:Pg@Lab2026!
-pg2:*:*:*:Pg@Lab2026!
-pg3:*:*:*:Pg@Lab2026!
-pg4:*:*:*:Pg@Lab2026!
+podpg-cls1-pg1:*:*:*:Pg@Lab2026!
+podpg-cls1-pg2:*:*:*:Pg@Lab2026!
+podpg-cls1-pg3:*:*:*:Pg@Lab2026!
+podpg-cls1-pg4:*:*:*:Pg@Lab2026!
 127.0.0.1:*:*:*:Pg@Lab2026!
 localhost:*:*:*:Pg@Lab2026!
 ```
@@ -272,24 +274,24 @@ Wildcard entries cover all ports, databases, and users on each hostname.
 File: `~/.pg_service.conf` — connect with `psql service=<name>` or `PGSERVICE=<name>`.
 
 ```ini
-[pg1]           host=pg1  port=5433  user=postgres  dbname=postgres
-[pg2]           host=pg2  port=5434  user=postgres  dbname=postgres
-[pg3]           host=pg3  port=5435  user=postgres  dbname=postgres
-[pg4]           host=pg4  port=5437  user=postgres  dbname=postgres  # standby (read-only)
+[podpg-cls1-pg1]           host=podpg-cls1-pg1  port=5433  user=postgres  dbname=postgres
+[podpg-cls1-pg2]           host=podpg-cls1-pg2  port=5434  user=postgres  dbname=postgres
+[podpg-cls1-pg3]           host=podpg-cls1-pg3  port=5435  user=postgres  dbname=postgres
+[podpg-cls1-pg4]           host=podpg-cls1-pg4  port=5437  user=postgres  dbname=postgres  # standby (read-only)
 
-[pg1-bouncer]   host=pg1  port=6433  user=postgres  dbname=postgres
-[pg2-bouncer]   host=pg2  port=6434  user=postgres  dbname=postgres
-[pg3-bouncer]   host=pg3  port=6435  user=postgres  dbname=postgres
-[pg4-bouncer]   host=pg4  port=6436  user=postgres  dbname=postgres  # standby
+[podpg-cls1-pg1-bouncer]   host=podpg-cls1-pg1  port=6433  user=postgres  dbname=postgres
+[podpg-cls1-pg2-bouncer]   host=podpg-cls1-pg2  port=6434  user=postgres  dbname=postgres
+[podpg-cls1-pg3-bouncer]   host=podpg-cls1-pg3  port=6435  user=postgres  dbname=postgres
+[podpg-cls1-pg4-bouncer]   host=podpg-cls1-pg4  port=6436  user=postgres  dbname=postgres  # standby
 
-[pg1-rw]        host=pg1  port=5433  user=dba_rw    dbname=dba
-[pg2-rw]        host=pg2  port=5434  user=dba_rw    dbname=dba
-[pg3-rw]        host=pg3  port=5435  user=dba_rw    dbname=dba
+[podpg-cls1-pg1-rw]        host=podpg-cls1-pg1  port=5433  user=dba_rw    dbname=dba
+[podpg-cls1-pg2-rw]        host=podpg-cls1-pg2  port=5434  user=dba_rw    dbname=dba
+[podpg-cls1-pg3-rw]        host=podpg-cls1-pg3  port=5435  user=dba_rw    dbname=dba
 
-[pg1-ro]        host=pg1  port=5433  user=dba_ro    dbname=dba
-[pg2-ro]        host=pg2  port=5434  user=dba_ro    dbname=dba
-[pg3-ro]        host=pg3  port=5435  user=dba_ro    dbname=dba
-[pg4-ro]        host=pg4  port=5437  user=dba_ro    dbname=dba    # standby read traffic
+[podpg-cls1-pg1-ro]        host=podpg-cls1-pg1  port=5433  user=dba_ro    dbname=dba
+[podpg-cls1-pg2-ro]        host=podpg-cls1-pg2  port=5434  user=dba_ro    dbname=dba
+[podpg-cls1-pg3-ro]        host=podpg-cls1-pg3  port=5435  user=dba_ro    dbname=dba
+[podpg-cls1-pg4-ro]        host=podpg-cls1-pg4  port=5437  user=dba_ro    dbname=dba    # standby read traffic
 ```
 
 ### 4. ~/.zshrc — dynamic shell functions
@@ -297,7 +299,7 @@ File: `~/.pg_service.conf` — connect with `psql service=<name>` or `PGSERVICE=
 Add to `~/.zshrc` (already done if you followed the setup steps):
 
 ```zsh
-_PG_NODES=("8011:pg1:5433" "8012:pg2:5434" "8013:pg3:5435")
+_PG_NODES=("8011:podpg-cls1-pg1:5433" "8012:podpg-cls1-pg2:5434" "8013:podpg-cls1-pg3:5435")
 
 # Connect to current Patroni primary — accepts any extra psql args
 function pg-primary() {
@@ -324,20 +326,20 @@ function pg-replica() {
 # Print Patroni cluster state, Keepalived VIPs, and HAProxy backend health
 function pg-status() {
   echo "=== Patroni cluster ==="
-  podman exec pg1 patronictl -c /etc/patroni/patroni.yml list 2>/dev/null \
-    || podman exec pg2 patronictl -c /etc/patroni/patroni.yml list 2>/dev/null \
+  podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list 2>/dev/null \
+    || podman exec podpg-cls1-pg2 patronictl -c /etc/patroni/patroni.yml list 2>/dev/null \
     || echo "ERROR: containers not reachable"
 
   echo ""
   echo "=== Keepalived VIPs ==="
-  for _n in pg1 pg2 pg3; do
+  for _n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
     podman exec "${_n}" ip addr show eth0 2>/dev/null \
       | awk -v node="${_n}" '/inet / && !/172\.18\.0\.1[123]\//{printf "  %-4s <- %s\n", node, $2}'
   done
 
   echo ""
   echo "=== HAProxy backends (be_write / be_read) ==="
-  for _n in pg1 pg2 pg3; do
+  for _n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
     if podman exec "${_n}" systemctl is-active haproxy >/dev/null 2>&1; then
       podman exec "${_n}" bash -c \
         'curl -s -u "admin:Pg@Lab2026!" "http://127.0.0.1:7000/;csv" \
@@ -347,9 +349,9 @@ function pg-status() {
   done
 }
 
-alias psql-pg1='psql service=pg1'
-alias psql-pg2='psql service=pg2'
-alias psql-pg3='psql service=pg3'
+alias psql-podpg-cls1-pg1='psql service=podpg-cls1-pg1'
+alias psql-podpg-cls1-pg2='psql service=podpg-cls1-pg2'
+alias psql-podpg-cls1-pg3='psql service=podpg-cls1-pg3'
 ```
 
 ### 5. ~/.vars_personal — PGPASSWORD
@@ -367,28 +369,28 @@ export PGPASSWORD=$PGPWD_PERSONAL
 
 ```bash
 # No password prompt — resolved via ~/.pgpass
-psql -h pg1 -p 5433 -U postgres postgres    # leader
-psql -h pg2 -p 5434 -U postgres postgres    # sync standby
-psql -h pg3 -p 5435 -U postgres postgres    # replica (nosync)
+psql -h podpg-cls1-pg1 -p 5433 -U postgres postgres    # leader
+psql -h podpg-cls1-pg2 -p 5434 -U postgres postgres    # sync standby
+psql -h podpg-cls1-pg3 -p 5435 -U postgres postgres    # replica (nosync)
 ```
 
 ### B. By hostname — pgBouncer (after /etc/hosts is set)
 
 ```bash
-psql -h pg1 -p 6433 -U postgres postgres
-psql -h pg2 -p 6434 -U postgres postgres
-psql -h pg3 -p 6435 -U postgres postgres
+psql -h podpg-cls1-pg1 -p 6433 -U postgres postgres
+psql -h podpg-cls1-pg2 -p 6434 -U postgres postgres
+psql -h podpg-cls1-pg3 -p 6435 -U postgres postgres
 ```
 
 ### C. Named service (after /etc/hosts is set)
 
 ```bash
-psql service=pg1            # direct PG on pg1
-psql service=pg2            # direct PG on pg2  (sync standby)
-psql service=pg3            # direct PG on pg3
-psql service=pg1-bouncer    # via pgBouncer on pg1
-psql service=pg1-rw         # as dba_rw on pg1
-psql service=pg1-ro         # as dba_ro on pg1
+psql service=podpg-cls1-pg1            # direct PG on podpg-cls1-pg1
+psql service=podpg-cls1-pg2            # direct PG on podpg-cls1-pg2  (sync standby)
+psql service=podpg-cls1-pg3            # direct PG on podpg-cls1-pg3
+psql service=podpg-cls1-pg1-bouncer    # via pgBouncer on podpg-cls1-pg1
+psql service=podpg-cls1-pg1-rw         # as dba_rw on podpg-cls1-pg1
+psql service=podpg-cls1-pg1-ro         # as dba_ro on podpg-cls1-pg1
 ```
 
 ### D. Dynamic shell functions — role-based (after /etc/hosts is set)
@@ -413,11 +415,11 @@ The VIPs float between containers. Accessible inside the podman network (not fro
 
 ```bash
 # Primary VIP (172.18.0.10) — always the Patroni leader
-podman exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5432 -U postgres postgres \
+podman exec podpg-cls1-pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5432 -U postgres postgres \
   -c "SELECT inet_server_addr(), pg_is_in_recovery();"'
 
 # Replica VIP (172.18.0.9) — highest-priority healthy replica
-podman exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.9 -p 5432 -U postgres postgres \
+podman exec podpg-cls1-pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.9 -p 5432 -U postgres postgres \
   -c "SELECT inet_server_addr(), pg_is_in_recovery();"'
 ```
 
@@ -428,17 +430,17 @@ read port goes only to replicas, regardless of which container's HAProxy you hit
 
 ```bash
 # Writes via primary VIP + HAProxy write port
-podman exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5000 -U postgres postgres \
+podman exec podpg-cls1-pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5000 -U postgres postgres \
   -c "SELECT inet_server_addr(), pg_is_in_recovery();"'
 # → always returns the primary node, is_replica=f
 
 # Reads via primary VIP + HAProxy read port
-podman exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5001 -U postgres postgres \
+podman exec podpg-cls1-pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5001 -U postgres postgres \
   -c "SELECT inet_server_addr(), pg_is_in_recovery();"'
 # → always returns a replica, is_replica=t
 
 # Reads via replica VIP + HAProxy read port
-podman exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.9 -p 5001 -U postgres postgres \
+podman exec podpg-cls1-pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.9 -p 5001 -U postgres postgres \
   -c "SELECT inet_server_addr(), pg_is_in_recovery();"'
 ```
 
@@ -449,23 +451,23 @@ These require the containers to be recreated (see Ansible Operations below).
 
 ```bash
 # Write port on each node's HAProxy — all route to the current primary
-psql -h localhost -p 15000 -U postgres postgres   # pg1 HAProxy write  ← usually primary
-psql -h localhost -p 25000 -U postgres postgres   # pg2 HAProxy write
-psql -h localhost -p 35000 -U postgres postgres   # pg3 HAProxy write
+psql -h localhost -p 15000 -U postgres postgres   # podpg-cls1-pg1 HAProxy write  ← usually primary
+psql -h localhost -p 25000 -U postgres postgres   # podpg-cls1-pg2 HAProxy write
+psql -h localhost -p 35000 -U postgres postgres   # podpg-cls1-pg3 HAProxy write
 
 # Read port on each node's HAProxy — all route to a healthy replica
-psql -h localhost -p 15001 -U postgres postgres   # pg1 HAProxy read
-psql -h localhost -p 25001 -U postgres postgres   # pg2 HAProxy read
-psql -h localhost -p 35001 -U postgres postgres   # pg3 HAProxy read
+psql -h localhost -p 15001 -U postgres postgres   # podpg-cls1-pg1 HAProxy read
+psql -h localhost -p 25001 -U postgres postgres   # podpg-cls1-pg2 HAProxy read
+psql -h localhost -p 35001 -U postgres postgres   # podpg-cls1-pg3 HAProxy read
 
 # HAProxy stats page (open in browser)
-open http://localhost:17000    # pg1 stats  (admin / Pg@Lab2026!)
-open http://localhost:27000    # pg2 stats
-open http://localhost:37000    # pg3 stats
+open http://localhost:17000    # podpg-cls1-pg1 stats  (admin / Pg@Lab2026!)
+open http://localhost:27000    # podpg-cls1-pg2 stats
+open http://localhost:37000    # podpg-cls1-pg3 stats
 
 # Using hostname aliases (after /etc/hosts)
-psql -h pg1 -p 15000 -U postgres postgres   # HAProxy write via pg1
-psql -h pg2 -p 25001 -U postgres postgres   # HAProxy read  via pg2
+psql -h podpg-cls1-pg1 -p 15000 -U postgres postgres   # HAProxy write via podpg-cls1-pg1
+psql -h podpg-cls1-pg2 -p 25001 -U postgres postgres   # HAProxy read  via podpg-cls1-pg2
 ```
 
 ---
@@ -474,32 +476,32 @@ psql -h pg2 -p 25001 -U postgres postgres   # HAProxy read  via pg2
 
 ```bash
 # Full cluster status (run from any node)
-podman exec pg2 patronictl -c /etc/patroni/patroni.yml list
+podman exec podpg-cls1-pg2 patronictl -c /etc/patroni/patroni.yml list
 
 # Cluster topology with history
-podman exec pg2 patronictl -c /etc/patroni/patroni.yml topology
+podman exec podpg-cls1-pg2 patronictl -c /etc/patroni/patroni.yml topology
 
 # Cluster event history (switchovers, failovers, timeline changes)
-podman exec pg2 patronictl -c /etc/patroni/patroni.yml history pg-podman-cls1
+podman exec podpg-cls1-pg2 patronictl -c /etc/patroni/patroni.yml history pg-podman-cls1
 
 # Replication lag check
-podman exec pg2 patronictl -c /etc/patroni/patroni.yml list | grep -E "Lag|Member"
+podman exec podpg-cls1-pg2 patronictl -c /etc/patroni/patroni.yml list | grep -E "Lag|Member"
 
 # Show current cluster config (DCS-stored parameters)
-podman exec pg2 patronictl -c /etc/patroni/patroni.yml show-config
+podman exec podpg-cls1-pg2 patronictl -c /etc/patroni/patroni.yml show-config
 
 # Edit DCS-stored cluster config
-podman exec pg2 patronictl -c /etc/patroni/patroni.yml edit-config
+podman exec podpg-cls1-pg2 patronictl -c /etc/patroni/patroni.yml edit-config
 
 # Patroni REST API — health check on each node
-curl -s http://localhost:8011/patroni | python3 -m json.tool   # pg1
-curl -s http://localhost:8012/patroni | python3 -m json.tool   # pg2
-curl -s http://localhost:8013/patroni | python3 -m json.tool   # pg3
+curl -s http://localhost:8011/patroni | python3 -m json.tool   # podpg-cls1-pg1
+curl -s http://localhost:8012/patroni | python3 -m json.tool   # podpg-cls1-pg2
+curl -s http://localhost:8013/patroni | python3 -m json.tool   # podpg-cls1-pg3
 
 # Check which node is primary (returns HTTP 200 only on primary, 503 otherwise)
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8011/primary   # pg1
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8012/primary   # pg2
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8013/primary   # pg3 (never primary)
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8011/primary   # podpg-cls1-pg1
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8012/primary   # podpg-cls1-pg2
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8013/primary   # podpg-cls1-pg3 (never primary)
 
 # Check which nodes are healthy replicas
 curl -s -o /dev/null -w "%{http_code}" http://localhost:8011/replica   # 200 if streaming replica
@@ -510,28 +512,28 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:8013/replica   # 200 if 
 # mode which aborts with "Aborted!" when Enter is pressed with no input.
 # --force suppresses the interactive confirmation prompt.
 # --leader  = current primary to step down  (check with: patronictl list)
-# --candidate = replica to promote; either pg1 or pg2 can be leader — pick the other one
+# --candidate = replica to promote; either podpg-cls1-pg1 or podpg-cls1-pg2 can be leader — pick the other one
 # Example (replace <current-leader> and <candidate> with actual node names):
-podman exec pg1 patronictl -c /etc/patroni/patroni.yml switchover pg-podman-cls1 \
+podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml switchover pg-podman-cls1 \
   --leader <current-leader> --candidate <candidate> --force
 
 # Trigger a manual failover (promotes a replica to leader)
-podman exec pg2 patronictl -c /etc/patroni/patroni.yml failover pg-podman-cls1 --force
+podman exec podpg-cls1-pg2 patronictl -c /etc/patroni/patroni.yml failover pg-podman-cls1 --force
 
 # Failover to a specific node
 # NOTE: Patroni 4.x uses --leader instead of the deprecated --master flag
-podman exec pg2 patronictl -c /etc/patroni/patroni.yml failover pg-podman-cls1 \
-  --leader pg2 --candidate pg1 --force
+podman exec podpg-cls1-pg2 patronictl -c /etc/patroni/patroni.yml failover pg-podman-cls1 \
+  --leader podpg-cls1-pg2 --candidate podpg-cls1-pg1 --force
 
 # Pause/resume Patroni automatic failover
-podman exec pg2 patronictl -c /etc/patroni/patroni.yml pause
-podman exec pg2 patronictl -c /etc/patroni/patroni.yml resume
+podman exec podpg-cls1-pg2 patronictl -c /etc/patroni/patroni.yml pause
+podman exec podpg-cls1-pg2 patronictl -c /etc/patroni/patroni.yml resume
 
 # Reload Patroni config after editing patroni.yml
-podman exec pg2 patronictl -c /etc/patroni/patroni.yml reload pg-podman-cls1
+podman exec podpg-cls1-pg2 patronictl -c /etc/patroni/patroni.yml reload pg-podman-cls1
 
 # Reinitialize a lagging/diverged replica
-podman exec pg2 patronictl -c /etc/patroni/patroni.yml reinit pg-podman-cls1 pg1 --force
+podman exec podpg-cls1-pg2 patronictl -c /etc/patroni/patroni.yml reinit pg-podman-cls1 podpg-cls1-pg1 --force
 ```
 
 ---
@@ -541,12 +543,12 @@ podman exec pg2 patronictl -c /etc/patroni/patroni.yml reinit pg-podman-cls1 pg1
 ```bash
 export PGPASSWORD='Pg@Lab2026!'
 
-# Connect to specific node (pg1 or pg2 may be leader at any time; use pg-primary for role-based access)
-psql -h localhost -p 5433 -U postgres postgres   # pg1
-psql -h localhost -p 5434 -U postgres postgres   # pg2
-psql -h localhost -p 5435 -U postgres postgres   # pg3 (always replica)
+# Connect to specific node (podpg-cls1-pg1 or podpg-cls1-pg2 may be leader at any time; use pg-primary for role-based access)
+psql -h localhost -p 5433 -U postgres postgres   # podpg-cls1-pg1
+psql -h localhost -p 5434 -U postgres postgres   # podpg-cls1-pg2
+psql -h localhost -p 5435 -U postgres postgres   # podpg-cls1-pg3 (always replica)
 
-# Replication status — lag in seconds and bytes (run on primary — pg1)
+# Replication status — lag in seconds and bytes (run on primary — podpg-cls1-pg1)
 # write_lag  : primary flush → standby wrote WAL to OS buffer  (network RTT)
 # flush_lag  : primary flush → standby flushed WAL to disk     (commit overhead for sync standby)
 # replay_lag : primary flush → standby applied WAL to data     (replica data staleness)
@@ -567,7 +569,7 @@ psql -h localhost -p 5433 -U postgres postgres -c "
   FROM pg_stat_replication
   ORDER BY client_addr;"
 
-# Check standby recovery status (run on replica — pg2 or pg3)
+# Check standby recovery status (run on replica — podpg-cls1-pg2 or podpg-cls1-pg3)
 # replication_delay: seconds since last transaction was replayed on this replica
 psql -h localhost -p 5434 -U postgres postgres -c "
   SELECT pg_is_in_recovery(),
@@ -576,19 +578,19 @@ psql -h localhost -p 5434 -U postgres postgres -c "
          pg_last_wal_replay_lsn(),
          round((pg_wal_lsn_diff(pg_last_wal_receive_lsn(), pg_last_wal_replay_lsn())) / 1048576.0, 2) AS receive_vs_replay_lag_mb;"
 
-# Active connections and sessions (run on primary — pg1)
+# Active connections and sessions (run on primary — podpg-cls1-pg1)
 psql -h localhost -p 5433 -U postgres postgres -c "
   SELECT count(*), state, wait_event_type, wait_event
   FROM pg_stat_activity GROUP BY state, wait_event_type, wait_event ORDER BY count DESC;"
 
-# Long-running queries (>30s) (run on primary — pg1)
+# Long-running queries (>30s) (run on primary — podpg-cls1-pg1)
 psql -h localhost -p 5433 -U postgres postgres -c "
   SELECT pid, now()-query_start AS duration, state, left(query,80) AS query
   FROM pg_stat_activity
   WHERE state != 'idle' AND query_start < now() - interval '30 seconds'
   ORDER BY duration DESC;"
 
-# pg_stat_statements top 10 by total time (run on primary — pg1)
+# pg_stat_statements top 10 by total time (run on primary — podpg-cls1-pg1)
 psql -h localhost -p 5433 -U postgres postgres -c "
   SELECT round(total_exec_time::numeric,2) AS total_ms,
          calls, round(mean_exec_time::numeric,2) AS mean_ms,
@@ -613,7 +615,7 @@ psql -h localhost -p 5433 -U postgres postgres -c "
 
 ```bash
 # HAProxy backend health summary (CSV stats from inside a container)
-podman exec pg2 bash -c \
+podman exec podpg-cls1-pg2 bash -c \
   'curl -s -u "admin:Pg@Lab2026!" "http://127.0.0.1:7000/;csv" \
    | grep -v "^#" | cut -d, -f1,2,18 \
    | awk -F, '"'"'{printf "%-12s %-8s %s\n", $1, $2, $3}'"'"''
@@ -622,31 +624,31 @@ podman exec pg2 bash -c \
 # From inside container: http://172.18.0.12:7000/  (admin / <PG_SUPERUSER_PWD>)
 
 # Check which backends are UP (for write port)
-podman exec pg2 bash -c \
+podman exec podpg-cls1-pg2 bash -c \
   'curl -s -u "admin:Pg@Lab2026!" "http://127.0.0.1:7000/;csv" \
    | grep "be_write" | cut -d, -f1,2,18 \
    | awk -F, '"'"'{printf "%-12s %-8s %s\n", $1, $2, $3}'"'"''
 
 # Check which backends are UP (for read port)
-podman exec pg2 bash -c \
+podman exec podpg-cls1-pg2 bash -c \
   'curl -s -u "admin:Pg@Lab2026!" "http://127.0.0.1:7000/;csv" \
    | grep "be_read" | cut -d, -f1,2,18 \
    | awk -F, '"'"'{printf "%-12s %-8s %s\n", $1, $2, $3}'"'"''
 
 # HAProxy service status on each node
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo "=== $n ==="; podman exec $n systemctl status haproxy --no-pager -l | tail -3
 done
 
 # Reload HAProxy config (no connection drops, used after config change)
-for n in pg1 pg2 pg3; do podman exec $n systemctl reload haproxy; done
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do podman exec $n systemctl reload haproxy; done
 
 # Verify HAProxy write port routes only to primary
-podman exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5000 \
+podman exec podpg-cls1-pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5000 \
   -U postgres -d postgres -c "SELECT inet_server_addr(), pg_is_in_recovery();"'
 
 # Verify HAProxy read port routes only to replica
-podman exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5001 \
+podman exec podpg-cls1-pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5001 \
   -U postgres -d postgres -c "SELECT inet_server_addr(), pg_is_in_recovery();"'
 ```
 
@@ -656,26 +658,26 @@ podman exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5001 \
 
 ```bash
 # Which node holds each VIP
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo "=== $n ===" && podman exec $n ip addr show eth0 | grep "inet "
 done
 # 172.18.0.10 (eth0:vip)    → Patroni primary (leader)
 # 172.18.0.9  (eth0:rvip)   → sync standby (Keepalived uses /synchronous endpoint)
 
 # Keepalived service status
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo "=== $n ===" && podman exec $n systemctl status keepalived --no-pager | tail -5
 done
 
 # VRRP state on each node (MASTER vs BACKUP)
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo -n "$n: "
   podman exec $n journalctl -u keepalived --no-pager -n 5 2>/dev/null \
     | grep -E "MASTER|BACKUP" | tail -2
 done
 
 # Keepalived effective priorities (shows weight contribution)
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo -n "$n primary check: "
   podman exec $n curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8008/primary
   echo -n "  replica check: "
@@ -684,11 +686,11 @@ for n in pg1 pg2 pg3; do
 done
 
 # Manually verify VIP reachability from inside cluster
-podman exec pg3 ping -c 2 172.18.0.10   # primary VIP
-podman exec pg3 ping -c 2 172.18.0.9    # replica VIP
+podman exec podpg-cls1-pg3 ping -c 2 172.18.0.10   # primary VIP
+podman exec podpg-cls1-pg3 ping -c 2 172.18.0.9    # replica VIP
 
 # Restart Keepalived (re-triggers VRRP election)
-for n in pg1 pg2 pg3; do podman exec $n systemctl restart keepalived; done
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do podman exec $n systemctl restart keepalived; done
 # Wait ~8s for election to settle then re-check VIP assignment
 ```
 
@@ -699,9 +701,9 @@ for n in pg1 pg2 pg3; do podman exec $n systemctl restart keepalived; done
 ```bash
 # pgBouncer admin console (from host via mapped port)
 export PGPASSWORD='Pg@Lab2026!'
-psql -h localhost -p 6433 -U postgres pgbouncer -c "SHOW POOLS;"    # pg1
-psql -h localhost -p 6434 -U postgres pgbouncer -c "SHOW POOLS;"    # pg2
-psql -h localhost -p 6435 -U postgres pgbouncer -c "SHOW POOLS;"    # pg3
+psql -h localhost -p 6433 -U postgres pgbouncer -c "SHOW POOLS;"    # podpg-cls1-pg1
+psql -h localhost -p 6434 -U postgres pgbouncer -c "SHOW POOLS;"    # podpg-cls1-pg2
+psql -h localhost -p 6435 -U postgres pgbouncer -c "SHOW POOLS;"    # podpg-cls1-pg3
 
 # All useful pgBouncer admin commands
 psql -h localhost -p 6434 -U postgres pgbouncer << 'EOF'
@@ -714,16 +716,16 @@ SHOW CONFIG;
 EOF
 
 # pgBouncer service status
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo "=== $n ===" && podman exec $n systemctl status pgbouncer --no-pager | tail -3
 done
 
 # Reload pgBouncer after config change
-for n in pg1 pg2 pg3; do podman exec $n systemctl reload pgbouncer; done
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do podman exec $n systemctl reload pgbouncer; done
 
 # Fix stale connection pool (SASL auth failures after failover)
 # This clears all server-side connections and forces reconnects
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo "Reconnecting $n pgBouncer pools..."
   podman exec $n bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 127.0.0.1 -p 6432 \
     -U postgres pgbouncer -c "RECONNECT;" 2>/dev/null' \
@@ -731,7 +733,7 @@ for n in pg1 pg2 pg3; do
 done
 
 # Check which PostgreSQL host each pgBouncer is pointing to
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo -n "$n pgbouncer → " && podman exec $n grep "^*" /etc/pgbouncer/pgbouncer.ini
 done
 ```
@@ -742,24 +744,24 @@ done
 
 ```bash
 # etcd cluster member list (from inside container)
-podman exec pg1 etcdctl --endpoints=http://172.18.0.11:2379 member list
+podman exec podpg-cls1-pg1 etcdctl --endpoints=http://172.18.0.11:2379 member list
 
 # etcd cluster health
-podman exec pg1 etcdctl \
+podman exec podpg-cls1-pg1 etcdctl \
   --endpoints=http://172.18.0.11:2379,http://172.18.0.12:2379,http://172.18.0.13:2379 \
   endpoint health
 
 # etcd endpoint status (leader, raft term, raft index)
-podman exec pg1 etcdctl \
+podman exec podpg-cls1-pg1 etcdctl \
   --endpoints=http://172.18.0.11:2379,http://172.18.0.12:2379,http://172.18.0.13:2379 \
   endpoint status --write-out=table
 
 # Read Patroni DCS key
-podman exec pg1 etcdctl --endpoints=http://172.18.0.11:2379 \
+podman exec podpg-cls1-pg1 etcdctl --endpoints=http://172.18.0.11:2379 \
   get /service/pg-podman-cls1/leader
 
 # etcd service status
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo "=== $n ===" && podman exec $n systemctl status etcd --no-pager | tail -3
 done
 ```
@@ -770,30 +772,30 @@ done
 
 ```bash
 # Show backup info (run from any node with access to shared volume)
-podman exec pg1 pgbackrest --stanza=pg-podman-cls1 info
+podman exec podpg-cls1-pg1 pgbackrest --stanza=pg-podman-cls1 info
 
-# Full backup (run on leader — pg1)
-podman exec pg1 pgbackrest --stanza=pg-podman-cls1 --log-level-console=info backup --type=full
+# Full backup (run on leader — podpg-cls1-pg1)
+podman exec podpg-cls1-pg1 pgbackrest --stanza=pg-podman-cls1 --log-level-console=info backup --type=full
 
 # Incremental backup
-podman exec pg1 pgbackrest --stanza=pg-podman-cls1 --log-level-console=info backup --type=incr
+podman exec podpg-cls1-pg1 pgbackrest --stanza=pg-podman-cls1 --log-level-console=info backup --type=incr
 
 # Differential backup
-podman exec pg1 pgbackrest --stanza=pg-podman-cls1 --log-level-console=info backup --type=diff
+podman exec podpg-cls1-pg1 pgbackrest --stanza=pg-podman-cls1 --log-level-console=info backup --type=diff
 
 # Check backup integrity
-podman exec pg1 pgbackrest --stanza=pg-podman-cls1 check
+podman exec podpg-cls1-pg1 pgbackrest --stanza=pg-podman-cls1 check
 
 # Restore (stop patroni first, then restore, then restart)
-podman exec pg1 systemctl stop patroni
-podman exec pg1 pgbackrest --stanza=pg-podman-cls1 --log-level-console=info restore --delta
-podman exec pg1 systemctl start patroni
+podman exec podpg-cls1-pg1 systemctl stop patroni
+podman exec podpg-cls1-pg1 pgbackrest --stanza=pg-podman-cls1 --log-level-console=info restore --delta
+podman exec podpg-cls1-pg1 systemctl start patroni
 
 # Point-in-time restore
-podman exec pg1 systemctl stop patroni
-podman exec pg1 pgbackrest --stanza=pg-podman-cls1 --log-level-console=info restore --delta \
+podman exec podpg-cls1-pg1 systemctl stop patroni
+podman exec podpg-cls1-pg1 pgbackrest --stanza=pg-podman-cls1 --log-level-console=info restore --delta \
   --target="2026-04-30 10:30:00" --target-action=promote
-podman exec pg1 systemctl start patroni
+podman exec podpg-cls1-pg1 systemctl start patroni
 ```
 
 ---
@@ -805,17 +807,17 @@ All commands use `podman exec` so they work from the host (ryzen9) terminal with
 ### PostgreSQL logs
 
 ```bash
-# Tail PostgreSQL log on the current leader (pg1)
-podman exec pg1 tail -100 /var/log/postgresql/postgresql-Wed.log
+# Tail PostgreSQL log on the current leader (podpg-cls1-pg1)
+podman exec podpg-cls1-pg1 tail -100 /var/log/postgresql/postgresql-Wed.log
 
 # Follow PostgreSQL log live
-podman exec pg1 bash -c "tail -f /var/log/postgresql/postgresql-$(date +%a).log"
+podman exec podpg-cls1-pg1 bash -c "tail -f /var/log/postgresql/postgresql-$(date +%a).log"
 
 # Search for errors in PostgreSQL log
-podman exec pg1 grep -i "ERROR\|FATAL\|PANIC" /var/log/postgresql/postgresql-Wed.log | tail -20
+podman exec podpg-cls1-pg1 grep -i "ERROR\|FATAL\|PANIC" /var/log/postgresql/postgresql-Wed.log | tail -20
 
 # PostgreSQL log on all nodes
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo "=== $n ===" && podman exec $n bash -c \
     "tail -20 /var/log/postgresql/postgresql-\$(date +%a).log 2>/dev/null || echo 'no log'"
 done
@@ -825,18 +827,18 @@ done
 
 ```bash
 # Patroni log on all nodes
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo "=== $n ===" && podman exec $n tail -30 /var/log/patroni/patroni.log
 done
 
 # Follow Patroni log live on leader
-podman exec pg1 tail -f /var/log/patroni/patroni.log
+podman exec podpg-cls1-pg1 tail -f /var/log/patroni/patroni.log
 
 # Patroni log via journald
-podman exec pg1 journalctl -u patroni --no-pager -n 50
+podman exec podpg-cls1-pg1 journalctl -u patroni --no-pager -n 50
 
 # Search for failover/switchover events
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo "=== $n ===" && podman exec $n grep -i "promoting\|demoting\|failover\|switchover\|leader" \
     /var/log/patroni/patroni.log | tail -10
 done
@@ -846,30 +848,30 @@ done
 
 ```bash
 # HAProxy logs via journald
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo "=== $n ===" && podman exec $n journalctl -u haproxy --no-pager -n 20
 done
 
 # Follow HAProxy log live
-podman exec pg1 journalctl -u haproxy -f
+podman exec podpg-cls1-pg1 journalctl -u haproxy -f
 
 # Check backend state changes in HAProxy log
-podman exec pg1 journalctl -u haproxy --no-pager | grep -i "UP\|DOWN\|BACKEND"
+podman exec podpg-cls1-pg1 journalctl -u haproxy --no-pager | grep -i "UP\|DOWN\|BACKEND"
 ```
 
 ### Keepalived logs
 
 ```bash
 # Keepalived VRRP election and VIP assignment events
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo "=== $n ===" && podman exec $n journalctl -u keepalived --no-pager -n 20
 done
 
 # Follow Keepalived log live (watch VIP migrations)
-podman exec pg1 journalctl -u keepalived -f
+podman exec podpg-cls1-pg1 journalctl -u keepalived -f
 
 # Show only MASTER/BACKUP transitions
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo -n "$n: " && podman exec $n journalctl -u keepalived --no-pager \
     | grep -E "MASTER STATE|BACKUP STATE" | tail -3
 done
@@ -879,15 +881,15 @@ done
 
 ```bash
 # pgBouncer log on all nodes
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo "=== $n ===" && podman exec $n tail -20 /var/log/pgbouncer/pgbouncer.log
 done
 
 # Follow pgBouncer log live
-podman exec pg1 tail -f /var/log/pgbouncer/pgbouncer.log
+podman exec podpg-cls1-pg1 tail -f /var/log/pgbouncer/pgbouncer.log
 
 # Search for auth errors
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo "=== $n ===" && podman exec $n grep -i "ERROR\|failed\|refused" \
     /var/log/pgbouncer/pgbouncer.log | tail -5
 done
@@ -897,29 +899,29 @@ done
 
 ```bash
 # pgBackRest backup log
-podman exec pg1 cat /var/log/pgbackrest/pg-podman-cls1-backup.log 2>/dev/null | tail -30
+podman exec podpg-cls1-pg1 cat /var/log/pgbackrest/pg-podman-cls1-backup.log 2>/dev/null | tail -30
 
 # List all pgBackRest logs
-podman exec pg1 ls /var/log/pgbackrest/
+podman exec podpg-cls1-pg1 ls /var/log/pgbackrest/
 
 # Check stanza status and health
-podman exec pg1 pgbackrest --stanza=pg-podman-cls1 info
-podman exec pg1 pgbackrest --stanza=pg-podman-cls1 check
+podman exec podpg-cls1-pg1 pgbackrest --stanza=pg-podman-cls1 info
+podman exec podpg-cls1-pg1 pgbackrest --stanza=pg-podman-cls1 check
 
 # Check stanza details (system-id, wal_system_identifier, etc.)
-podman exec pg1 sudo -u postgres pgbackrest --stanza=pg-podman-cls1 info --log-level-console=info
+podman exec podpg-cls1-pg1 sudo -u postgres pgbackrest --stanza=pg-podman-cls1 info --log-level-console=info
 ```
 
 ### etcd logs
 
 ```bash
 # etcd logs via journald
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo "=== $n ===" && podman exec $n journalctl -u etcd --no-pager -n 15
 done
 
 # etcd leader election events
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo "=== $n ===" && podman exec $n journalctl -u etcd --no-pager \
     | grep -i "elected\|leader\|follower" | tail -5
 done
@@ -933,24 +935,24 @@ done
 export PGPASSWORD='Pg@Lab2026!'
 
 # 1. Patroni cluster state
-podman exec pg2 patronictl -c /etc/patroni/patroni.yml list
+podman exec podpg-cls1-pg2 patronictl -c /etc/patroni/patroni.yml list
 
 # 2. VIP locations
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo -n "$n: " && podman exec $n ip addr show eth0 | grep "inet " | awk '{print $2}'
 done
 
 # 3. HAProxy backend health (1 line per backend)
-podman exec pg2 bash -c \
+podman exec podpg-cls1-pg2 bash -c \
   'curl -s -u "admin:Pg@Lab2026!" "http://127.0.0.1:7000/;csv" \
    | grep -v "^#\|FRONTEND" | cut -d, -f1,2,18'
 
 # 4. Write path: confirm connection lands on primary
-podman exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5000 \
+podman exec podpg-cls1-pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5000 \
   -U postgres postgres -c "SELECT inet_server_addr(), pg_is_in_recovery();"'
 
 # 5. Read path: confirm connection lands on a replica
-podman exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5001 \
+podman exec podpg-cls1-pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5001 \
   -U postgres postgres -c "SELECT inet_server_addr(), pg_is_in_recovery();"'
 
 # 6. All direct PG ports
@@ -968,12 +970,12 @@ for port in 6433 6434 6435; do
 done
 
 # 8. etcd health
-podman exec pg1 etcdctl \
+podman exec podpg-cls1-pg1 etcdctl \
   --endpoints=http://172.18.0.11:2379,http://172.18.0.12:2379,http://172.18.0.13:2379 \
   endpoint health
 
 # 9. pgBackRest stanza check
-podman exec pg1 pgbackrest --stanza=pg-podman-cls1 check
+podman exec podpg-cls1-pg1 pgbackrest --stanza=pg-podman-cls1 check
 ```
 
 ---
@@ -983,36 +985,36 @@ podman exec pg1 pgbackrest --stanza=pg-podman-cls1 check
 ```bash
 export PGPASSWORD='Pg@Lab2026!'
 
-# Step 1: Identify current leader and sync standby (either pg1 or pg2 may be leader)
-podman exec pg1 patronictl -c /etc/patroni/patroni.yml list
+# Step 1: Identify current leader and sync standby (either podpg-cls1-pg1 or podpg-cls1-pg2 may be leader)
+podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
 # Note the Leader and Sync Standby rows — use those names in the commands below.
-# pg3 always has nosync:true and is never promoted to sync standby, but CAN become leader in failover.
+# podpg-cls1-pg3 always has nosync:true and is never promoted to sync standby, but CAN become leader in failover.
 
 # Step 2: Graceful switchover — swap leader and sync standby
 # Replace <leader> with the current Leader node, <standby> with the Sync Standby node.
-podman exec pg1 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 \
+podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 \
   --leader <leader> --candidate <standby> --force
 
 # Step 3: Watch VIP migrate (run in a second terminal, re-runs every 2s)
-watch -n 2 'for n in pg1 pg2 pg3; do echo -n "$n: "; podman exec $n ip addr show eth0 | grep "inet " | awk "{print \$2}"; done'
+watch -n 2 'for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do echo -n "$n: "; podman exec $n ip addr show eth0 | grep "inet " | awk "{print \$2}"; done'
 
 # Step 4: Verify write connection lands on new leader (HAProxy updates within ~9s)
 sleep 10
-podman exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5000 \
+podman exec podpg-cls1-pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 172.18.0.10 -p 5000 \
   -U postgres postgres -c "SELECT inet_server_addr(), pg_is_in_recovery();"'
 
 # Simulate node failure — stop the current leader (check with patronictl list first)
-# The sync standby (pg1 or pg2) is automatically promoted — zero data loss
+# The sync standby (podpg-cls1-pg1 or podpg-cls1-pg2) is automatically promoted — zero data loss
 podman stop <leader>
 sleep 15
-podman exec pg1 patronictl -c /etc/patroni/patroni.yml list   # former standby is now leader
+podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list   # former standby is now leader
 
 # Recover failed node — it rejoins as replica and streams from the new leader
 podman start <former-leader>
 sleep 20
-podman exec pg1 patronictl -c /etc/patroni/patroni.yml list   # rejoined as replica
+podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list   # rejoined as replica
 # Switchover back if desired (restore any preferred topology)
-podman exec pg1 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 \
+podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 \
   --leader <current-leader> --candidate <former-leader> --force
 ```
 
@@ -1022,29 +1024,29 @@ podman exec pg1 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1
 
 ### DR Quick Overview
 
-**Scenario**: Both pg1 (Leader) & pg2 (Sync Standby) fail — pg3 (Replica with nosync: true) takes over.
+**Scenario**: Both podpg-cls1-pg1 (Leader) & podpg-cls1-pg2 (Sync Standby) fail — podpg-cls1-pg3 (Replica with nosync: true) takes over.
 
 **Key Points**:
 - ⚠️  **Automatic failover is DISABLED** in this cluster
-- ⚠️  **pg3 is async (nosync: true)** — NOT eligible for automatic election
-- ✅ **MANUAL COMMAND REQUIRED**: `patronictl failover pg-docker-cls1 --force` to promote pg3
-- ✅ **VIP (172.18.0.10) automatically migrates** to pg3 after promotion
+- ⚠️  **podpg-cls1-pg3 is async (nosync: true)** — NOT eligible for automatic election
+- ✅ **MANUAL COMMAND REQUIRED**: `patronictl failover pg-docker-cls1 --force` to promote podpg-cls1-pg3
+- ✅ **VIP (172.18.0.10) automatically migrates** to podpg-cls1-pg3 after promotion
 - ✅ **Applications reconnect transparently** to same VIP — no code changes needed
-- ✅ **Data is safe**: Writes on pg3 are persisted; pg1/pg2 catch up via WAL replay
+- ✅ **Data is safe**: Writes on podpg-cls1-pg3 are persisted; podpg-cls1-pg1/podpg-cls1-pg2 catch up via WAL replay
 
 ### DR Test Validation Matrix
 
 Track the state at each phase of the test. Example for Cycle 1:
 
-| Phase | Timeline | pg1 Role | pg2 Role | pg3 Role | pg1 State | pg2 State | pg3 State | VIP Location | Lag = 0 |
+| Phase | Timeline | podpg-cls1-pg1 Role | podpg-cls1-pg2 Role | podpg-cls1-pg3 Role | podpg-cls1-pg1 State | podpg-cls1-pg2 State | podpg-cls1-pg3 State | VIP Location | Lag = 0 |
 |-------|----------|----------|----------|----------|-----------|-----------|-----------|--------------|---------|
-| Pre-DR | 1 | Leader | Sync Standby | Replica | running | running | running | pg1 | ✓ |
-| Disaster | 1 | Leader | Sync Standby | Replica | **offline** | **offline** | running | pg1 (old) | N/A |
+| Pre-DR | 1 | Leader | Sync Standby | Replica | running | running | running | podpg-cls1-pg1 | ✓ |
+| Disaster | 1 | Leader | Sync Standby | Replica | **offline** | **offline** | running | podpg-cls1-pg1 (old) | N/A |
 | Detected | 1 | offline | offline | Replica | offline | offline | streaming | none | N/A |
-| Promoted | **2** | offline | offline | **Leader** | offline | offline | running | **pg3** | N/A |
-| DR Active | 2 | offline | offline | Leader | offline | offline | running | pg3 | N/A |
-| Recovery | 2 | Replica | Replica | Leader | starting | starting | running | pg3 | N/A → ✓ |
-| Restored | **3** | **Leader** | **Sync Standby** | **Replica** | running | streaming | streaming | **pg1** | ✓ |
+| Promoted | **2** | offline | offline | **Leader** | offline | offline | running | **podpg-cls1-pg3** | N/A |
+| DR Active | 2 | offline | offline | Leader | offline | offline | running | podpg-cls1-pg3 | N/A |
+| Recovery | 2 | Replica | Replica | Leader | starting | starting | running | podpg-cls1-pg3 | N/A → ✓ |
+| Restored | **3** | **Leader** | **Sync Standby** | **Replica** | running | streaming | streaming | **podpg-cls1-pg1** | ✓ |
 
 Repeat the same matrix for Cycle 2 and compare timings.
 
@@ -1055,22 +1057,22 @@ Repeat the same matrix for Cycle 2 and compare timings.
 ```bash
 # Step 1: Capture baseline topology
 echo "=== Baseline Topology ===" 
-podman exec pg1 patronictl -c /etc/patroni/patroni.yml list
+podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
 
 # Step 2: Verify VIP assignments
 echo "=== VIP Status ===" 
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo -n "$n: "
   podman exec $n ip addr show eth0 2>/dev/null | grep "172.18.0.1[09]" | awk '{print $2}'
 done
 
 # Step 3: Check HAProxy health
 echo "=== HAProxy Backend Status ===" 
-podman exec pg1 curl -s -u "admin:Pg@Lab2026!" "http://127.0.0.1:7000/;csv" | grep "pg_write"
+podman exec podpg-cls1-pg1 curl -s -u "admin:Pg@Lab2026!" "http://127.0.0.1:7000/;csv" | grep "pg_write"
 
 # Step 4: Verify etcd cluster
 echo "=== etcd Cluster Health ===" 
-podman exec pg1 etcdctl --endpoints=http://172.18.0.11:2379,http://172.18.0.12:2379,http://172.18.0.13:2379 endpoint health | wc -l
+podman exec podpg-cls1-pg1 etcdctl --endpoints=http://172.18.0.11:2379,http://172.18.0.12:2379,http://172.18.0.13:2379 endpoint health | wc -l
 echo "(Expected: 3 healthy members)"
 
 # Step 5: Baseline replication lag
@@ -1084,9 +1086,9 @@ echo "✅ PRE-DR VERIFICATION COMPLETE"
 ```
 
 **Expected State**:
-- pg1: Leader, pg2: Sync Standby, pg3: Replica
+- podpg-cls1-pg1: Leader, podpg-cls1-pg2: Sync Standby, podpg-cls1-pg3: Replica
 - Timeline: 1
-- VIP: 172.18.0.10 on pg1
+- VIP: 172.18.0.10 on podpg-cls1-pg1
 - Lag: 0.00 MB on both replicas
 - etcd: 3/3 healthy
 
@@ -1094,63 +1096,63 @@ echo "✅ PRE-DR VERIFICATION COMPLETE"
 
 ### Disaster Scenario
 
-**Purpose**: Simulate pg1 & pg2 failure and trigger manual failover
+**Purpose**: Simulate podpg-cls1-pg1 & podpg-cls1-pg2 failure and trigger manual failover
 
 ```bash
-# Step 1: Stop pg1 (Leader)
-echo "=== STOPPING pg1 (Leader) ===" 
-podman stop pg1
-echo "✓ pg1 stopped"
+# Step 1: Stop podpg-cls1-pg1 (Leader)
+echo "=== STOPPING podpg-cls1-pg1 (Leader) ===" 
+podman stop podpg-cls1-pg1
+echo "✓ podpg-cls1-pg1 stopped"
 
-# Step 2: Stop pg2 (Sync Standby)
-echo "=== STOPPING pg2 (Sync Standby) ===" 
-podman stop pg2
-echo "✓ pg2 stopped"
+# Step 2: Stop podpg-cls1-pg2 (Sync Standby)
+echo "=== STOPPING podpg-cls1-pg2 (Sync Standby) ===" 
+podman stop podpg-cls1-pg2
+echo "✓ podpg-cls1-pg2 stopped"
 
 # Step 3: Wait for Patroni to detect failure
 echo "=== Waiting for Patroni to detect failure..." 
 sleep 10
 
-# Step 4: Verify pg1 & pg2 offline
-echo "=== Verify pg1 & pg2 Offline ===" 
-podman ps --format "table {{.Names}}\t{{.Status}}" | grep -E "pg1|pg2|pg3"
+# Step 4: Verify podpg-cls1-pg1 & podpg-cls1-pg2 offline
+echo "=== Verify podpg-cls1-pg1 & podpg-cls1-pg2 Offline ===" 
+podman ps --format "table {{.Names}}\t{{.Status}}" | grep -E "podpg-cls1-pg1|podpg-cls1-pg2|podpg-cls1-pg3"
 
-# Step 5: Check cluster state (pg3 still Replica)
-# ⚠️ NOTE: When pg1 & pg2 are stopped, etcd loses quorum (2/3 down).
+# Step 5: Check cluster state (podpg-cls1-pg3 still Replica)
+# ⚠️ NOTE: When podpg-cls1-pg1 & podpg-cls1-pg2 are stopped, etcd loses quorum (2/3 down).
 # Patroni cannot connect to DCS — patronictl will timeout/fail.
-# Use direct PostgreSQL query to verify pg3 is still in recovery mode (replica):
-echo "=== Cluster State (pg3 should still be Replica) ===" 
-podman exec pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 127.0.0.1 -p 5432 -U postgres postgres -t -c "SELECT pg_is_in_recovery();"'
+# Use direct PostgreSQL query to verify podpg-cls1-pg3 is still in recovery mode (replica):
+echo "=== Cluster State (podpg-cls1-pg3 should still be Replica) ===" 
+podman exec podpg-cls1-pg3 bash -c 'PGPASSWORD="Pg@Lab2026!" psql -h 127.0.0.1 -p 5432 -U postgres postgres -t -c "SELECT pg_is_in_recovery();"'
 
-# Step 6: Check etcd status from pg3
-# ⚠️ NOTE: etcd will show "unhealthy cluster" when pg1 & pg2 are down (lost quorum).
+# Step 6: Check etcd status from podpg-cls1-pg3
+# ⚠️ NOTE: etcd will show "unhealthy cluster" when podpg-cls1-pg1 & podpg-cls1-pg2 are down (lost quorum).
 # This is EXPECTED — we proceed to failover anyway.
 echo "=== etcd Status (will show unhealthy due to quorum loss) ===" 
-podman exec pg3 etcdctl --endpoints=http://172.18.0.13:2379 endpoint health 2>&1 | grep -E "^http://|Error:" | head -1 || echo "Expected: etcd unhealthy due to lost quorum (2/3 nodes down)"
+podman exec podpg-cls1-pg3 etcdctl --endpoints=http://172.18.0.13:2379 endpoint health 2>&1 | grep -E "^http://|Error:" | head -1 || echo "Expected: etcd unhealthy due to lost quorum (2/3 nodes down)"
 
 # Step 7: ⚠️ CRITICAL LIMITATION ⚠️
-# patronictl failover CANNOT work when etcd has lost quorum (pg1 & pg2 down).
+# patronictl failover CANNOT work when etcd has lost quorum (podpg-cls1-pg1 & podpg-cls1-pg2 down).
 # The command will fail with: "Etcd is not responding properly"
 # 
 # REASON: patronictl requires DCS (etcd) to:
 #   1. Read current cluster state
 #   2. Write failover decision
-#   3. Communicate with pg3's Patroni daemon
+#   3. Communicate with podpg-cls1-pg3's Patroni daemon
 #
 # With 2/3 etcd nodes down → no quorum → no DCS operations possible
 #
 # WORKAROUND FOR TESTING:
-# Restart pg1 & pg2 FIRST to restore etcd quorum, THEN test failover:
+# Restart podpg-cls1-pg1 & podpg-cls1-pg2 FIRST to restore etcd quorum, THEN test failover:
 echo ""
 echo "⚠️  ETCD QUORUM LOST - Cannot proceed with patronictl failover"
-echo "⚠️  Solution: Restart pg1 & pg2 to restore etcd quorum FIRST"
+echo "⚠️  Solution: Restart podpg-cls1-pg1 & podpg-cls1-pg2 to restore etcd quorum FIRST"
 echo ""
 echo "Run this in a separate terminal:"
-echo "  podman start pg1 pg2"
+echo "  podman start podpg-cls1-pg1 podpg-cls1-pg2"
 echo "  sleep 20"
-echo "  podman exec pg3 patronictl -c /etc/patroni/patroni.yml list  # verify etcd healthy"
+echo "  podman exec podpg-cls1-pg3 patronictl -c /etc/patroni/patroni.yml list  # verify etcd healthy"
 echo ""
-echo "Then proceed with failover test by stopping pg1 & pg2 again"
+echo "Then proceed with failover test by stopping podpg-cls1-pg1 & podpg-cls1-pg2 again"
 echo ""
 echo "SKIPPING failover step (will work once etcd quorum is restored)"
 
@@ -1158,46 +1160,46 @@ echo "SKIPPING failover step (will work once etcd quorum is restored)"
 echo "=== Waiting for promotion..." 
 sleep 5
 
-# Step 9: Verify pg3 is now Leader
-echo "=== VERIFY pg3 PROMOTED TO LEADER ===" 
-podman exec pg3 patronictl -c /etc/patroni/patroni.yml list | grep "pg3"
+# Step 9: Verify podpg-cls1-pg3 is now Leader
+echo "=== VERIFY podpg-cls1-pg3 PROMOTED TO LEADER ===" 
+podman exec podpg-cls1-pg3 patronictl -c /etc/patroni/patroni.yml list | grep "podpg-cls1-pg3"
 
 echo ""
 echo "✅ DISASTER & PROMOTION COMPLETE (Timeline: 1→2)"
 ```
 
 **Expected State After Promotion**:
-- pg1: offline, pg2: offline, pg3: Leader
+- podpg-cls1-pg1: offline, podpg-cls1-pg2: offline, podpg-cls1-pg3: Leader
 - Timeline: 2 (advanced from 1)
-- pg3 State: running (not streaming)
-- VIP: should migrate to pg3
+- podpg-cls1-pg3 State: running (not streaming)
+- VIP: should migrate to podpg-cls1-pg3
 
 ---
 
 ### Manual Promotion
 
-**Purpose**: Promote pg3 to leader and verify it accepts writes
+**Purpose**: Promote podpg-cls1-pg3 to leader and verify it accepts writes
 
 ```bash
 # Step 1: Execute Manual Failover Command
 echo "=== Execute Manual Failover Command ===" 
-podman exec pg3 patronictl -c /etc/patroni/patroni.yml failover pg-docker-cls1 --force
+podman exec podpg-cls1-pg3 patronictl -c /etc/patroni/patroni.yml failover pg-docker-cls1 --force
 
 # Step 2: Wait for Promotion to Complete
 echo "=== Waiting 5 seconds for promotion to complete..." 
 sleep 5
 
-# Step 3: Verify pg3 is Now Leader
-echo "=== Verify pg3 is Now Leader ===" 
-podman exec pg3 patronictl -c /etc/patroni/patroni.yml list
+# Step 3: Verify podpg-cls1-pg3 is Now Leader
+echo "=== Verify podpg-cls1-pg3 is Now Leader ===" 
+podman exec podpg-cls1-pg3 patronictl -c /etc/patroni/patroni.yml list
 
-# Expected Output shows: pg3 | ... | Leader | running | 2 |
+# Expected Output shows: podpg-cls1-pg3 | ... | Leader | running | 2 |
 
-# Step 4: Verify pg3 Can Perform Writes (Critical Test)
+# Step 4: Verify podpg-cls1-pg3 Can Perform Writes (Critical Test)
 export PGPASSWORD='Pg@Lab2026!'
 echo ""
-echo "=== Verify pg3 Can Perform Writes ===" 
-podman exec pg3 psql -U postgres postgres -c \
+echo "=== Verify podpg-cls1-pg3 Can Perform Writes ===" 
+podman exec podpg-cls1-pg3 psql -U postgres postgres -c \
   "SELECT is_wal_replay_paused() AS replay_paused, pg_is_in_recovery() AS is_replica;"
 
 # Expected Output: f | f (NOT in recovery, can accept writes)
@@ -1206,15 +1208,15 @@ podman exec pg3 psql -U postgres postgres -c \
 
 **Expected State After Promotion**:
 - Timeline incremented from 1 to 2
-- pg3 State changed from "streaming" to "running"
-- pg3 Role changed from "Replica" to "Leader"
-- pg3 pg_is_in_recovery() returns FALSE
+- podpg-cls1-pg3 State changed from "streaming" to "running"
+- podpg-cls1-pg3 Role changed from "Replica" to "Leader"
+- podpg-cls1-pg3 pg_is_in_recovery() returns FALSE
 
 ---
 
 ### DR Mode Active
 
-**Purpose**: Test that pg3 accepts writes and verify health
+**Purpose**: Test that podpg-cls1-pg3 accepts writes and verify health
 
 ```bash
 # Step 1: Create DR Test Table and Insert Data
@@ -1228,7 +1230,7 @@ CREATE TABLE IF NOT EXISTS dr_test (
 );
 
 INSERT INTO dr_test (event) VALUES 
-  ('DR mode activated - pg3 is now leader'),
+  ('DR mode activated - podpg-cls1-pg3 is now leader'),
   ('Data written during DR on ' || now()::TEXT);
 
 SELECT COUNT(*) as total_records, MAX(created_at) as latest FROM dr_test;
@@ -1243,7 +1245,7 @@ psql -h localhost -p 5435 -U postgres postgres -c \
 # Step 3: Verify HAProxy Write Pool is Healthy
 echo ""
 echo "=== Verify HAProxy Write Pool ===" 
-podman exec pg3 curl -s -u "admin:Pg@Lab2026!" "http://127.0.0.1:7000/;csv" | grep -E "^pg_write"
+podman exec podpg-cls1-pg3 curl -s -u "admin:Pg@Lab2026!" "http://127.0.0.1:7000/;csv" | grep -E "^pg_write"
 
 # Step 4: Verify pgBouncer Connectivity via VIP
 echo ""
@@ -1253,39 +1255,39 @@ psql -h 172.18.0.10 -p 6435 -U postgres postgres -c "SELECT now();" 2>&1 | head 
 # Step 5: Verify Patroni Health Endpoints
 echo ""
 echo "=== Verify Patroni Health ===" 
-echo -n "pg3 /primary: "
+echo -n "podpg-cls1-pg3 /primary: "
 curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost:8013/primary
 
-echo -n "pg3 /replica: "
+echo -n "podpg-cls1-pg3 /replica: "
 curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost:8013/replica
 
 echo ""
-echo "✅ DR MODE VERIFIED: pg3 accepting user connections"
+echo "✅ DR MODE VERIFIED: podpg-cls1-pg3 accepting user connections"
 ```
 
 **Expected Output**:
 - dr_test table with 2 records
-- HAProxy pg_write backend shows pg3 as UP
+- HAProxy pg_write backend shows podpg-cls1-pg3 as UP
 - pgBouncer connection succeeds
-- pg3 /primary returns HTTP 200
-- pg3 /replica returns HTTP 503 (no replicas available)
+- podpg-cls1-pg3 /primary returns HTTP 200
+- podpg-cls1-pg3 /replica returns HTTP 503 (no replicas available)
 
 ---
 
 ### Recovery Phase
 
-**Purpose**: Bring pg1 & pg2 back online and monitor rejoin
+**Purpose**: Bring podpg-cls1-pg1 & podpg-cls1-pg2 back online and monitor rejoin
 
 ```bash
-# Step 1: Start pg1
-echo "=== Starting pg1 ===" 
-podman start pg1
-echo "✓ pg1 started"
+# Step 1: Start podpg-cls1-pg1
+echo "=== Starting podpg-cls1-pg1 ===" 
+podman start podpg-cls1-pg1
+echo "✓ podpg-cls1-pg1 started"
 
-# Step 2: Start pg2
-echo "=== Starting pg2 ===" 
-podman start pg2
-echo "✓ pg2 started"
+# Step 2: Start podpg-cls1-pg2
+echo "=== Starting podpg-cls1-pg2 ===" 
+podman start podpg-cls1-pg2
+echo "✓ podpg-cls1-pg2 started"
 
 # Step 3: Wait for Services to Start
 echo "=== Waiting 15 seconds for services to start..." 
@@ -1299,7 +1301,7 @@ for i in {1..15}; do
   echo "[T=${elapsed}s] Rejoin Check $i"
   
   # Show cluster state
-  status=$(podman exec pg3 patronictl -c /etc/patroni/patroni.yml list 2>/dev/null)
+  status=$(podman exec podpg-cls1-pg3 patronictl -c /etc/patroni/patroni.yml list 2>/dev/null)
   echo "$status" | grep -E "^[+-]|pg[123]" | head -5
   
   # Show current lag
@@ -1315,7 +1317,7 @@ done
 # Step 5: Final Rejoin Verification
 echo ""
 echo "=== RECOVERY COMPLETE ===" 
-podman exec pg3 patronictl -c /etc/patroni/patroni.yml list
+podman exec podpg-cls1-pg3 patronictl -c /etc/patroni/patroni.yml list
 
 # Step 6: Verify Final Replication Lag is Zero
 echo ""
@@ -1333,8 +1335,8 @@ echo "✅ RECOVERY PHASE COMPLETE (LAG: 0.00 MB)"
 ```
 
 **Expected State During Recovery**:
-- [T=10-20s]: pg1/pg2 in "archive recovery" phase
-- [T=20-40s]: pg1/pg2 in "streaming" phase, lag decreasing
+- [T=10-20s]: podpg-cls1-pg1/podpg-cls1-pg2 in "archive recovery" phase
+- [T=20-40s]: podpg-cls1-pg1/podpg-cls1-pg2 in "streaming" phase, lag decreasing
 - [T=40-60s]: All nodes "streaming", lag → 0.00 MB
 - Timeline: Still 2 (will advance to 3 after switchover)
 
@@ -1342,31 +1344,31 @@ echo "✅ RECOVERY PHASE COMPLETE (LAG: 0.00 MB)"
 
 ### Restore Topology
 
-**Purpose**: Switchover pg3 → pg1 to restore original topology
+**Purpose**: Switchover podpg-cls1-pg3 → podpg-cls1-pg1 to restore original topology
 
 ```bash
 # Step 1: Verify Current Leader
-echo "=== Current Leader (should be pg3) ===" 
-podman exec pg3 patronictl -c /etc/patroni/patroni.yml list | grep "Leader"
+echo "=== Current Leader (should be podpg-cls1-pg3) ===" 
+podman exec podpg-cls1-pg3 patronictl -c /etc/patroni/patroni.yml list | grep "Leader"
 
 # Step 2: Execute Switchover
 echo ""
-echo "=== EXECUTING SWITCHOVER: pg3 → pg1 ===" 
-podman exec pg3 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 \
-  --leader pg3 --candidate pg1 --force
+echo "=== EXECUTING SWITCHOVER: podpg-cls1-pg3 → podpg-cls1-pg1 ===" 
+podman exec podpg-cls1-pg3 patronictl -c /etc/patroni/patroni.yml switchover pg-docker-cls1 \
+  --leader podpg-cls1-pg3 --candidate podpg-cls1-pg1 --force
 
 # Step 3: Wait for Switchover to Complete
 echo "=== Waiting 10 seconds for switchover..." 
 sleep 10
 
-# Step 4: Verify pg1 is Now Leader (timeline should be 3)
+# Step 4: Verify podpg-cls1-pg1 is Now Leader (timeline should be 3)
 echo "=== VERIFY TOPOLOGY RESTORED ===" 
-podman exec pg1 patronictl -c /etc/patroni/patroni.yml list
+podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
 
-# Step 5: Verify VIP Migrated Back to pg1
+# Step 5: Verify VIP Migrated Back to podpg-cls1-pg1
 echo ""
 echo "=== Verify VIP Assignments ===" 
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo -n "$n: "
   podman exec $n ip addr show eth0 2>/dev/null | grep "172.18.0.1[09]" | awk '{print $2}'
 done
@@ -1390,14 +1392,14 @@ psql -h localhost -p 5433 -U postgres postgres -c \
 echo ""
 echo "✅ CYCLE COMPLETE"
 echo "Timeline Progression: 1 → 2 → 3 ✓"
-echo "Topology Restored: pg1=Leader, pg2=Standby, pg3=Replica ✓"
+echo "Topology Restored: podpg-cls1-pg1=Leader, podpg-cls1-pg2=Standby, podpg-cls1-pg3=Replica ✓"
 echo "Data Preserved: DR writes still present ✓"
 ```
 
 **Expected State After Restore**:
-- pg1: Leader, pg2: Sync Standby, pg3: Replica
+- podpg-cls1-pg1: Leader, podpg-cls1-pg2: Sync Standby, podpg-cls1-pg3: Replica
 - Timeline: 3 (advanced from 2)
-- VIP: 172.18.0.10 on pg1 (restored)
+- VIP: 172.18.0.10 on podpg-cls1-pg1 (restored)
 - Lag: 0.00 MB (all caught up)
 - dr_test table: 2 records (data preserved)
 
@@ -1422,9 +1424,9 @@ echo ""
 echo "=== Patroni REST API Health ===" 
 for port in 8011 8012 8013; do
   node=""
-  [ "$port" = "8011" ] && node="pg1"
-  [ "$port" = "8012" ] && node="pg2"
-  [ "$port" = "8013" ] && node="pg3"
+  [ "$port" = "8011" ] && node="podpg-cls1-pg1"
+  [ "$port" = "8012" ] && node="podpg-cls1-pg2"
+  [ "$port" = "8013" ] && node="podpg-cls1-pg3"
   echo -n "$node /patroni: "
   curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost:$port/patroni
 done
@@ -1443,7 +1445,7 @@ EOF
 # Step 4: etcd Cluster Healthy
 echo ""
 echo "=== etcd Cluster Healthy ===" 
-podman exec pg1 etcdctl --endpoints=http://172.18.0.11:2379,http://172.18.0.12:2379,http://172.18.0.13:2379 \
+podman exec podpg-cls1-pg1 etcdctl --endpoints=http://172.18.0.11:2379,http://172.18.0.12:2379,http://172.18.0.13:2379 \
   endpoint health
 
 # Step 5: Verify Data Integrity (DR writes preserved)
@@ -1468,16 +1470,16 @@ Timeline is a PostgreSQL concept that increments every time:
 3. A new WAL archive begins
 
 **In our DR test**:
-- **Pre-DR**: TL = 1 (pg1 is original leader)
-- **After pg3 promotion**: TL = 2 (pg3 created new timeline when promoted)
-- **After pg3 switches back to pg1**: TL = 3 (pg1 created new timeline after switchover)
+- **Pre-DR**: TL = 1 (podpg-cls1-pg1 is original leader)
+- **After podpg-cls1-pg3 promotion**: TL = 2 (podpg-cls1-pg3 created new timeline when promoted)
+- **After podpg-cls1-pg3 switches back to podpg-cls1-pg1**: TL = 3 (podpg-cls1-pg1 created new timeline after switchover)
 
 **Tracking Timeline During Each Phase**:
 
 ```bash
 # Track timeline on each node
-for n in pg1 pg2 pg3; do
-  port=$([[ "$n" == "pg1" ]] && echo 5433 || [[ "$n" == "pg2" ]] && echo 5434 || echo 5435)
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
+  port=$([[ "$n" == "podpg-cls1-pg1" ]] && echo 5433 || [[ "$n" == "podpg-cls1-pg2" ]] && echo 5434 || echo 5435)
   echo -n "$n: "
   podman exec $n pg_controldata /var/lib/postgresql/18/main 2>/dev/null | grep "Current wal level"
   echo -n "$n timeline: "
@@ -1499,7 +1501,7 @@ LSN tracks the exact byte position in the WAL (Write-Ahead Log). Key LSN values:
 # Monitor LSN movement (run during recovery phase)
 for i in {1..10}; do
   echo "=== LSN Check $i ==="
-  podman exec pg3 psql -U postgres postgres << 'EOF' -t 2>&1 | grep -v "^$"
+  podman exec podpg-cls1-pg3 psql -U postgres postgres << 'EOF' -t 2>&1 | grep -v "^$"
   SELECT 
     'LEADER' AS role,
     pg_current_wal_lsn() AS current_lsn,
@@ -1541,130 +1543,130 @@ LEADER: pg_current_wal_lsn() = 0/15500000
 
 **What Happens to Replication Slots During Failover?**
 
-Patroni manages replication slots automatically. During pg3 promotion:
+Patroni manages replication slots automatically. During podpg-cls1-pg3 promotion:
 
-1. **Before Promotion**: pg3 was a replica, not consuming slots
-2. **During Promotion**: Patroni doesn't create new slots on pg3 (it's now the leader)
-3. **After pg1/pg2 rejoin**: They reconnect as replicas, reusing their original slots
+1. **Before Promotion**: podpg-cls1-pg3 was a replica, not consuming slots
+2. **During Promotion**: Patroni doesn't create new slots on podpg-cls1-pg3 (it's now the leader)
+3. **After podpg-cls1-pg1/podpg-cls1-pg2 rejoin**: They reconnect as replicas, reusing their original slots
 
 **Monitor Slot Status During DR Test**:
 
 ```bash
-# Before disaster - verify slots on pg1
-podman exec pg1 psql -U postgres postgres -c \
+# Before disaster - verify slots on podpg-cls1-pg1
+podman exec podpg-cls1-pg1 psql -U postgres postgres -c \
   "SELECT slot_name, slot_type, restart_lsn, restart_lsn IS NULL AS inactive FROM pg_replication_slots ORDER BY slot_name;"
 
 # Expected Pre-DR Output:
 #  slot_name      | slot_type | restart_lsn | inactive
 # ----------------+-----------+-------------+----------
-#  pg2            | physical  | 0/12345678  | f
-#  pg3            | physical  | 0/12345678  | f
+#  podpg-cls1-pg2            | physical  | 0/12345678  | f
+#  podpg-cls1-pg3            | physical  | 0/12345678  | f
 
-# During DR mode - check slots on pg3 (now leader)
-podman exec pg3 psql -U postgres postgres -c \
+# During DR mode - check slots on podpg-cls1-pg3 (now leader)
+podman exec podpg-cls1-pg3 psql -U postgres postgres -c \
   "SELECT slot_name, slot_type, restart_lsn, restart_lsn IS NULL AS inactive FROM pg_replication_slots ORDER BY slot_name;"
 
-# Expected DR Mode Output: (0 rows - no slots on pg3 yet, replicas offline)
+# Expected DR Mode Output: (0 rows - no slots on podpg-cls1-pg3 yet, replicas offline)
 
-# After recovery - slots should re-activate on pg3
-podman exec pg3 psql -U postgres postgres -c \
+# After recovery - slots should re-activate on podpg-cls1-pg3
+podman exec podpg-cls1-pg3 psql -U postgres postgres -c \
   "SELECT slot_name, slot_type, restart_lsn, restart_lsn IS NULL AS inactive FROM pg_replication_slots ORDER BY slot_name;"
 
 # Expected Post-Recovery Output:
 #  slot_name      | slot_type | restart_lsn | inactive
 # ----------------+-----------+-------------+----------
-#  pg1            | physical  | 0/12345xxx  | f
-#  pg2            | physical  | 0/12345xxx  | f
+#  podpg-cls1-pg1            | physical  | 0/12345xxx  | f
+#  podpg-cls1-pg2            | physical  | 0/12345xxx  | f
 ```
 
 ---
 
 ### DR Troubleshooting
 
-#### Issue: pg3 Fails to Promote to Leader
+#### Issue: podpg-cls1-pg3 Fails to Promote to Leader
 
-**Symptom**: pg3 remains Replica even after pg1/pg2 stopped
+**Symptom**: podpg-cls1-pg3 remains Replica even after podpg-cls1-pg1/podpg-cls1-pg2 stopped
 
 **Diagnose**:
 ```bash
-podman exec pg3 patronictl -c /etc/patroni/patroni.yml list
+podman exec podpg-cls1-pg3 patronictl -c /etc/patroni/patroni.yml list
 
 # Check if Patroni is paused
-podman exec pg3 patronictl -c /etc/patroni/patroni.yml list | grep -i pause
+podman exec podpg-cls1-pg3 patronictl -c /etc/patroni/patroni.yml list | grep -i pause
 
 # If paused, resume it
-podman exec pg3 patronictl -c /etc/patroni/patroni.yml resume
+podman exec podpg-cls1-pg3 patronictl -c /etc/patroni/patroni.yml resume
 
 # Check etcd connectivity
-podman exec pg3 etcdctl --endpoints=http://172.18.0.13:2379 endpoint health
+podman exec podpg-cls1-pg3 etcdctl --endpoints=http://172.18.0.13:2379 endpoint health
 ```
 
-#### Issue: VIP Not Migrating to pg3
+#### Issue: VIP Not Migrating to podpg-cls1-pg3
 
-**Symptom**: VIP still on pg1 even though it's stopped
+**Symptom**: VIP still on podpg-cls1-pg1 even though it's stopped
 
 **Diagnose**:
 ```bash
 # Check Keepalived status
-podman exec pg3 systemctl status keepalived --no-pager
+podman exec podpg-cls1-pg3 systemctl status keepalived --no-pager
 
 # Check Keepalived log
-podman exec pg3 journalctl -u keepalived --no-pager -n 20
+podman exec podpg-cls1-pg3 journalctl -u keepalived --no-pager -n 20
 ```
 
 **Fix**:
 ```bash
-# Restart Keepalived on pg3
-podman exec pg3 systemctl restart keepalived
+# Restart Keepalived on podpg-cls1-pg3
+podman exec podpg-cls1-pg3 systemctl restart keepalived
 sleep 5
 
 # Verify VIP is assigned
-podman exec pg3 ip addr show eth0 | grep "172.18.0.10"
+podman exec podpg-cls1-pg3 ip addr show eth0 | grep "172.18.0.10"
 ```
 
-#### Issue: pg1/pg2 Not Rejoining After Start
+#### Issue: podpg-cls1-pg1/podpg-cls1-pg2 Not Rejoining After Start
 
 **Diagnose**:
 ```bash
-# Check pg1 patroni status
-podman exec pg1 systemctl status patroni --no-pager
+# Check podpg-cls1-pg1 patroni status
+podman exec podpg-cls1-pg1 systemctl status patroni --no-pager
 
-# Check pg1 patroni logs
-podman exec pg1 tail -50 /var/log/patroni/patroni.log
+# Check podpg-cls1-pg1 patroni logs
+podman exec podpg-cls1-pg1 tail -50 /var/log/patroni/patroni.log
 
-# Check if pg1 can connect to etcd
-podman exec pg1 etcdctl --endpoints=http://172.18.0.11:2379 endpoint health
+# Check if podpg-cls1-pg1 can connect to etcd
+podman exec podpg-cls1-pg1 etcdctl --endpoints=http://172.18.0.11:2379 endpoint health
 ```
 
 **Fix**:
 ```bash
-# Restart Patroni on pg1
-podman exec pg1 systemctl restart patroni
+# Restart Patroni on podpg-cls1-pg1
+podman exec podpg-cls1-pg1 systemctl restart patroni
 
 # Monitor rejoin
 sleep 10
-podman exec pg3 patronictl -c /etc/patroni/patroni.yml list
+podman exec podpg-cls1-pg3 patronictl -c /etc/patroni/patroni.yml list
 ```
 
 #### Issue: etcd Cluster Unhealthy
 
 **Check**:
 ```bash
-podman exec pg3 etcdctl --endpoints=http://172.18.0.11:2379,http://172.18.0.12:2379,http://172.18.0.13:2379 \
+podman exec podpg-cls1-pg3 etcdctl --endpoints=http://172.18.0.11:2379,http://172.18.0.12:2379,http://172.18.0.13:2379 \
   endpoint health
 ```
 
 **Fix**:
 ```bash
 # Check etcd service on that node
-podman exec pg1 systemctl status etcd --no-pager
+podman exec podpg-cls1-pg1 systemctl status etcd --no-pager
 
 # Restart etcd if needed
-podman exec pg1 systemctl restart etcd
+podman exec podpg-cls1-pg1 systemctl restart etcd
 sleep 5
 
 # Verify cluster again
-podman exec pg3 etcdctl --endpoints=http://172.18.0.11:2379,http://172.18.0.12:2379,http://172.18.0.13:2379 \
+podman exec podpg-cls1-pg3 etcdctl --endpoints=http://172.18.0.11:2379,http://172.18.0.12:2379,http://172.18.0.13:2379 \
   endpoint health
 ```
 
@@ -1673,59 +1675,59 @@ podman exec pg3 etcdctl --endpoints=http://172.18.0.11:2379,http://172.18.0.12:2
 ### Complete DR Test Verification Checklist
 
 #### Before Starting (Pre-DR Baseline)
-- [ ] All 3 nodes running (pg1 leader, pg2 standby, pg3 replica)
-- [ ] Cluster topology correct (pg1 Leader, pg2 Sync Standby, pg3 Replica nosync)
-- [ ] VIP on pg1 (172.18.0.10)
+- [ ] All 3 nodes running (podpg-cls1-pg1 leader, podpg-cls1-pg2 standby, podpg-cls1-pg3 replica)
+- [ ] Cluster topology correct (podpg-cls1-pg1 Leader, podpg-cls1-pg2 Sync Standby, podpg-cls1-pg3 Replica nosync)
+- [ ] VIP on podpg-cls1-pg1 (172.18.0.10)
 - [ ] All Patroni health endpoints returning correct HTTP codes
 - [ ] All PostgreSQL connections responding
-- [ ] HAProxy write pool showing pg1 as UP
+- [ ] HAProxy write pool showing podpg-cls1-pg1 as UP
 - [ ] Replication lag = 0.00 MB
-- [ ] Replication slots active for pg2 and pg3
+- [ ] Replication slots active for podpg-cls1-pg2 and podpg-cls1-pg3
 - [ ] etcd cluster healthy (all 3 members)
 - [ ] Baseline data snapshot captured
 
 #### Cycle 1: Full DR Test
 
 **Disaster & Promotion Phase**
-- [ ] pg1 and pg2 stopped successfully
-- [ ] Verify pg1/pg2 offline in 10 seconds
-- [ ] pg3 still Replica after stop
-- [ ] etcd still accessible from pg3
+- [ ] podpg-cls1-pg1 and podpg-cls1-pg2 stopped successfully
+- [ ] Verify podpg-cls1-pg1/podpg-cls1-pg2 offline in 10 seconds
+- [ ] podpg-cls1-pg3 still Replica after stop
+- [ ] etcd still accessible from podpg-cls1-pg3
 - [ ] Failover command issued: `patronictl failover --force`
-- [ ] pg3 promoted to Leader within 5 seconds
+- [ ] podpg-cls1-pg3 promoted to Leader within 5 seconds
 - [ ] Timeline advanced from 1 to 2
-- [ ] VIP migrated to pg3 (172.18.0.10)
-- [ ] pg3 is NOT in recovery (pg_is_in_recovery() = false)
-- [ ] HAProxy write pool now shows pg3 as UP
+- [ ] VIP migrated to podpg-cls1-pg3 (172.18.0.10)
+- [ ] podpg-cls1-pg3 is NOT in recovery (pg_is_in_recovery() = false)
+- [ ] HAProxy write pool now shows podpg-cls1-pg3 as UP
 
 **DR Mode Active Phase**
 - [ ] Create test table and insert data successfully
 - [ ] Data query returns records
-- [ ] pg3 /primary endpoint returns HTTP 200
-- [ ] pg3 /replica endpoint returns HTTP 503 (no replicas)
-- [ ] Patroni health shows only pg3 as member
+- [ ] podpg-cls1-pg3 /primary endpoint returns HTTP 200
+- [ ] podpg-cls1-pg3 /replica endpoint returns HTTP 503 (no replicas)
+- [ ] Patroni health shows only podpg-cls1-pg3 as member
 
 **Recovery & Rejoin Phase**
-- [ ] pg1 and pg2 started successfully
+- [ ] podpg-cls1-pg1 and podpg-cls1-pg2 started successfully
 - [ ] Containers running within 20 seconds
-- [ ] pg1 and pg2 detected by Patroni (not offline anymore)
+- [ ] podpg-cls1-pg1 and podpg-cls1-pg2 detected by Patroni (not offline anymore)
 - [ ] Archive recovery phase observed (10-30 seconds)
 - [ ] Streaming replication phase observed
-- [ ] Timeline on pg1/pg2 updated to 2
-- [ ] VIP remains on pg3 (still the leader)
+- [ ] Timeline on podpg-cls1-pg1/podpg-cls1-pg2 updated to 2
+- [ ] VIP remains on podpg-cls1-pg3 (still the leader)
 - [ ] Replication lag decreases over time
 - [ ] All replicas reach 0.00 MB lag
 - [ ] All 3 nodes operational (direct PostgreSQL connections work)
 
 **Switchover & Restore Phase**
-- [ ] pg3 verified as current leader before switchover
-- [ ] Switchover command executed: `patronictl switchover --leader pg3 --candidate pg1 --force`
-- [ ] pg1 promoted to Leader within 10 seconds
+- [ ] podpg-cls1-pg3 verified as current leader before switchover
+- [ ] Switchover command executed: `patronictl switchover --leader podpg-cls1-pg3 --candidate podpg-cls1-pg1 --force`
+- [ ] podpg-cls1-pg1 promoted to Leader within 10 seconds
 - [ ] Timeline advanced to 3
-- [ ] pg2 role changed to Sync Standby
-- [ ] pg3 role changed back to Replica
-- [ ] VIP migrated to pg1 (172.18.0.10)
-- [ ] Original topology restored (pg1=Leader, pg2=Standby, pg3=Replica)
+- [ ] podpg-cls1-pg2 role changed to Sync Standby
+- [ ] podpg-cls1-pg3 role changed back to Replica
+- [ ] VIP migrated to podpg-cls1-pg1 (172.18.0.10)
+- [ ] Original topology restored (podpg-cls1-pg1=Leader, podpg-cls1-pg2=Standby, podpg-cls1-pg3=Replica)
 
 **Post-Recovery Validation (Cycle 1)**
 - [ ] All 3 PostgreSQL nodes operational
@@ -1772,124 +1774,126 @@ Expected total time for Cycle 2: **90-120 seconds** (validation of consistency)
 
 ---
 
-## Multi-DC Standby Cluster Setup (pg4 — Region B)
+## Multi-DC Standby Cluster Setup (podpg-cls1-pg4 — Region B)
 
 ### Standby Cluster Overview
 
-pg4 runs in **Patroni standby cluster mode** — it streams WAL from the primary DC leader (via the
+podpg-cls1-pg4 runs in **Patroni standby cluster mode** — it streams WAL from the primary DC leader (via the
 floating VIP 172.18.0.10) and remains read-only until explicitly promoted. It shares the same cluster
 name (`pg-podman-cls1`) as the primary cluster, which enables seamless failover and failback.
 
 **Key Differences from a Normal Replica**:
 
-| Feature              | Normal Replica (pg2, pg3) | Standby Cluster (pg4)              |
+| Feature              | Normal Replica (podpg-cls1-pg2, podpg-cls1-pg3) | Standby Cluster (podpg-cls1-pg4)              |
 |----------------------|---------------------------|------------------------------------|
 | Managed by Patroni   | Yes (same cluster)        | Yes (separate Patroni instance)    |
 | etcd                 | Shared 3-node cluster     | Own single-node etcd               |
 | Read queries         | Via primary DC HAProxy    | Direct: localhost:5437             |
 | Write after promote  | Via switchover only       | Via `patronictl promote` or direct |
 | Cluster name         | pg-podman-cls1            | pg-podman-cls1 (same)              |
-| Streaming source     | primary (pg1)             | Primary VIP (172.18.0.10)          |
+| Streaming source     | primary (podpg-cls1-pg1)             | Primary VIP (172.18.0.10)          |
 
-### Setup pg4 Container
+### Setup podpg-cls1-pg4 Container
 
-pg4 is created alongside pg1–pg3 during Phase 1 (`playbook-setup-podman.yml`). The playbook loops
-over all containers; existing containers (pg1–pg3) are silently skipped so it is safe to re-run.
+podpg-cls1-pg4 is created alongside podpg-cls1-pg1–podpg-cls1-pg3 during Phase 1 (`playbook-setup-podman.yml`). The playbook loops
+over all containers; existing containers (podpg-cls1-pg1–podpg-cls1-pg3) are silently skipped so it is safe to re-run.
 
 ```bash
-cd playbook-install-pg-cluster-podman/
+cd playbook-install-pg-cluster-podman-etcd/
 
-# Create pg4 container (pg1-pg3 already running — they are skipped automatically)
-ansible-playbook playbook-setup-podman.yml --tags containers
+# Create podpg-cls1-pg4 container (podpg-cls1-pg1/pg2/pg3 already running — they are skipped automatically)
+ansible-playbook playbook-setup-podman.yml --tags containers 2>&1 | tee logs/playbook-setup-podman.yml.log
 
-# Verify pg4 container is running
-podman ps --filter name=pg4 --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+# Verify podpg-cls1-pg4 container is running
+podman ps --filter name=podpg-cls1-pg4 --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
-# Check pg4 container IP
-podman inspect pg4 | jq -r '.[0].NetworkSettings.Networks."lab-network".IPAddress'
+# Check podpg-cls1-pg4 container IP
+podman inspect podpg-cls1-pg4 | jq -r '.[0].NetworkSettings.Networks."lab-network".IPAddress'
 # Expected: 172.18.0.14
 ```
 
 ### Install Standby Cluster
 
 ```bash
-cd playbook-install-pg-cluster-podman/
+cd playbook-install-pg-cluster-podman-etcd/
 
-# Install standby cluster on pg4 (primary cluster must be running first)
-ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass
+# Install standby cluster on podpg-cls1-pg4 (primary cluster must be running first)
+ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass 2>&1 | tee logs/playbook-install-standby-cluster.yml.log
 
 # Install specific component only
 ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml \
-  --vault-password-file=vault-pass --tags patroni
+  --vault-password-file=vault-pass --tags patroni \
+  2>&1 | tee logs/playbook-install-standby-cluster.yml.log
 
 # Reinitialize standby (re-streams from primary from scratch)
 ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml \
-  --vault-password-file=vault-pass -e reinit_cluster=true
+  --vault-password-file=vault-pass -e reinit_cluster=true \
+  2>&1 | tee logs/playbook-install-standby-cluster.yml.log
 ```
 
 ### Verify Standby Streaming
 
 ```bash
-# ── From pg4: check Patroni sees it as standby leader ────────────────────────
-podman exec pg4 patronictl -c /etc/patroni/patroni.yml list
+# ── From podpg-cls1-pg4: check Patroni sees it as standby leader ────────────────────────
+podman exec podpg-cls1-pg4 patronictl -c /etc/patroni/patroni.yml list
 # Expected output:
 # + Cluster: pg-podman-cls1 (standby) ---+----------+
 # | Member | Host        | Role           | State     | TL | Lag in MB |
 # +--------+-------------+----------------+-----------+----+-----------+
-# | pg4    | 172.18.0.14 | Standby Leader | streaming |  1 |         0 |
+# | podpg-cls1-pg4    | 172.18.0.14 | Standby Leader | streaming |  1 |         0 |
 
-# ── From pg1: check pg4 is a streaming replica ───────────────────────────────
-podman exec pg1 psql -U postgres postgres -c \
+# ── From podpg-cls1-pg1: check podpg-cls1-pg4 is a streaming replica ───────────────────────────────
+podman exec podpg-cls1-pg1 psql -U postgres postgres -c \
   "SELECT client_addr, state, sync_state, sent_lsn, replay_lsn,
           ROUND((sent_lsn - replay_lsn)/1048576.0,2) AS lag_mb
    FROM pg_stat_replication
    WHERE client_addr = '172.18.0.14';"
 
-# ── Verify pg4 is in recovery (standby mode) ─────────────────────────────────
-podman exec pg4 psql -U postgres postgres -c "SELECT pg_is_in_recovery();"
-# Expected: t (true — pg4 is a standby)
+# ── Verify podpg-cls1-pg4 is in recovery (standby mode) ─────────────────────────────────
+podman exec podpg-cls1-pg4 psql -U postgres postgres -c "SELECT pg_is_in_recovery();"
+# Expected: t (true — podpg-cls1-pg4 is a standby)
 
-# ── Check streaming lag on pg4 ────────────────────────────────────────────────
-podman exec pg4 psql -U postgres postgres -c \
+# ── Check streaming lag on podpg-cls1-pg4 ────────────────────────────────────────────────
+podman exec podpg-cls1-pg4 psql -U postgres postgres -c \
   "SELECT now() - pg_last_xact_replay_timestamp() AS replication_lag;"
 
-# ── Verify pg4 etcd is healthy ────────────────────────────────────────────────
-podman exec pg4 etcdctl --endpoints=http://172.18.0.14:2379 endpoint health
+# ── Verify podpg-cls1-pg4 etcd is healthy ────────────────────────────────────────────────
+podman exec podpg-cls1-pg4 etcdctl --endpoints=http://172.18.0.14:2379 endpoint health
 
-# ── Monitor pg4 Patroni log ───────────────────────────────────────────────────
-podman exec pg4 tail -f /var/log/patroni/patroni.log
+# ── Monitor podpg-cls1-pg4 Patroni log ───────────────────────────────────────────────────
+podman exec podpg-cls1-pg4 tail -f /var/log/patroni/patroni.log
 ```
 
 ### Multi-DC DR: Promote Standby
 
-Use this when the entire Region A (primary DC) is down and you need to promote pg4 to accept writes.
+Use this when the entire Region A (primary DC) is down and you need to promote podpg-cls1-pg4 to accept writes.
 
 ```bash
 # ── Step 1: Verify Region A is down ──────────────────────────────────────────
-podman exec pg4 psql -h 172.18.0.10 -U postgres postgres -c "SELECT 1;" 2>&1 || \
+podman exec podpg-cls1-pg4 psql -h 172.18.0.10 -U postgres postgres -c "SELECT 1;" 2>&1 || \
   echo "Primary DC (172.18.0.10) is unreachable — safe to promote"
 
-# ── Step 2: Check pg4 replication lag before promoting ───────────────────────
-podman exec pg4 patronictl -c /etc/patroni/patroni.yml list
-podman exec pg4 psql -U postgres postgres -c \
+# ── Step 2: Check podpg-cls1-pg4 replication lag before promoting ───────────────────────
+podman exec podpg-cls1-pg4 patronictl -c /etc/patroni/patroni.yml list
+podman exec podpg-cls1-pg4 psql -U postgres postgres -c \
   "SELECT now() - pg_last_xact_replay_timestamp() AS lag;"
 
-# ── Step 3: Promote pg4 standby cluster ──────────────────────────────────────
+# ── Step 3: Promote podpg-cls1-pg4 standby cluster ──────────────────────────────────────
 # Option A: via patronictl (recommended — graceful)
-podman exec pg4 patronictl -c /etc/patroni/patroni.yml promote pg-podman-cls1 pg4 --force
+podman exec podpg-cls1-pg4 patronictl -c /etc/patroni/patroni.yml promote pg-podman-cls1 podpg-cls1-pg4 --force
 
 # Option B: via pg_promote() (direct)
-# podman exec pg4 psql -U postgres postgres -c "SELECT pg_promote();"
+# podman exec podpg-cls1-pg4 psql -U postgres postgres -c "SELECT pg_promote();"
 
-# ── Step 4: Verify pg4 is now the primary ────────────────────────────────────
-podman exec pg4 patronictl -c /etc/patroni/patroni.yml list
-# Expected: pg4 Role = Leader
+# ── Step 4: Verify podpg-cls1-pg4 is now the primary ────────────────────────────────────
+podman exec podpg-cls1-pg4 patronictl -c /etc/patroni/patroni.yml list
+# Expected: podpg-cls1-pg4 Role = Leader
 
-podman exec pg4 psql -U postgres postgres -c "SELECT pg_is_in_recovery();"
-# Expected: f (false — pg4 is now a standalone primary)
+podman exec podpg-cls1-pg4 psql -U postgres postgres -c "SELECT pg_is_in_recovery();"
+# Expected: f (false — podpg-cls1-pg4 is now a standalone primary)
 
-# ── Step 5: Test writes on pg4 ───────────────────────────────────────────────
-podman exec pg4 psql -U postgres postgres -c \
+# ── Step 5: Test writes on podpg-cls1-pg4 ───────────────────────────────────────────────
+podman exec podpg-cls1-pg4 psql -U postgres postgres -c \
   "CREATE TABLE IF NOT EXISTS dr_test_region_b (id serial, ts timestamptz DEFAULT now(), note text);
    INSERT INTO dr_test_region_b (note) VALUES ('Written after Region B promotion');
    SELECT * FROM dr_test_region_b;"
@@ -1900,44 +1904,45 @@ psql -h localhost -p 5437 -U postgres postgres -c "SELECT * FROM dr_test_region_
 
 ### Multi-DC DR: Failback to Primary DC
 
-After Region A is restored, re-establish pg4 as a standby streaming from the recovered primary.
+After Region A is restored, re-establish podpg-cls1-pg4 as a standby streaming from the recovered primary.
 
 ```bash
 # ── Step 1: Bring Region A back up ───────────────────────────────────────────
-podman start pg1 pg2 pg3
+podman start podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3
 sleep 15
 
 # Verify primary cluster recovered
-podman exec pg1 patronictl -c /etc/patroni/patroni.yml list
+podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
 
-# ── Step 2: Ensure pg1 is the leader in Region A ─────────────────────────────
-# If pg3 was promoted during recovery, switchover back to pg1:
-# podman exec pg1 patronictl -c /etc/patroni/patroni.yml switchover \
-#   pg-podman-cls1 --leader pg3 --candidate pg1 --force
+# ── Step 2: Ensure podpg-cls1-pg1 is the leader in Region A ─────────────────────────────
+# If podpg-cls1-pg3 was promoted during recovery, switchover back to podpg-cls1-pg1:
+# podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml switchover \
+#   pg-podman-cls1 --leader podpg-cls1-pg3 --candidate podpg-cls1-pg1 --force
 
-# ── Step 3: Check what data pg4 has that Region A may be missing ─────────────
-podman exec pg4 psql -U postgres postgres -c \
+# ── Step 3: Check what data podpg-cls1-pg4 has that Region A may be missing ─────────────
+podman exec podpg-cls1-pg4 psql -U postgres postgres -c \
   "SELECT pg_current_wal_lsn() AS pg4_lsn, timeline_id FROM pg_control_checkpoint();"
-podman exec pg1 psql -U postgres postgres -c \
+podman exec podpg-cls1-pg1 psql -U postgres postgres -c \
   "SELECT pg_current_wal_lsn() AS pg1_lsn, timeline_id FROM pg_control_checkpoint();"
 
-# ── Step 4: Export any data written to pg4 during DR (if needed) ─────────────
-# If you wrote to pg4 while it was promoted, export and import to primary:
-podman exec pg4 pg_dump -U postgres postgres -t dr_test_region_b > /tmp/dr_test_region_b.sql
-podman exec -i pg1 psql -U postgres postgres < /tmp/dr_test_region_b.sql
+# ── Step 4: Export any data written to podpg-cls1-pg4 during DR (if needed) ─────────────
+# If you wrote to podpg-cls1-pg4 while it was promoted, export and import to primary:
+podman exec podpg-cls1-pg4 pg_dump -U postgres postgres -t dr_test_region_b > /tmp/dr_test_region_b.sql
+podman exec -i podpg-cls1-pg1 psql -U postgres postgres < /tmp/dr_test_region_b.sql
 
-# ── Step 5: Re-initialize pg4 as standby of the restored primary ─────────────
-# pg4 must stream from the new primary — reinitialize via Ansible:
+# ── Step 5: Re-initialize podpg-cls1-pg4 as standby of the restored primary ─────────────
+# podpg-cls1-pg4 must stream from the new primary — reinitialize via Ansible:
 ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml \
-  --vault-password-file=vault-pass -e reinit_cluster=true
+  --vault-password-file=vault-pass -e reinit_cluster=true \
+  2>&1 | tee logs/playbook-install-standby-cluster.yml.log
 
-# ── Step 6: Verify pg4 is streaming again ────────────────────────────────────
+# ── Step 6: Verify podpg-cls1-pg4 is streaming again ────────────────────────────────────
 sleep 30
-podman exec pg4 patronictl -c /etc/patroni/patroni.yml list
-podman exec pg4 psql -U postgres postgres -c "SELECT pg_is_in_recovery();"
-# Expected: t (true — pg4 is back in standby mode)
+podman exec podpg-cls1-pg4 patronictl -c /etc/patroni/patroni.yml list
+podman exec podpg-cls1-pg4 psql -U postgres postgres -c "SELECT pg_is_in_recovery();"
+# Expected: t (true — podpg-cls1-pg4 is back in standby mode)
 
-podman exec pg1 psql -U postgres postgres -c \
+podman exec podpg-cls1-pg1 psql -U postgres postgres -c \
   "SELECT client_addr, state, sync_state, ROUND((sent_lsn - replay_lsn)/1048576.0,2) AS lag_mb
    FROM pg_stat_replication
    WHERE client_addr = '172.18.0.14';"
@@ -1945,56 +1950,56 @@ podman exec pg1 psql -U postgres postgres -c \
 
 ### Standby Cluster Troubleshooting
 
-#### pg4 not streaming (stays in "stopped" or "starting" state)
+#### podpg-cls1-pg4 not streaming (stays in "stopped" or "starting" state)
 
 ```bash
-# Check Patroni logs on pg4
-podman exec pg4 tail -50 /var/log/patroni/patroni.log | grep -E "ERROR|WARNING|streaming|standby"
+# Check Patroni logs on podpg-cls1-pg4
+podman exec podpg-cls1-pg4 tail -50 /var/log/patroni/patroni.log | grep -E "ERROR|WARNING|streaming|standby"
 
-# Verify pg4 can reach the primary VIP
-podman exec pg4 pg_isready -h 172.18.0.10 -p 5432
+# Verify podpg-cls1-pg4 can reach the primary VIP
+podman exec podpg-cls1-pg4 pg_isready -h 172.18.0.10 -p 5432
 # Expected: 172.18.0.10:5432 - accepting connections
 
-# Check replication slot created on primary for pg4
-podman exec pg1 psql -U postgres postgres -c \
-  "SELECT slot_name, active, restart_lsn FROM pg_replication_slots WHERE slot_name LIKE '%pg4%';"
+# Check replication slot created on primary for podpg-cls1-pg4
+podman exec podpg-cls1-pg1 psql -U postgres postgres -c \
+  "SELECT slot_name, active, restart_lsn FROM pg_replication_slots WHERE slot_name LIKE '%podpg-cls1-pg4%';"
 
-# Restart Patroni on pg4 to force reconnect
-podman exec pg4 systemctl restart patroni
+# Restart Patroni on podpg-cls1-pg4 to force reconnect
+podman exec podpg-cls1-pg4 systemctl restart patroni
 sleep 10
-podman exec pg4 patronictl -c /etc/patroni/patroni.yml list
+podman exec podpg-cls1-pg4 patronictl -c /etc/patroni/patroni.yml list
 ```
 
-#### pg4 etcd unhealthy
+#### podpg-cls1-pg4 etcd unhealthy
 
 ```bash
-# Check etcd status on pg4
-podman exec pg4 systemctl status etcd --no-pager
+# Check etcd status on podpg-cls1-pg4
+podman exec podpg-cls1-pg4 systemctl status etcd --no-pager
 
 # Check etcd logs
-podman exec pg4 journalctl -u etcd --no-pager -n 30
+podman exec podpg-cls1-pg4 journalctl -u etcd --no-pager -n 30
 
-# Restart etcd on pg4 (single-node, no quorum concern)
-podman exec pg4 systemctl restart etcd
+# Restart etcd on podpg-cls1-pg4 (single-node, no quorum concern)
+podman exec podpg-cls1-pg4 systemctl restart etcd
 sleep 5
-podman exec pg4 etcdctl --endpoints=http://172.18.0.14:2379 endpoint health
+podman exec podpg-cls1-pg4 etcdctl --endpoints=http://172.18.0.14:2379 endpoint health
 ```
 
-#### pg4 fails to promote
+#### podpg-cls1-pg4 fails to promote
 
 ```bash
-# Check if pg4 Patroni is paused
-podman exec pg4 patronictl -c /etc/patroni/patroni.yml list | grep -i pause
+# Check if podpg-cls1-pg4 Patroni is paused
+podman exec podpg-cls1-pg4 patronictl -c /etc/patroni/patroni.yml list | grep -i pause
 
 # If paused, resume
-podman exec pg4 patronictl -c /etc/patroni/patroni.yml resume
+podman exec podpg-cls1-pg4 patronictl -c /etc/patroni/patroni.yml resume
 
 # Verify primary is truly unreachable before promoting
-podman exec pg4 pg_isready -h 172.18.0.10 -p 5432
+podman exec podpg-cls1-pg4 pg_isready -h 172.18.0.10 -p 5432
 # Must time out / refuse connection before promoting
 
 # Manual pg_promote() if patronictl fails
-podman exec pg4 psql -U postgres postgres -c "SELECT pg_promote();"
+podman exec podpg-cls1-pg4 psql -U postgres postgres -c "SELECT pg_promote();"
 ```
 
 ---
@@ -2117,7 +2122,7 @@ Cause: Stale server-side pool connections (common after a Patroni failover/resta
 
 ```bash
 # Fix: reload pgBouncer to clear stale connections
-for n in pg1 pg2 pg3; do podman exec $n systemctl reload pgbouncer; done
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do podman exec $n systemctl reload pgbouncer; done
 ```
 
 ### Keepalived VIP not assigned (silent failure)
@@ -2127,7 +2132,7 @@ Symptom: `ip addr show eth0` shows no VIP despite Keepalived running.
 Common cause: Interface label too long (Linux limit: 15 chars). Check the log:
 
 ```bash
-podman exec pg1 journalctl -u keepalived --no-pager | grep -i "label\|removing\|no VIP"
+podman exec podpg-cls1-pg1 journalctl -u keepalived --no-pager | grep -i "label\|removing\|no VIP"
 ```
 
 Fix: Ensure labels in `keepalived.conf.j2` are ≤15 chars (e.g., `eth0:vip`, `eth0:rvip`).
@@ -2138,37 +2143,37 @@ Symptom: All backends DOWN in `be_write` or `be_read`.
 
 ```bash
 # Check if Patroni REST API is reachable
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo -n "$n /primary: "
   podman exec $n curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8008/primary
   echo
 done
 
 # Restart HAProxy if needed
-for n in pg1 pg2 pg3; do podman exec $n systemctl restart haproxy; done
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do podman exec $n systemctl restart haproxy; done
 ```
 
 ### Patroni failover not happening
 
 ```bash
 # Check if Patroni is paused
-podman exec pg2 patronictl -c /etc/patroni/patroni.yml list | grep -i pause
+podman exec podpg-cls1-pg2 patronictl -c /etc/patroni/patroni.yml list | grep -i pause
 
 # Resume if paused
-podman exec pg2 patronictl -c /etc/patroni/patroni.yml resume
+podman exec podpg-cls1-pg2 patronictl -c /etc/patroni/patroni.yml resume
 
 # Check etcd connectivity (DCS required for failover)
-podman exec pg2 etcdctl --endpoints=http://172.18.0.12:2379 endpoint health
+podman exec podpg-cls1-pg2 etcdctl --endpoints=http://172.18.0.12:2379 endpoint health
 ```
 
 ### Replica lagging behind
 
 ```bash
 # Check lag
-podman exec pg2 patronictl -c /etc/patroni/patroni.yml list
+podman exec podpg-cls1-pg2 patronictl -c /etc/patroni/patroni.yml list
 
 # Reinitialize lagging replica from scratch
-podman exec pg2 patronictl -c /etc/patroni/patroni.yml reinit pg-podman-cls1 pg3 --force
+podman exec podpg-cls1-pg2 patronictl -c /etc/patroni/patroni.yml reinit pg-podman-cls1 podpg-cls1-pg3 --force
 ```
 
 ### pgBackRest stanza system-id mismatch
@@ -2187,7 +2192,7 @@ manual data directory reset) but the old pgBackRest stanza metadata still exists
 
 ```bash
 # SSH into the leader container and switch to postgres user
-podman exec -it pg1 bash
+podman exec -it podpg-cls1-pg1 bash
 su - postgres
 
 # Delete the old stanza (all backups for this stanza will be removed)
@@ -2204,7 +2209,7 @@ exit
 exit
 
 # Now run a full backup
-podman exec pg1 pgbackrest --stanza=pg-podman-cls1 --log-level-console=info backup --type=full
+podman exec podpg-cls1-pg1 pgbackrest --stanza=pg-podman-cls1 --log-level-console=info backup --type=full
 ```
 
 **Note**: The stanza-delete + stanza-create cycle re-synchronizes pgBackRest with the current
@@ -2228,10 +2233,10 @@ the interface.
 
 ```bash
 # Identify which node is the current Patroni primary
-podman exec pg1 patronictl -c /etc/patroni/patroni.yml list
+podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
 
 # Check current VIP assignments
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo -n "$n: "
   podman exec $n ip addr show eth0 | grep "inet " | awk '{print $2}' | tr '\n' ' '; echo
 done
@@ -2241,7 +2246,7 @@ podman exec <primary_node> systemctl restart keepalived
 sleep 5
 
 # Verify VIP is now assigned
-for n in pg1 pg2 pg3; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3; do
   echo -n "$n: "
   podman exec $n ip addr show eth0 | grep "inet " | awk '{print $2}' | tr '\n' ' '; echo
 done
@@ -2261,13 +2266,13 @@ podman ps --format "table {{.Names}}\t{{.Ports}}" | grep pg
 
 # If ports like 15000/25000/35000 are missing, recreate containers:
 # 1. Destroy containers (volumes are named and survive this step — data is safe)
-podman rm -f pg1 pg2 pg3
+podman rm -f podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3
 
 # 2. Recreate with correct port mappings (reads from roles/podman_infrastructure/defaults/main.yml)
-ansible-playbook playbook-setup-podman.yml
+ansible-playbook playbook-setup-podman.yml 2>&1 | tee logs/playbook-setup-podman.yml.log
 
 # 3. Reinstall cluster software on the fresh containers
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
+ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass 2>&1 | tee logs/playbook-install-pg-cluster.yml.log
 ```
 
 ### psql password authentication failed despite correct ~/.pgpass
@@ -2301,33 +2306,33 @@ ls -la ~/.pgpass   # must be 600
 Symptom: write queries hang indefinitely; `pg_stat_replication` shows `sync_state = sync` for the
 sync standby but `sent_lsn != flush_lsn`.
 
-Cause: The sync standby (whichever of pg1/pg2 holds that role) is down or lagging. The primary
+Cause: The sync standby (whichever of podpg-cls1-pg1/podpg-cls1-pg2 holds that role) is down or lagging. The primary
 waits for it to confirm WAL receipt before committing (`synchronous_commit = on`,
 `synchronous_node_count = 1`).
 
 ```bash
 # Check replication state on primary — use pg-primary or patronictl list to identify it first
-podman exec pg1 patronictl -c /etc/patroni/patroni.yml list
+podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
 pg-primary -c "SELECT client_addr, state, sync_state, sent_lsn, flush_lsn FROM pg_stat_replication;"
 
 # Check Patroni status on the sync standby node
 podman exec <sync-standby-node> systemctl status patroni
 
 # If the sync standby is down and you need writes to continue immediately — temporarily switch to async:
-podman exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-podman-cls1 \
+podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-podman-cls1 \
   --force -p synchronous_mode=false
 # Restore sync mode once the sync standby is back and caught up:
-podman exec pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-podman-cls1 \
+podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml edit-config pg-podman-cls1 \
   --force -p synchronous_mode=true
 ```
 
 ### Container won't start after podman Desktop restart
 
 ```bash
-podman start pg1 pg2 pg3
+podman start podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3
 sleep 5
 # Services (patroni, etcd, pgbouncer, haproxy, keepalived) are enabled and auto-start
-podman exec pg1 patronictl -c /etc/patroni/patroni.yml list
+podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
 ```
 
 ### etcd quorum lost (2 of 3 nodes down)
@@ -2335,9 +2340,9 @@ podman exec pg1 patronictl -c /etc/patroni/patroni.yml list
 The cluster becomes read-only (no Patroni operations). Restart at least 2 nodes:
 
 ```bash
-podman start pg1 pg2
+podman start podpg-cls1-pg1 podpg-cls1-pg2
 sleep 10
-podman exec pg1 etcdctl \
+podman exec podpg-cls1-pg1 etcdctl \
   --endpoints=http://172.18.0.11:2379,http://172.18.0.12:2379 \
   endpoint health
 ```
@@ -2346,18 +2351,18 @@ podman exec pg1 etcdctl \
 
 ## Container Setup Phase (Podman)
 
-This setup uses **Podman** exclusively on Ubuntu 24.04. All 4 containers (pg1–pg4) are created in Phase 1.
+This setup uses **Podman** exclusively on Ubuntu 24.04. All 4 containers (podpg-cls1-pg1–podpg-cls1-pg4) are created in Phase 1.
 
 ### Phase 1: Podman Setup (All Containers)
 
 ```bash
-cd playbook-install-pg-cluster-podman/
+cd playbook-install-pg-cluster-podman-etcd/
 
-# Creates pg1, pg2, pg3 (primary DC) + pg4 (standby DC) on lab-network
-ansible-playbook playbook-setup-podman.yml
+# Creates podpg-cls1-pg1, podpg-cls1-pg2, podpg-cls1-pg3 (primary DC) + podpg-cls1-pg4 (standby DC) on lab-network
+ansible-playbook playbook-setup-podman.yml 2>&1 | tee logs/playbook-setup-podman.yml.log
 
 # Re-run containers step only (existing containers are skipped — safe to run alongside live cluster)
-ansible-playbook playbook-setup-podman.yml --tags containers
+ansible-playbook playbook-setup-podman.yml --tags containers 2>&1 | tee logs/playbook-setup-podman.yml.log
 ```
 
 **Benefits**:
@@ -2365,17 +2370,17 @@ ansible-playbook playbook-setup-podman.yml --tags containers
 - Shared lab-network compatible with other lab containers (mongo, sqlserver, etc.)
 - Identical port mappings to the reference Docker-based setup
 
-### Phase 2a: Primary Cluster Installation (pg1, pg2, pg3)
+### Phase 2a: Primary Cluster Installation (podpg-cls1-pg1, podpg-cls1-pg2, podpg-cls1-pg3)
 
 ```bash
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
+ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass 2>&1 | tee logs/playbook-install-pg-cluster.yml.log
 ```
 
-### Phase 2b: Standby Cluster Installation (pg4 — Region B)
+### Phase 2b: Standby Cluster Installation (podpg-cls1-pg4 — Region B)
 
 ```bash
 # Run after primary cluster is fully operational
-ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass
+ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass 2>&1 | tee logs/playbook-install-standby-cluster.yml.log
 ```
 
 ---
@@ -2383,78 +2388,90 @@ ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-passw
 ## Common Ansible Operations
 
 ```bash
-cd playbook-install-pg-cluster-podman/
+cd playbook-install-pg-cluster-podman-etcd/
 
-# ── PRIMARY CLUSTER (pg1, pg2, pg3) ──────────────────────────────────────────
+# ── PRIMARY CLUSTER (podpg-cls1-pg1, podpg-cls1-pg2, podpg-cls1-pg3) ──────────────────────────────────────────
 # Full setup: containers + cluster install
-ansible-playbook playbook-setup-podman.yml
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
+ansible-playbook playbook-setup-podman.yml 2>&1 | tee logs/playbook-setup-podman.yml.log
+ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass 2>&1 | tee logs/playbook-install-pg-cluster.yml.log
 
 # Install/reconfigure a single component only (primary cluster)
 ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
-  --vault-password-file=vault-pass --tags haproxy
+  --vault-password-file=vault-pass --tags haproxy \
+  2>&1 | tee logs/playbook-install-pg-cluster.yml.log
 ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
-  --vault-password-file=vault-pass --tags keepalived
+  --vault-password-file=vault-pass --tags keepalived \
+  2>&1 | tee logs/playbook-install-pg-cluster.yml.log
 ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
-  --vault-password-file=vault-pass --tags haproxy,keepalived
+  --vault-password-file=vault-pass --tags haproxy,keepalived \
+  2>&1 | tee logs/playbook-install-pg-cluster.yml.log
 ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
-  --vault-password-file=vault-pass --tags patroni
+  --vault-password-file=vault-pass --tags patroni \
+  2>&1 | tee logs/playbook-install-pg-cluster.yml.log
 ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
-  --vault-password-file=vault-pass --tags pgbouncer
+  --vault-password-file=vault-pass --tags pgbouncer \
+  2>&1 | tee logs/playbook-install-pg-cluster.yml.log
 ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
-  --vault-password-file=vault-pass --tags pgbackrest
+  --vault-password-file=vault-pass --tags pgbackrest \
+  2>&1 | tee logs/playbook-install-pg-cluster.yml.log
 ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
-  --vault-password-file=vault-pass --tags etcd
+  --vault-password-file=vault-pass --tags etcd \
+  2>&1 | tee logs/playbook-install-pg-cluster.yml.log
 
 # Reinitialize primary cluster (DESTROYS ALL DATA — keeps packages)
 ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
-  --vault-password-file=vault-pass -e reinit_cluster=true
+  --vault-password-file=vault-pass -e reinit_cluster=true \
+  2>&1 | tee logs/playbook-install-pg-cluster.yml.log
 
 # Reinitialize without confirmation prompt (CI/automation)
 ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
-  --vault-password-file=vault-pass -e reinit_cluster=true -e skip_confirm=true
+  --vault-password-file=vault-pass -e reinit_cluster=true -e skip_confirm=true \
+  2>&1 | tee logs/playbook-install-pg-cluster.yml.log
 
 # Reinitialize + wipe all pgBackRest backups
 ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml \
   --vault-password-file=vault-pass \
-  -e reinit_cluster=true -e skip_confirm=true -e cleanup_pgbackrest_backups=true
+  -e reinit_cluster=true -e skip_confirm=true -e cleanup_pgbackrest_backups=true \
+  2>&1 | tee logs/playbook-install-pg-cluster.yml.log
 
-# ── STANDBY CLUSTER (pg4 — Region B) ─────────────────────────────────────────
+# ── STANDBY CLUSTER (podpg-cls1-pg4 — Region B) ─────────────────────────────────────────
 # Install standby cluster (primary cluster must be running first)
-ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass
+ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass 2>&1 | tee logs/playbook-install-standby-cluster.yml.log
 
 # Install specific component on standby only
 ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml \
-  --vault-password-file=vault-pass --tags patroni
+  --vault-password-file=vault-pass --tags patroni \
+  2>&1 | tee logs/playbook-install-standby-cluster.yml.log
 
 # Reinitialize standby from scratch (re-streams from primary)
 ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml \
-  --vault-password-file=vault-pass -e reinit_cluster=true
+  --vault-password-file=vault-pass -e reinit_cluster=true \
+  2>&1 | tee logs/playbook-install-standby-cluster.yml.log
 
 # ── VAULT & CREDENTIALS ───────────────────────────────────────────────────────
 # Edit vault credentials
 ansible-vault edit sensitive-values --vault-password-file=vault-pass
 
 # ── SSH INTO CONTAINERS ───────────────────────────────────────────────────────
-ssh -i ~/.ssh/id_ed25519 -p 2221 -o StrictHostKeyChecking=no ansible@127.0.0.1   # pg1
-ssh -i ~/.ssh/id_ed25519 -p 2222 -o StrictHostKeyChecking=no ansible@127.0.0.1   # pg2
-ssh -i ~/.ssh/id_ed25519 -p 2223 -o StrictHostKeyChecking=no ansible@127.0.0.1   # pg3
-ssh -i ~/.ssh/id_ed25519 -p 2224 -o StrictHostKeyChecking=no ansible@127.0.0.1   # pg4 (standby)
+ssh -i ~/.ssh/id_ed25519 -p 2221 -o StrictHostKeyChecking=no ansible@127.0.0.1   # podpg-cls1-pg1
+ssh -i ~/.ssh/id_ed25519 -p 2222 -o StrictHostKeyChecking=no ansible@127.0.0.1   # podpg-cls1-pg2
+ssh -i ~/.ssh/id_ed25519 -p 2223 -o StrictHostKeyChecking=no ansible@127.0.0.1   # podpg-cls1-pg3
+ssh -i ~/.ssh/id_ed25519 -p 2224 -o StrictHostKeyChecking=no ansible@127.0.0.1   # podpg-cls1-pg4 (standby)
 
 # ── CONTAINER LIFECYCLE ───────────────────────────────────────────────────────
 # Stop/start all containers (primary + standby)
-podman stop pg1 pg2 pg3 pg4 && podman start pg1 pg2 pg3 pg4
+podman stop podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3 podpg-cls1-pg4 && podman start podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3 podpg-cls1-pg4
 
 # Stop/start primary cluster only
-podman stop pg1 pg2 pg3 && podman start pg1 pg2 pg3
+podman stop podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3 && podman start podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3
 
 # Stop/start standby only
-podman stop pg4 && podman start pg4
+podman stop podpg-cls1-pg4 && podman start podpg-cls1-pg4
 
 # Full teardown — WARNING: destroys all data
-podman rm -f pg1 pg2 pg3 pg4
-podman volume rm pg-data-pg1 pg-data-pg2 pg-data-pg3 pg-data-pg4 \
-                 pg-logs-pg1 pg-logs-pg2 pg-logs-pg3 pg-logs-pg4 pg-backups
+podman rm -f podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3 podpg-cls1-pg4
+podman volume rm pg-data-podpg-cls1-pg1 pg-data-podpg-cls1-pg2 pg-data-podpg-cls1-pg3 pg-data-podpg-cls1-pg4 \
+                 pg-logs-podpg-cls1-pg1 pg-logs-podpg-cls1-pg2 pg-logs-podpg-cls1-pg3 pg-logs-podpg-cls1-pg4 pg-backups
 ```
 
 ---
@@ -2466,9 +2483,9 @@ scrape_configs:
   - job_name: postgresql_podman
     static_configs:
       - targets:
-          - 'host.podman.internal:9194'   # pg1
-          - 'host.podman.internal:9195'   # pg2
-          - 'host.podman.internal:9196'   # pg3
+          - 'host.podman.internal:9194'   # podpg-cls1-pg1
+          - 'host.podman.internal:9195'   # podpg-cls1-pg2
+          - 'host.podman.internal:9196'   # podpg-cls1-pg3
         labels:
           cluster: pg-podman-cls1
           env: podman-local
@@ -2514,10 +2531,10 @@ scrape_configs:
   when containers are recreated. The container-internal ports (5000/5001/7000) are always active.
 
 - **Synchronous replication**: `synchronous_mode: true` with `synchronous_node_count: 1` — every
-  commit on the leader must be acknowledged by the sync standby (whichever of pg1/pg2 holds that
-  role) before returning to the client. pg3 is excluded via `nosync: true` and never holds the sync
+  commit on the leader must be acknowledged by the sync standby (whichever of podpg-cls1-pg1/podpg-cls1-pg2 holds that
+  role) before returning to the client. podpg-cls1-pg3 is excluded via `nosync: true` and never holds the sync
   standby role. If the sync standby goes down, writes on the leader will block until it recovers (or
-  sync mode is temporarily disabled via `patronictl edit-config`). Failover between pg1 and pg2 is
+  sync mode is temporarily disabled via `patronictl edit-config`). Failover between podpg-cls1-pg1 and podpg-cls1-pg2 is
   always zero data loss.
 
 - **Passwords**: must NOT contain `$` (PostgreSQL dollar-quote delimiter breaks Patroni post-bootstrap SQL).
@@ -2530,21 +2547,21 @@ scrape_configs:
 ## Podman Infrastructure Conversion
 
 This directory implements the PostgreSQL cluster exclusively using **Podman** on Ubuntu 24.04, with
-a multi-datacenter architecture (pg1–pg3 primary, pg4 standby).
+a multi-datacenter architecture (podpg-cls1-pg1–podpg-cls1-pg3 primary, podpg-cls1-pg4 standby).
 
 ### Key Playbooks and Roles
 
 | File | Purpose | Notes |
 |------|---------|-------|
-| `playbook-setup-podman.yml` | Create all containers (pg1–pg4) | Phase 1 — runs before cluster install |
-| `playbook-install-pg-cluster.yml` | Install primary cluster | Phase 2a — pg1, pg2, pg3 only |
-| `playbook-install-standby-cluster.yml` | Install standby cluster | Phase 2b — pg4 only |
+| `playbook-setup-podman.yml` | Create all containers (podpg-cls1-pg1–podpg-cls1-pg4) | Phase 1 — runs before cluster install |
+| `playbook-install-pg-cluster.yml` | Install primary cluster | Phase 2a — podpg-cls1-pg1, podpg-cls1-pg2, podpg-cls1-pg3 only |
+| `playbook-install-standby-cluster.yml` | Install standby cluster | Phase 2b — podpg-cls1-pg4 only |
 | `playbook-cleanup.yml` | Teardown all containers + volumes | Uses podman commands |
-| `roles/podman_infrastructure/` | Podman container orchestration role | pg1–pg4 definitions |
+| `roles/podman_infrastructure/` | Podman container orchestration role | podpg-cls1-pg1–podpg-cls1-pg4 definitions |
 | `roles/podman_infrastructure/defaults/main.yml` | Container definitions (network, ports, volumes) | All 4 nodes |
 | `roles/podman_infrastructure/tasks/custom/pg_containers.yml` | Create all pg containers | Podman-specific syntax |
-| `roles/pg_cluster/templates/patroni.yml.j2` | Patroni config (with standby_cluster block) | Conditional for pg4 |
-| `roles/pg_cluster/templates/etcd.env.j2` | etcd config (single-node for pg4) | Conditional bootstrap |
+| `roles/pg_cluster/templates/patroni.yml.j2` | Patroni config (with standby_cluster block) | Conditional for podpg-cls1-pg4 |
+| `roles/pg_cluster/templates/etcd.env.j2` | etcd config (single-node for podpg-cls1-pg4) | Conditional bootstrap |
 
 ### Testing Results
 
@@ -2552,13 +2569,13 @@ a multi-datacenter architecture (pg1–pg3 primary, pg4 standby).
 **Host**: ryzen9 (Ubuntu 24.04)
 **Podman Version**: 3.4.2+
 
-✓ **Containers created successfully** with lab-network attachment (pg1:172.18.0.11, pg2:172.18.0.12, pg3:172.18.0.13, pg4:172.18.0.14)
+✓ **Containers created successfully** with lab-network attachment (podpg-cls1-pg1:172.18.0.11, podpg-cls1-pg2:172.18.0.12, podpg-cls1-pg3:172.18.0.13, podpg-cls1-pg4:172.18.0.14)
 ✓ **PostgreSQL 18 primary cluster installed** with full Patroni HA + etcd + HAProxy + Keepalived
-✓ **Primary cluster operational**: pg1 as Leader, pg2 as Sync Standby, pg3 as Replica
+✓ **Primary cluster operational**: podpg-cls1-pg1 as Leader, podpg-cls1-pg2 as Sync Standby, podpg-cls1-pg3 as Replica
 ✓ **VIPs assigned**: Primary 172.18.0.10, Replica 172.18.0.9
 ✓ **All services running**: PostgreSQL, Patroni, etcd, pgBouncer, HAProxy, Keepalived, pg_exporter
 ✓ **Volumes persistent**: Data survives container restart
-✓ **Standby cluster (pg4)**: Streams from primary VIP; read-only until promoted
+✓ **Standby cluster (podpg-cls1-pg4)**: Streams from primary VIP; read-only until promoted
 
 ### Container Lifecycle (Podman)
 
@@ -2567,23 +2584,23 @@ a multi-datacenter architecture (pg1–pg3 primary, pg4 standby).
 podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep pg
 
 # Verify ports are exposed
-podman port pg1
-podman port pg4
+podman port podpg-cls1-pg1
+podman port podpg-cls1-pg4
 
 # Verify network attachment
-podman inspect pg4 | jq '.[0].NetworkSettings.Networks."lab-network".IPAddress'
+podman inspect podpg-cls1-pg4 | jq '.[0].NetworkSettings.Networks."lab-network".IPAddress'
 
 # Destroy all containers (data lost)
-podman rm -f pg1 pg2 pg3 pg4
+podman rm -f podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3 podpg-cls1-pg4
 
 # Destroy all volumes (persistent data lost)
-podman volume rm pg-data-pg1 pg-data-pg2 pg-data-pg3 pg-data-pg4 \
-                 pg-logs-pg1 pg-logs-pg2 pg-logs-pg3 pg-logs-pg4 pg-backups
+podman volume rm pg-data-podpg-cls1-pg1 pg-data-podpg-cls1-pg2 pg-data-podpg-cls1-pg3 pg-data-podpg-cls1-pg4 \
+                 pg-logs-podpg-cls1-pg1 pg-logs-podpg-cls1-pg2 pg-logs-podpg-cls1-pg3 pg-logs-podpg-cls1-pg4 pg-backups
 
 # Recreate fresh multi-DC cluster
-ansible-playbook playbook-setup-podman.yml
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
-ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass
+ansible-playbook playbook-setup-podman.yml 2>&1 | tee logs/playbook-setup-podman.yml.log
+ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass 2>&1 | tee logs/playbook-install-pg-cluster.yml.log
+ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass 2>&1 | tee logs/playbook-install-standby-cluster.yml.log
 ```
 
 ---
@@ -2600,23 +2617,23 @@ This section explains multi-region DCS deployment strategies and how they impact
 
 **Problem with Co-Located DCS** (current lab setup):
 ```
-pg1: PostgreSQL + Patroni + etcd
-pg2: PostgreSQL + Patroni + etcd
-pg3: PostgreSQL + Patroni + etcd
+podpg-cls1-pg1: PostgreSQL + Patroni + etcd
+podpg-cls1-pg2: PostgreSQL + Patroni + etcd
+podpg-cls1-pg3: PostgreSQL + Patroni + etcd
 ```
 
-When pg1 & pg2 stop → etcd loses quorum → patronictl failover fails ❌
+When podpg-cls1-pg1 & podpg-cls1-pg2 stop → etcd loses quorum → patronictl failover fails ❌
 
 **Solution with Separate DCS** (production setup):
 ```
 PostgreSQL Cluster       DCS Cluster (Separate)
-├── pg1 (Patroni)       ├── etcd1 (India)
-├── pg2 (Patroni)       ├── etcd2 (US East)
-└── pg3 (Patroni)       └── etcd3 (EU)
+├── podpg-cls1-pg1 (Patroni)       ├── etcd1 (India)
+├── podpg-cls1-pg2 (Patroni)       ├── etcd2 (US East)
+└── podpg-cls1-pg3 (Patroni)       └── etcd3 (EU)
                         (Always running, independent)
 ```
 
-When pg1 & pg2 stop → etcd still has quorum → patronictl failover works ✅
+When podpg-cls1-pg1 & podpg-cls1-pg2 stop → etcd still has quorum → patronictl failover works ✅
 
 ### DCS Quorum Rules (Critical for DR)
 
@@ -2719,11 +2736,11 @@ Tolerates: 1 entire region failure + 1 additional node failure
 With properly distributed separate DCS cluster:
 
 **Before**: Co-located etcd (current)
-- Stop pg1 & pg2 → etcd quorum lost → DR test fails ❌
-- Workaround: Restart pg1 & pg2 to restore quorum, then test
+- Stop podpg-cls1-pg1 & podpg-cls1-pg2 → etcd quorum lost → DR test fails ❌
+- Workaround: Restart podpg-cls1-pg1 & podpg-cls1-pg2 to restore quorum, then test
 
 **After**: Separate distributed etcd (production)
-- Stop pg1 & pg2 → DCS unaffected → DR test works perfectly ✅
+- Stop podpg-cls1-pg1 & podpg-cls1-pg2 → DCS unaffected → DR test works perfectly ✅
 - Can test complete failure scenarios without DCS interference
 - Failover works as designed
 
@@ -2788,7 +2805,7 @@ etcdctl --endpoints=https://etcd1:2379,https://etcd2:2379,https://etcd3:2379,htt
 **Monitor Patroni connectivity to DCS**:
 ```bash
 # Patroni logs should show healthy DCS connection
-pg1: journalctl -u patroni -f | grep -i "dcs\|etcd"
+podpg-cls1-pg1: journalctl -u patroni -f | grep -i "dcs\|etcd"
 
 # All nodes should show quorum achieved
 patronictl -c /etc/patroni/patroni.yml list
@@ -2806,7 +2823,7 @@ ping etcd5  # India ↔ EU
 | Factor | Lab Setup | Production Setup |
 |--------|-----------|------------------|
 | DCS Location | Co-located with PG | Separate nodes |
-| DCS Nodes | 3 (on pg1, pg2, pg3) | 5+ across regions |
+| DCS Nodes | 3 (on podpg-cls1-pg1, podpg-cls1-pg2, podpg-cls1-pg3) | 5+ across regions |
 | Quorum Resilience | Fails when 2 PG nodes down | Survives PG failures |
 | DR Test Works | No (need workaround) | Yes (complete test) |
 | Region Failure | Cluster unavailable | Cluster available |
@@ -2823,26 +2840,26 @@ unset PGPASSWORD
 
 ### Connect to podman container prompt, and connect to postgresql
 ```bash
-saanvi@ryzen9:~/PostgreSQL-Learning$ podman exec -it pg2 bash
-root@pg2:/# patronictl -c /etc/patroni/patroni.yml list
+saanvi@ryzen9:~/PostgreSQL-Learning$ podman exec -it podpg-cls1-pg2 bash
+root@podpg-cls1-pg2:/# patronictl -c /etc/patroni/patroni.yml list
 + Cluster: pg-podman-cls1 (7634451494908218688) --+-----------+
 | Member | Host        | Role    | State     | TL | Lag in MB |
 +--------+-------------+---------+-----------+----+-----------+
-| pg1    | 172.18.0.11 | Replica | streaming |  2 |         0 |
-| pg2    | 172.18.0.12 | Leader  | running   |  2 |           |
-| pg3    | 172.18.0.13 | Replica | streaming |  2 |         0 |
+| podpg-cls1-pg1    | 172.18.0.11 | Replica | streaming |  2 |         0 |
+| podpg-cls1-pg2    | 172.18.0.12 | Leader  | running   |  2 |           |
+| podpg-cls1-pg3    | 172.18.0.13 | Replica | streaming |  2 |         0 |
 +--------+-------------+---------+-----------+----+-----------+
-root@pg2:/# 
-root@pg2:/# su - postgres
-postgres@pg2:~$ psql
+root@podpg-cls1-pg2:/# 
+root@podpg-cls1-pg2:/# su - postgres
+postgres@podpg-cls1-pg2:~$ psql
 psql (18.3 (Ubuntu 18.3-1.pgdg24.04+1))
 Type "help" for help.
 
 postgres=# 
 postgres=# \q
-postgres@pg2:~$ exit
+postgres@podpg-cls1-pg2:~$ exit
 logout
-root@pg2:/# 
+root@podpg-cls1-pg2:/# 
 ```
 
 ### Add environment variable
@@ -2858,10 +2875,10 @@ EOF
 tee -a /etc/hosts << 'EOF'
 
 # PostgreSQL podman cluster — lab-network 172.18.0.0/16
-172.18.0.11  pg1    # PostgreSQL :5433  pgBouncer :6433  Patroni :8011  (Primary DC)
-172.18.0.12  pg2    # PostgreSQL :5434  pgBouncer :6434  Patroni :8012  (Primary DC)
-172.18.0.13  pg3    # PostgreSQL :5435  pgBouncer :6435  Patroni :8013  (Primary DC)
-172.18.0.14  pg4    # PostgreSQL :5437  pgBouncer :6436  Patroni :8014  (Standby DC)
+172.18.0.11  podpg-cls1-pg1    # PostgreSQL :5433  pgBouncer :6433  Patroni :8011  (Primary DC)
+172.18.0.12  podpg-cls1-pg2    # PostgreSQL :5434  pgBouncer :6434  Patroni :8012  (Primary DC)
+172.18.0.13  podpg-cls1-pg3    # PostgreSQL :5435  pgBouncer :6435  Patroni :8013  (Primary DC)
+172.18.0.14  podpg-cls1-pg4    # PostgreSQL :5437  pgBouncer :6436  Patroni :8014  (Standby DC)
 
 172.18.0.10 pg-primary pg-leader
 172.18.0.9  pg-replica
@@ -2871,20 +2888,20 @@ EOF
 ### Take SSH of containers
 ```bash
 # Primary DC
-ssh -p 2221 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_ed25519 ansible@127.0.0.1 "patronictl -c /etc/patroni/patroni.yml list" 2>/dev/null  # pg1
-ssh -p 2224 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_ed25519 ansible@127.0.0.1 "patronictl -c /etc/patroni/patroni.yml list" 2>/dev/null  # pg4 (standby)
+ssh -p 2221 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_ed25519 ansible@127.0.0.1 "patronictl -c /etc/patroni/patroni.yml list" 2>/dev/null  # podpg-cls1-pg1
+ssh -p 2224 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_ed25519 ansible@127.0.0.1 "patronictl -c /etc/patroni/patroni.yml list" 2>/dev/null  # podpg-cls1-pg4 (standby)
 ```
 
 ### Quick status check (all nodes)
 ```bash
 # All nodes — cluster status
-for n in pg1 pg2 pg3 pg4; do
+for n in podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3 podpg-cls1-pg4; do
   echo "=== $n ==="
   podman exec $n patronictl -c /etc/patroni/patroni.yml list 2>/dev/null | head -10
 done
 
-# pg4 standby streaming lag
-podman exec pg1 psql -U postgres postgres -c \
+# podpg-cls1-pg4 standby streaming lag
+podman exec podpg-cls1-pg1 psql -U postgres postgres -c \
   "SELECT client_addr, state, sync_state,
           ROUND((sent_lsn - replay_lsn)/1048576.0,2) AS lag_mb
    FROM pg_stat_replication;"
@@ -2894,5 +2911,5 @@ podman exec pg1 psql -U postgres postgres -c \
 
 **Document Status**: ✅ CONSOLIDATED AND COMPLETE (Multi-Datacenter)
 
-Covers: primary 3-node HA cluster (pg1/pg2/pg3), standby cluster (pg4/Region B), DR testing,
+Covers: primary 3-node HA cluster (podpg-cls1-pg1/podpg-cls1-pg2/podpg-cls1-pg3), standby cluster (podpg-cls1-pg4/Region B), DR testing,
 failover/failback, and all operational procedures.

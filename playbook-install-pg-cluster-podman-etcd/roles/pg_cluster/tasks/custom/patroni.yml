@@ -19,8 +19,8 @@
 # ---------------------------------------------------------------------------
 # patronictl convenience — export PATRONICTL_CONFIG_FILE so -c flag is not needed.
 # Covers interactive sessions (ssh, docker exec -it ... bash).
-# For direct docker exec (docker exec pg1 patronictl ...) use:
-#   docker exec -e PATRONICTL_CONFIG_FILE=/etc/patroni/patroni.yml pg1 patronictl list
+# For direct docker exec (docker exec podpg-cls1-podpg-cls1-pg1 patronictl ...) use:
+#   docker exec -e PATRONICTL_CONFIG_FILE=/etc/patroni/patroni.yml podpg-cls1-podpg-cls1-pg1 patronictl list
 # ---------------------------------------------------------------------------
 - name: Set PATRONICTL_CONFIG_FILE in /etc/environment
   ansible.builtin.lineinfile:

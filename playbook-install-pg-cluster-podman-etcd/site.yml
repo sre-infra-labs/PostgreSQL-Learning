@@ -6,12 +6,12 @@
 #   Phase 1: ansible-playbook playbook-setup-podman.yml
 #   Phase 2: ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
 #
-# For standby cluster (pg4 — Region B / Secondary DC):
-#   Phase 1b: ansible-playbook playbook-setup-podman.yml -e 'pg_containers=[pg4]'
+# For standby cluster (podpg-cls1-podpg-cls1-pg4 — Region B / Secondary DC):
+#   Phase 1b: ansible-playbook playbook-setup-podman.yml -e 'pg_containers=[podpg-cls1-podpg-cls1-pg4]'
 #   Phase 2b: ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass
 
 - name: Phase 1 - Setup Podman Infrastructure (Primary Cluster)
   import_playbook: playbook-setup-podman.yml
 
-- name: Phase 2 - Install PostgreSQL 18 Cluster (Primary Cluster — pg1, pg2, pg3)
+- name: Phase 2 - Install PostgreSQL 18 Cluster (Primary Cluster — podpg-cls1-podpg-cls1-pg1, podpg-cls1-podpg-cls1-pg2, podpg-cls1-podpg-cls1-pg3)
   import_playbook: playbook-install-pg-cluster.yml

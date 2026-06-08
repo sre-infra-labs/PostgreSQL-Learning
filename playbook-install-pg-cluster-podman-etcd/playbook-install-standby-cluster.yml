@@ -1,10 +1,10 @@
 ---
 # Standby Cluster Playbook
-# Installs pg4 as a single-node standby cluster in Region B (Secondary Datacenter)
+# Installs podpg-cls1-podpg-cls1-pg4 as a single-node standby cluster in Region B (Secondary Datacenter)
 # Same cluster name as primary (pg-podman-cls1) to enable failover/failback
-# pg4 streams from primary cluster leader (pg1 or pg2) via standby_cluster configuration
+# podpg-cls1-podpg-cls1-pg4 streams from primary cluster leader (podpg-cls1-podpg-cls1-pg1 or podpg-cls1-podpg-cls1-pg2) via standby_cluster configuration
 
-- name: Install PostgreSQL 18 Standby Cluster in Podman container (pg4)
+- name: Install PostgreSQL 18 Standby Cluster in Podman container (podpg-cls1-podpg-cls1-pg4)
   hosts: standby
   become: true
   become_user: root
@@ -18,7 +18,7 @@
   pre_tasks:
     - name: Starting PostgreSQL Standby Cluster Installation
       ansible.builtin.debug:
-        msg: "Installing PostgreSQL 18 standby cluster (pg4) with Patroni streaming from primary via {{ patroni_standby_cluster.host }}"
+        msg: "Installing PostgreSQL 18 standby cluster (podpg-cls1-podpg-cls1-pg4) with Patroni streaming from primary via {{ patroni_standby_cluster.host }}"
 
   roles:
     - role: roles/pg_cluster
@@ -27,12 +27,12 @@
     - name: PostgreSQL Standby Cluster Installation Completed
       ansible.builtin.debug:
         msg:
-          - "PostgreSQL 18 standby cluster (pg4) installation completed!"
-          - "  pg4 => SSH:2224 | PG:5437 | Patroni:8014 | pgBouncer:6436 | HAProxy write:45000 read:45001 stats:47000"
-          - "  pg4 streams from primary VIP: {{ patroni_standby_cluster.host }}:{{ patroni_standby_cluster.port }}"
+          - "PostgreSQL 18 standby cluster (podpg-cls1-podpg-cls1-pg4) installation completed!"
+          - "  podpg-cls1-podpg-cls1-pg4 => SSH:2224 | PG:5437 | Patroni:8014 | pgBouncer:6436 | HAProxy write:45000 read:45001 stats:47000"
+          - "  podpg-cls1-podpg-cls1-pg4 streams from primary VIP: {{ patroni_standby_cluster.host }}:{{ patroni_standby_cluster.port }}"
           - ""
           - "Verify standby is streaming:"
-          - "  podman exec pg1 patronictl -c /etc/patroni/patroni.yml list"
+          - "  podman exec podpg-cls1-podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list"
 
 # Usage:
 #   ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass
