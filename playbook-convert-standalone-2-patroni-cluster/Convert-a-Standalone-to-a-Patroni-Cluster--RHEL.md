@@ -110,7 +110,7 @@ export PATH=/usr/pgsql-18/bin:$PATH
 export PGDATA=/var/lib/postgresql/18/main
 export PGPORT=5432
 export PGPASSFILE=/var/lib/postgresql/.pgpass
-export PATRONICTL_CONFIG_FILE=/var/lib/postgresql/patroni.yml
+export PATRONICTL_CONFIG_FILE=/etc/patroni/patroni.yml
 EOF
 
 # Apply the profile in the current session
@@ -225,13 +225,18 @@ local   all             all                                      scram-sha-256
 # IPv4 loopback
 host    all             all              127.0.0.1/32            scram-sha-256
 
+# IPv6 loopback
+host    all             all              ::1/128                 scram-sha-256
+
 # Streaming replication
 host    replication     replicator       127.0.0.1/32            scram-sha-256
+host    replication     replicator       ::1/128                 scram-sha-256
 host    replication     replicator       192.168.100.0/24        scram-sha-256
 
 # pg_rewind
-host    all             replicator      127.0.0.1/32            scram-sha-256
-host    all             replicator      192.168.100.0/24        scram-sha-256
+host    all             replicator       127.0.0.1/32            scram-sha-256
+host    all             replicator       ::1/128                 scram-sha-256
+host    all             replicator       192.168.100.0/24        scram-sha-256
 
 # Application connections
 host    all             all              192.168.100.0/24        scram-sha-256
@@ -522,12 +527,18 @@ pgbackrest --stanza=sqlred info
 exit
 ```
 
-
-> **Important**: Once Patroni is running it manages the PostgreSQL process. **Do not** start `postgresql-18.service` directly — keep it **disabled**.
+## 10. IMPORTANT: Update postgres & replication roles passwords. These passwords/roles would be later used by Patroni Config
+  ### https://patroni.readthedocs.io/en/latest/existing_data.html#convert-a-standalone-to-a-patroni-cluster
 
 ```bash
-sudo systemctl disable postgresql-18
+sudo su - postgres
+psql
+
+
+CREATE ROLE replicator WITH LOGIN SUPERUSER REPLICATION BYPASSRLS ENCRYPTED PASSWORD 'YourReplicatorPassword';
+CREATE ROLE postgres WITH LOGIN SUPERUSER REPLICATION BYPASSRLS ENCRYPTED PASSWORD 'YourSuperUserPassword';
 ```
+
 
 ---
 ---
@@ -548,7 +559,7 @@ etcd --version
 ### Option B – Install from Official Binary
 
 ```bash
-ETCD_VER=v3.5.21
+ETCD_VER=v3.6.12
 
 curl -L \
   https://github.com/etcd-io/etcd/releases/download/${ETCD_VER}/etcd-${ETCD_VER}-linux-amd64.tar.gz \
@@ -570,9 +581,21 @@ etcdctl version
 sudo dnf install -y python3 python3-pip python3-devel gcc
 
 # Install Patroni with etcd3 support
-sudo pip3 install patroni[etcd3]
+# psycopg[binary] (psycopg3) is required by Patroni to connect to PostgreSQL;
+# it is not pulled in automatically by the etcd3 extra.
+# psycopg3 is preferred over psycopg2: native asyncio, server-side binding,
+# better COPY performance, and actively developed (psycopg2 is bug-fix only).
+sudo pip3 install "patroni[etcd3]" "psycopg[binary]"
+
+# pip installs patroni/patronictl into /usr/local/bin which is not on the default
+# RHEL PATH. Add it system-wide so all users can run patroni and patronictl.
+echo 'export PATH=/usr/local/bin:$PATH' | sudo tee /etc/profile.d/local-bin.sh
+sudo chmod 644 /etc/profile.d/local-bin.sh
+export PATH=/usr/local/bin:$PATH
 
 patroni --version
+patronictl version
+python3 -c "import psycopg; print(psycopg.__version__)"
 ```
 
 ## 3. Install postgres_exporter
@@ -596,17 +619,28 @@ postgres_exporter --version
 
 ## 5. Configure etcd (Single Node)
 
+> etcd was installed from a binary tarball (no package manager), so the config
+> directory, data directory, and systemd unit file must all be created manually.
+
 ```bash
+# Create a dedicated etcd system user (no login shell, no home directory)
+sudo useradd --system --no-create-home --shell /sbin/nologin etcd
+
+# Create config and data directories
+sudo mkdir -p /etc/etcd
+sudo mkdir -p /var/lib/etcd
+
+# Write the etcd config file
 sudo tee /etc/etcd/etcd.conf > /dev/null << 'EOF'
 ETCD_NAME="sqlred"
-ETCD_DATA_DIR="/var/lib/etcd/default.etcd"
+ETCD_DATA_DIR="/var/lib/etcd"
 
 # Client communication
-ETCD_LISTEN_CLIENT_URLS="http://192.168.100.55:2379,http://127.0.0.1:2379"
+ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379"
 ETCD_ADVERTISE_CLIENT_URLS="http://192.168.100.55:2379"
 
 # Peer communication
-ETCD_LISTEN_PEER_URLS="http://192.168.100.55:2380"
+ETCD_LISTEN_PEER_URLS="http://0.0.0.0:2380"
 ETCD_INITIAL_ADVERTISE_PEER_URLS="http://192.168.100.55:2380"
 
 # Bootstrap cluster
@@ -615,19 +649,53 @@ ETCD_INITIAL_CLUSTER_TOKEN="patroni-etcd-cluster"
 ETCD_INITIAL_CLUSTER_STATE="new"
 EOF
 
+# Create the systemd unit file (not created by the tarball install)
+# tee writes as root — hand ownership to the etcd user before starting the service
+sudo chown etcd:etcd /etc/etcd/etcd.conf
+sudo chown etcd:etcd /etc/etcd/
+sudo chmod 0755 /etc/etcd/
+sudo chmod 0755 /etc/etcd/etcd.conf
+# Use -R so the member/ subdirectory (created by a prior root-run) is also re-owned
+sudo chown -R etcd:etcd /var/lib/etcd/
+sudo chmod 0755 /var/lib/etcd/
+
+sudo tee /etc/systemd/system/etcd.service > /dev/null << 'EOF'
+[Unit]
+Description=etcd distributed key-value store
+Documentation=https://etcd.io/docs/
+After=network.target
+
+[Service]
+Type=notify
+User=etcd
+Group=etcd
+EnvironmentFile=/etc/etcd/etcd.conf
+ExecStart=/usr/local/bin/etcd
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
 sudo systemctl enable --now etcd
 
 # Confirm etcd is healthy
+sudo systemctl status etcd
 etcdctl --endpoints=http://192.168.100.55:2379 endpoint health
 ```
 
 ## 6. Configure Patroni
 
-### Create patroni.yml in the postgres User Home Directory
+### Create patroni.yml
 
 ```bash
-sudo -u postgres tee /var/lib/postgresql/patroni.yml > /dev/null << 'EOF'
-scope: postgres-cluster
+sudo mkdir -p /etc/patroni
+
+sudo tee /etc/patroni/patroni.yml > /dev/null << 'EOF'
+scope: sqlred-patroni-cls
 namespace: /db/
 name: sqlred
 
@@ -666,7 +734,9 @@ bootstrap:
     - "local   all             postgres                            peer"
     - "local   all             all                                 scram-sha-256"
     - "host    all             all             127.0.0.1/32        scram-sha-256"
+    - "host    all             all             ::1/128             scram-sha-256"
     - "host    replication     replicator      127.0.0.1/32        scram-sha-256"
+    - "host    replication     replicator      ::1/128             scram-sha-256"
     - "host    replication     replicator      192.168.100.0/24    scram-sha-256"
     - "host    all             all             192.168.100.0/24    scram-sha-256"
 
@@ -708,8 +778,11 @@ tags:
   nosync: false
 EOF
 
-# Restrict permissions
-sudo chmod 0600 /var/lib/postgresql/patroni.yml
+# tee writes as root — hand ownership to postgres so the Patroni service can read the file
+sudo chown postgres:postgres /etc/patroni/
+sudo chown postgres:postgres /etc/patroni/patroni.yml
+sudo chmod 0755 /etc/patroni/
+sudo chmod 0755 /etc/patroni/patroni.yml
 ```
 
 ### Create Patroni systemd Service
@@ -725,7 +798,7 @@ Wants=etcd.service
 Type=simple
 User=postgres
 Group=postgres
-ExecStart=/usr/local/bin/patroni /var/lib/postgresql/patroni.yml
+ExecStart=/usr/local/bin/patroni /etc/patroni/patroni.yml
 ExecReload=/bin/kill -s HUP $MAINPID
 KillMode=process
 TimeoutSec=30
@@ -809,6 +882,12 @@ sudo systemctl disable postgresql-18
 # Start Patroni – it picks up /var/lib/postgresql/18/main as-is
 sudo systemctl enable --now patroni
 
+# Verify patroni service is running
+sudo systemctl status patroni
+
+# Validate patroni cluster. Ensure "Role" should be "Leader"
+patronictl -c /etc/patroni/patroni.yml list
+
 # Follow startup logs
 sudo journalctl -u patroni -f
 ```
@@ -817,7 +896,8 @@ sudo journalctl -u patroni -f
 
 ```bash
 # List cluster members
-sudo -u postgres patronictl -c /var/lib/postgresql/patroni.yml list
+# sudo strips PATH — use the full binary path
+sudo -u postgres /usr/local/bin/patronictl -c /etc/patroni/patroni.yml list
 
 # Inspect the Patroni REST API
 curl -s http://192.168.100.55:8008 | python3 -m json.tool
@@ -869,7 +949,12 @@ sudo systemctl disable postgresql-18
 
 # Patroni
 sudo dnf install -y python3 python3-pip python3-devel gcc
-sudo pip3 install patroni[etcd3]
+sudo pip3 install "patroni[etcd3]" "psycopg[binary]"
+
+# Add /usr/local/bin to PATH if not already done on this node
+echo 'export PATH=/usr/local/bin:$PATH' | sudo tee /etc/profile.d/local-bin.sh
+sudo chmod 644 /etc/profile.d/local-bin.sh
+export PATH=/usr/local/bin:$PATH
 
 # pgbackrest
 sudo dnf install -y pgbackrest
@@ -885,9 +970,10 @@ sudo -u postgres tee /var/lib/postgresql/.pgpass > /dev/null << 'EOF'
 EOF
 sudo chmod 0600 /var/lib/postgresql/.pgpass
 
-# patroni.yml – stored in postgres user home
-sudo -u postgres tee /var/lib/postgresql/patroni.yml > /dev/null << 'EOF'
-scope: postgres-cluster
+# patroni.yml – stored in /etc/patroni/
+sudo mkdir -p /etc/patroni
+sudo tee /etc/patroni/patroni.yml > /dev/null << 'EOF'
+scope: sqlred-patroni-cls
 namespace: /db/
 name: <REPLICA_HOSTNAME>
 
@@ -922,7 +1008,9 @@ bootstrap:
     - "local   all             postgres                            peer"
     - "local   all             all                                 scram-sha-256"
     - "host    all             all             127.0.0.1/32        scram-sha-256"
+    - "host    all             all             ::1/128             scram-sha-256"
     - "host    replication     replicator      127.0.0.1/32        scram-sha-256"
+    - "host    replication     replicator      ::1/128             scram-sha-256"
     - "host    replication     replicator      192.168.100.0/24    scram-sha-256"
     - "host    all             all             192.168.100.0/24    scram-sha-256"
 
@@ -956,7 +1044,10 @@ tags:
   nosync: false
 EOF
 
-sudo chmod 0600 /var/lib/postgresql/patroni.yml
+sudo chown postgres:postgres /etc/patroni/patroni.yml
+sudo chown postgres:postgres /etc/patroni/
+sudo chmod 0700 /etc/patroni/
+sudo chmod 0600 /etc/patroni/patroni.yml
 ```
 
 ## 4. Create Patroni systemd Service and Start on Replica
@@ -972,7 +1063,7 @@ Wants=network-online.target
 Type=simple
 User=postgres
 Group=postgres
-ExecStart=/usr/local/bin/patroni /var/lib/postgresql/patroni.yml
+ExecStart=/usr/local/bin/patroni /etc/patroni/patroni.yml
 ExecReload=/bin/kill -s HUP $MAINPID
 KillMode=process
 TimeoutSec=30
@@ -1034,10 +1125,10 @@ sudo chmod 644 /etc/pgbackrest/pgbackrest.conf
 
 ```bash
 # Run from any cluster node
-sudo -u postgres patronictl -c /var/lib/postgresql/patroni.yml list
+sudo -u postgres /usr/local/bin/patronictl -c /etc/patroni/patroni.yml list
 
 # Expected output:
-# + Cluster: postgres-cluster (xxxxxxxxxxxxxxx) ----+----+-----------+
+# + Cluster: sqlred-patroni-cls (xxxxxxxxxxxxxxx) ----+----+-----------+
 # | Member            | Host                  | Role    | State   | TL | Lag in MB |
 # +-------------------+-----------------------+---------+---------+----+-----------+
 # | sqlred            | 192.168.100.55:5432   | Leader  | running |  1 |           |
@@ -1053,7 +1144,9 @@ sudo -u postgres psql -h 127.0.0.1 -p 5432 -d postgres \
 
 ## Useful patronictl Commands
 
-> If `PATRONICTL_CONFIG_FILE=/var/lib/postgresql/patroni.yml` is exported in the postgres user profile, the `-c` flag can be omitted from all commands below.
+> **Run as the `postgres` user** (`sudo su - postgres`) so that `/usr/local/bin` is in PATH and `PATRONICTL_CONFIG_FILE` is set from the profile. When calling via `sudo -u postgres`, use the full path `/usr/local/bin/patronictl` instead, because `sudo` strips the user PATH.
+>
+> If `PATRONICTL_CONFIG_FILE=/etc/patroni/patroni.yml` is exported in the postgres user profile, the `-c` flag can be omitted from all commands below.
 
 ```bash
 # List all cluster members
@@ -1063,23 +1156,23 @@ patronictl list
 patronictl history
 
 # Perform a planned switchover (interactive)
-patronictl switchover postgres-cluster
+patronictl switchover sqlred-patroni-cls
 
 # Initiate an emergency failover to a specific replica
-patronictl failover postgres-cluster --master sqlred --candidate <REPLICA_HOSTNAME>
+patronictl failover sqlred-patroni-cls --master sqlred --candidate <REPLICA_HOSTNAME>
 
 # Reload Patroni configuration without restart
-patronictl reload postgres-cluster
+patronictl reload sqlred-patroni-cls
 
 # Pause automatic failover (e.g. for maintenance)
-patronictl pause postgres-cluster
+patronictl pause sqlred-patroni-cls
 
 # Resume automatic failover
-patronictl resume postgres-cluster
+patronictl resume sqlred-patroni-cls
 
 # Edit DCS-stored cluster configuration
-patronictl edit-config postgres-cluster
+patronictl edit-config sqlred-patroni-cls
 
 # Reinitialise a replica (e.g. after data corruption)
-patronictl reinit postgres-cluster <REPLICA_HOSTNAME>
+patronictl reinit sqlred-patroni-cls <REPLICA_HOSTNAME>
 ```
