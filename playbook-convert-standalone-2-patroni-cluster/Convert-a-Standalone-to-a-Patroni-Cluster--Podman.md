@@ -4,7 +4,7 @@ Host (container runtime) — ryzen9 (192.168.100.1), Ubuntu 24.04
 Podman network        — lab-network (172.18.0.0/16)
 Patroni cluster name  — podpg-cls2
 pgbackrest stanza     — podpg-cls2
-pgbackrest backup     — bind mount of /stale-storage/share-stalestorage/pgbackrest_backups_cls2 → /var/lib/pgbackrest inside each container
+pgbackrest backup     — bind mount of /stale-storage/share-stalestorage/pgbackrest_backups_cls2 → /mnt/pgbackrest-repo inside each container
 
 | Container        | IP           | SSH (host) | PG (host) | Patroni (host) |
 |------------------|--------------|------------|-----------|----------------|
@@ -30,7 +30,7 @@ pgbackrest backup     — bind mount of /stale-storage/share-stalestorage/pgback
 
 ```bash
 # The Dockerfile is in the cls1 playbook directory — reuse it for cls2
-cd ~/GitHub/PostgreSQL-Learning/playbook-convert-standalone-2-patroni-cluster
+cd playbook-convert-standalone-2-patroni-cluster/
 
 podman build -t pg-cluster-node:latest .
 
@@ -78,7 +78,7 @@ podman run -d \
   --tmpfs /run/lock \
   --volume pg-cls2-data-pg1:/var/lib/postgresql \
   --volume pg-cls2-logs-pg1:/var/log \
-  --volume /stale-storage/share-stalestorage/pgbackrest_backups_cls2:/var/lib/pgbackrest \
+  --volume /stale-storage/share-stalestorage/pgbackrest_backups_cls2:/mnt/pgbackrest-repo \
   --volume /sys/fs/cgroup:/sys/fs/cgroup:rw \
   --restart=unless-stopped \
   pg-cluster-node:latest
@@ -102,7 +102,8 @@ cat >> /etc/hosts << 'EOF'
 172.18.0.22     podpg-cls2-pg2
 172.18.0.23     podpg-cls2-pg3
 172.18.0.24     podpg-cls2-pg4
-192.168.100.1   ryzen9
+172.18.0.25     podpg-cls2-pg5
+172.18.0.26     podpg-cls2-pg6
 EOF
 ```
 
@@ -123,7 +124,7 @@ curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
   -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
 
 echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
-  https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+  https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo $VERSION_CODENAME)-pgdg main" \
   > /etc/apt/sources.list.d/pgdg.list
 
 apt-get update
@@ -149,6 +150,9 @@ pgbackrest version
 ## 3. Set up postgres user home and profile
 
 ```bash
+# Clear any previous installation
+pg_dropcluster --stop 18 main 2>/dev/null || true
+
 # postgres user and /var/lib/postgresql already exist from the package install
 mkdir -p /var/lib/postgresql/{18/main,log,scripts}
 chown -R postgres:postgres /var/lib/postgresql
@@ -168,6 +172,7 @@ EOF
 ```bash
 # Stop and drop the default cluster created by the apt package
 pg_dropcluster --stop 18 main 2>/dev/null || true
+rm -rf /var/lib/postgresql/18/main/*
 
 # initdb — configs go into the data dir (consistent with Patroni's expectations)
 sudo -u postgres /usr/lib/postgresql/18/bin/initdb \
@@ -260,6 +265,7 @@ sudo -u postgres tee /var/lib/postgresql/.pgpass > /dev/null << 'EOF'
 *:5432:*:replicator:YourReplicatorPassword
 EOF
 
+chmod 0750 -R /var/lib/postgresql
 chmod 0600 /var/lib/postgresql/.pgpass
 ```
 
@@ -278,7 +284,7 @@ Group=postgres
 Environment=PGDATA=/var/lib/postgresql/18/main
 ExecStart=/usr/lib/postgresql/18/bin/pg_ctl start \
   -D /var/lib/postgresql/18/main \
-  -l /var/lib/postgresql/log/startup.log
+  -l /var/log/postgresql/startup.log
 ExecStop=/usr/lib/postgresql/18/bin/pg_ctl stop \
   -D /var/lib/postgresql/18/main
 ExecReload=/usr/lib/postgresql/18/bin/pg_ctl reload \
@@ -311,17 +317,17 @@ EOF
 
 > Run inside **podpg-cls2-pg1**.
 > The host directory `/stale-storage/share-stalestorage/pgbackrest_backups_cls2` is bind-mounted
-> into every container at `/var/lib/pgbackrest` via the `--volume` flag at container creation.
+> into every container at `/mnt/pgbackrest-repo` via the `--volume` flag at container creation.
 > No CIFS, no Samba, no network mount needed inside the container.
 
 ## 1. Verify the bind mount is active
 
 ```bash
 # Should show the host's backup directory contents
-ls -la /var/lib/pgbackrest
+ls -la /mnt/pgbackrest-repo
 
 # Verify postgres can write and delete
-sudo -u postgres bash -c 'touch /var/lib/pgbackrest/test && echo "Write OK" && rm /var/lib/pgbackrest/test && echo "Delete OK"'
+sudo -u postgres bash -c 'touch /mnt/pgbackrest-repo/test && echo "Write OK" && rm /mnt/pgbackrest-repo/test && echo "Delete OK"'
 ```
 
 ## 2. Configure pgbackrest.conf
@@ -332,12 +338,12 @@ mkdir -p /etc/pgbackrest
 tee /etc/pgbackrest/pgbackrest.conf > /dev/null << 'EOF'
 [global]
 # Host directory bind-mounted into the container at /var/lib/pgbackrest
-repo1-path=/var/lib/pgbackrest
+repo1-path=/mnt/pgbackrest-repo
 repo1-retention-full=2
 repo1-retention-diff=7
 log-level-console=info
 log-level-file=detail
-log-path=/var/lib/postgresql/log
+log-path=/var/log/pgbackrest
 
 process-max=4
 compress-type=lz4
@@ -389,7 +395,7 @@ EOF
 ## 1. Install etcd (binary)
 
 ```bash
-ETCD_VER=v3.5.17
+ETCD_VER=v3.6.12
 
 curl -L \
   https://github.com/etcd-io/etcd/releases/download/${ETCD_VER}/etcd-${ETCD_VER}-linux-amd64.tar.gz \
@@ -524,7 +530,7 @@ bootstrap:
     - "host    all             all             192.168.100.0/24    scram-sha-256"
 
 postgresql:
-  listen: "172.18.0.21:5432,127.0.0.1:5432"
+  listen: "0.0.0.0:5432"
   connect_address: "172.18.0.21:5432"
   data_dir: /var/lib/postgresql/18/main
   bin_dir: /usr/lib/postgresql/18/bin
@@ -608,6 +614,7 @@ journalctl -u patroni -f
 
 ```bash
 /usr/local/bin/patronictl -c /etc/patroni/patroni.yml list
+/usr/local/bin/patronictl -c /etc/patroni/patroni.yml restart podpg-cls2 --force
 
 # Expected: Role = Leader
 curl -s http://172.18.0.21:8008 | python3 -m json.tool
@@ -643,7 +650,7 @@ podman run -d \
   --tmpfs /run/lock \
   --volume pg-cls2-data-pg2:/var/lib/postgresql \
   --volume pg-cls2-logs-pg2:/var/log \
-  --volume /stale-storage/share-stalestorage/pgbackrest_backups_cls2:/var/lib/pgbackrest \
+  --volume /stale-storage/share-stalestorage/pgbackrest_backups_cls2:/mnt/pgbackrest-repo \
   --volume /sys/fs/cgroup:/sys/fs/cgroup:rw \
   --restart=unless-stopped \
   pg-cluster-node:latest
@@ -656,9 +663,11 @@ podman exec -it podpg-cls2-pg2 bash
 ```bash
 cat >> /etc/hosts << 'EOF'
 172.18.0.21     podpg-cls2-pg1
+172.18.0.22     podpg-cls2-pg2
 172.18.0.23     podpg-cls2-pg3
 172.18.0.24     podpg-cls2-pg4
-192.168.100.1   ryzen9
+172.18.0.25     podpg-cls2-pg5
+172.18.0.26     podpg-cls2-pg6
 EOF
 ```
 
@@ -670,7 +679,7 @@ install -d /usr/share/postgresql-common/pgdg
 curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
   -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
 echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
-  https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+  https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo $VERSION_CODENAME)-pgdg main" \
   > /etc/apt/sources.list.d/pgdg.list
 apt-get update
 apt-get install -y \
@@ -682,6 +691,7 @@ pg_dropcluster --stop 18 main 2>/dev/null || true
 
 mkdir -p /var/lib/postgresql/{18/main,log,scripts}
 chown -R postgres:postgres /var/lib/postgresql
+chmod -R 0750 /var/lib/postgresql
 
 sudo -u postgres tee /var/lib/postgresql/.bash_profile > /dev/null << 'EOF2'
 export PATH=/usr/lib/postgresql/18/bin:$PATH
@@ -695,13 +705,15 @@ sudo -u postgres tee /var/lib/postgresql/.pgpass > /dev/null << 'EOF2'
 *:*:*:postgres:YourSuperUserPassword
 *:5432:*:replicator:YourReplicatorPassword
 EOF2
+
+chmod 0750 -R /var/lib/postgresql
 chmod 0600 /var/lib/postgresql/.pgpass
 ```
 
 ### [inside podpg-cls2-pg2] Install etcd and Patroni
 
 ```bash
-ETCD_VER=v3.5.17
+ETCD_VER=v3.6.12
 curl -L \
   https://github.com/etcd-io/etcd/releases/download/${ETCD_VER}/etcd-${ETCD_VER}-linux-amd64.tar.gz \
   -o /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz
@@ -784,12 +796,12 @@ etcdctl --endpoints=http://172.18.0.21:2379,http://172.18.0.22:2379 member list
 mkdir -p /etc/pgbackrest
 tee /etc/pgbackrest/pgbackrest.conf > /dev/null << 'EOF'
 [global]
-repo1-path=/var/lib/pgbackrest
+repo1-path=/mnt/pgbackrest-repo
 repo1-retention-full=2
 repo1-retention-diff=7
 log-level-console=info
 log-level-file=detail
-log-path=/var/lib/postgresql/log
+log-path=/var/log/pgbackrest
 process-max=4
 compress-type=lz4
 archive-async=y
@@ -857,7 +869,7 @@ bootstrap:
     - "host    all             all             192.168.100.0/24    scram-sha-256"
 
 postgresql:
-  listen: "172.18.0.22:5432,127.0.0.1:5432"
+  listen: "0.0.0.0:5432"
   connect_address: "172.18.0.22:5432"
   data_dir: /var/lib/postgresql/18/main
   bin_dir: /usr/lib/postgresql/18/bin
