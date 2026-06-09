@@ -57,7 +57,7 @@ bootstrap:
       {% for rule in postgresql_pg_hba %}
         - {{ rule }}
       {% endfor %}
-    {% if patroni_standby_cluster is defined and patroni_standby_cluster.host is defined and patroni_standby_cluster.host | length > 0 %}
+    {% if inventory_hostname in groups['standby_cluster'] and patroni_standby_cluster is defined and patroni_standby_cluster.host is defined and patroni_standby_cluster.host | length > 0 %}
     {% set _slot_name = patroni_standby_cluster.primary_slot_name | default(patroni_standby_cluster_slot_name | default(patroni_standby_primary_slot_name)) %}
     standby_cluster:
       host: {{ patroni_standby_cluster.host }}

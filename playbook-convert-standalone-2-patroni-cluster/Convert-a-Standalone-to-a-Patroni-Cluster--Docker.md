@@ -512,6 +512,10 @@ bootstrap:
         archive_command: "pgbackrest --stanza=docpg-cls2 archive-push %p"
         restore_command: "pgbackrest --stanza=docpg-cls2 archive-get %f %p"
 
+  slots:
+    standby_cluster_slot:
+      type: physical
+
   initdb:
     - encoding: UTF8
     - data-checksums
@@ -854,6 +858,10 @@ bootstrap:
         archive_mode: "on"
         archive_command: "pgbackrest --stanza=docpg-cls2 archive-push %p"
         restore_command: "pgbackrest --stanza=docpg-cls2 archive-get %f %p"
+
+  slots:
+    standby_cluster_slot:
+      type: physical
 
   pg_hba:
     - "local   all             postgres                            peer"
@@ -1275,6 +1283,7 @@ bootstrap:
     standby_cluster:
       host: 172.18.0.21
       port: 5432
+      primary_slot_name: "standby_cluster_slot"
     postgresql:
       use_pg_rewind: true
       use_slots: true

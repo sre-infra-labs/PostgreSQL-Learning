@@ -87,6 +87,7 @@
   when:
     - _pg_data_contents.stdout is defined
     - _pg_data_contents.stdout | length > 0
+    - not (reinit_cluster | default(false) | bool)
 
 - name: Create PostgreSQL stats temp directory
   ansible.builtin.file:

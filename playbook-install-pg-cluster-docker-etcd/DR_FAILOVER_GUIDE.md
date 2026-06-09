@@ -75,19 +75,19 @@ Force-close any open application sessions that were established before the conne
 took effect.
 
 ```bash
-docker exec docpg-cls1-pg1 psql -h 172.18.0.11 -U postgres -c "
+docker exec docpg-cls1-pg1 psql -h docpg-cls1-pg1 -U postgres << "EOF"
 SELECT count(pg_terminate_backend(pid))
 FROM pg_stat_activity
 WHERE datname NOT IN ('template0', 'template1', 'postgres')
   AND usename NOT IN ('postgres', 'replicator')
   AND pid <> pg_backend_pid();
-"
+EOF
 ```
 
 Confirm no remaining application connections:
 
 ```bash
-docker exec docpg-cls1-pg1 psql -h 172.18.0.11 -U postgres -c "
+docker exec docpg-cls1-pg1 psql -h docpg-cls1-pg1 -U postgres -c "
 SELECT pid, usename, datname, application_name, state, query_start
 FROM pg_stat_activity
 WHERE usename NOT IN ('postgres', 'replicator')
@@ -106,7 +106,7 @@ ORDER BY query_start;
 **From the primary leader (docpg-cls1-pg1):**
 
 ```bash
-docker exec docpg-cls1-pg1 psql -h 172.18.0.11 -U postgres postgres -c "
+docker exec docpg-cls1-pg1 psql -h docpg-cls1-pg2 -U postgres postgres -c "
 SELECT
   application_name,
   state,
@@ -190,12 +190,14 @@ docker ps --filter name=docpg-cls1-pg --format "table {{.Names}}\t{{.Status}}"
 
 Remove the `standby_cluster` block from the DCS configuration. Patroni on `docpg-cls1-pg4`
 detects this change and promotes PostgreSQL from a streaming standby to a normal read-write
-primary.
+primary. At the same time, provision a permanent physical slot (`standby_cluster_slot`) so that the old primary cluster can securely stream from pg4 when it returns as the new standby.
 
 ```bash
 docker exec docpg-cls1-pg4 \
   patronictl -c /etc/patroni/patroni.yml \
-  edit-config docpg-cls1 --force --set standby_cluster=null
+  edit-config docpg-cls1 --force \
+  --set "standby_cluster=null" \
+  --set "slots.standby_cluster_slot.type=physical"
 ```
 
 Restart Patroni on pg4 to ensure the promotion is applied immediately:
@@ -316,20 +318,10 @@ docker exec docpg-cls1-pg2 systemctl start patroni
 docker exec docpg-cls1-pg3 systemctl start patroni
 ```
 
-Wait for a leader to be elected in the old cluster:
+Wait for patroni service to start, and patronictl command to return member list
 
-```bash
-until docker exec docpg-cls1-pg1 \
-        curl -sf http://172.18.0.11:8008/primary > /dev/null 2>&1 || \
-      docker exec docpg-cls1-pg2 \
-        curl -sf http://172.18.0.12:8008/primary > /dev/null 2>&1; do
-  echo "Waiting for old cluster leader..."; sleep 3
-done
-
-docker exec docpg-cls1-pg1 \
-  patronictl -c /etc/patroni/patroni.yml list docpg-cls1
-# ✅ One of pg1/pg2 shows Leader; others show Replica — expected at this stage
-```
+Scenario 01: In Real Disaster, the old primary cluster members come online, and start cluster with a "Leader"
+Scenario 02: In DR Drill, the old primary members would NOT come online. Would be in STOPPED state due to "maintenance" mode config before DR promotion.
 
 > **⚠️ Do not allow application traffic to this cluster.**
 > It holds a stale copy of data and will be demoted to standby in the next steps.
@@ -341,9 +333,7 @@ docker exec docpg-cls1-pg1 \
 Write the `standby_cluster` block into the old cluster's DCS, pointing it at pg4. Patroni
 propagates this to all members automatically.
 
-The replication slot **`standby_cluster_slot` is created automatically on pg4** by PostgreSQL
-when the first member of the old cluster connects as a streaming standby — no manual SQL call
-is needed.
+The old primary cluster will connect to the new primary (pg4) and stream using the **`standby_cluster_slot`** (which we permanently provisioned in pg4's DCS back in Step 6).
 
 ```bash
 # Run from any member of the old primary cluster.
@@ -351,9 +341,9 @@ is needed.
 docker exec docpg-cls1-pg1 \
   patronictl -c /etc/patroni/patroni.yml \
   edit-config docpg-cls1 --force \
-  -p "standby_cluster.host=172.18.0.14" \
-  -p "standby_cluster.port=5432" \
-  -p "standby_cluster.primary_slot_name=standby_cluster_slot"
+  --set "standby_cluster.host=docpg-cls1-pg4" \
+  --set "standby_cluster.port=5432" \
+  --set "standby_cluster.primary_slot_name=standby_cluster_slot"
 ```
 
 Verify the config was written to DCS:
@@ -454,7 +444,7 @@ docker exec docpg-cls1-pg4 \
 # | docpg-cls1-pg4   | 172.18.0.14 | Leader | running | NN |     0     |
 ```
 
-Verify `standby_cluster_slot` is active on pg4 (created automatically when pg1 connected):
+Verify `standby_cluster_slot` is active on pg4 (provisioned in DCS in Step 6, and activated when pg1 connected):
 
 ```bash
 docker exec docpg-cls1-pg4 psql -h 172.18.0.14 -U postgres -c "
