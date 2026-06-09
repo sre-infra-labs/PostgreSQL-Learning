@@ -207,14 +207,9 @@ ansible -i hosts.yml standby_cluster --list-hosts
 ansible-playbook -i hosts.yml playbook-setup-standby-cluster-containers.yml 2>&1 | tee logs/playbook-setup-standby-cluster-containers.yml.log
 
 # Phase 2: Setup Standby Patroni/PostgreSQL Cluster with one or more nodes
-ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass 2>&1 | tee logs/playbook-install-standby-cluster.yml.log
-
-  # OR
-    #below incase $PGDATA directories exists from previous run
-
-    ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass \
-      -e reinit_cluster=true -e skip_confirm=true \
-      2>&1 | tee logs/playbook-install-standby-cluster.yml.log
+ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass \
+  -e reinit_cluster=true -e skip_confirm=true \
+  2>&1 | tee logs/playbook-install-standby-cluster.yml.log
 
 # Phase 3: Verify Standby Cluster is Streaming
 docker exec docpg-cls1-pg4 patronictl -c /etc/patroni/patroni.yml list
