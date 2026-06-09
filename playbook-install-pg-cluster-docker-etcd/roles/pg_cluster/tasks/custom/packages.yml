@@ -73,6 +73,17 @@
     executable: pip3
     extra_args: "--break-system-packages"
 
+- name: Patch Patroni bootstrap.py to support '$$' in passwords
+  ansible.builtin.replace:
+    path: /usr/local/lib/python3.12/dist-packages/patroni/postgresql/bootstrap.py
+    regexp: '{{ item.regex }}'
+    replace: '{{ item.replace }}'
+  loop:
+    - { regex: 'DO \$\$', replace: 'DO $patroni_pwd$' }
+    - { regex: 'END;\$\$', replace: 'END;$patroni_pwd$' }
+  ignore_errors: true
+
+
 - name: Ensure postgres user exists
   ansible.builtin.user:
     name: "{{ postgres_user }}"

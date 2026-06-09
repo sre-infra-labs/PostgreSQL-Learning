@@ -1,0 +1,40 @@
+---
+# Populate /etc/hosts inside every container so each node can resolve all
+# peer containers by hostname.  Two extra VIP entries are added:
+#   docpg-cls1-writer → keepalived_vip         (primary write VIP)
+#   docpg-cls1-reader → keepalived_replica_vip (read/replica VIP)
+#
+# NOTE: blockinfile cannot be used here — it writes a temp file then calls
+# os.rename() over /etc/hosts, which fails with EBUSY on Docker bind-mounts.
+# Fix: render the block into /tmp (a normal mount) with `copy`, then assemble
+# and write /etc/hosts in-place via `cat > /etc/hosts` (no rename).
+
+- name: Render cluster hosts block into /tmp (Jinja2-safe — /tmp is not bind-mounted)
+  ansible.builtin.copy:
+    dest: /tmp/cluster_hosts_block
+    mode: "0644"
+    content: |
+      # BEGIN ANSIBLE MANAGED — docpg-cls1 cluster hosts
+      {% for host in (groups['primary_cluster_leader'] | default([]))
+                   + (groups['primary_cluster_replica'] | default([]))
+                   + (groups['standby_cluster_leader'] | default([]))
+                   + (groups['standby_cluster_replica'] | default([])) %}
+      {{ hostvars[host]['ip'] }}  {{ host }}
+      {% endfor %}
+      {{ keepalived_vip }}  docpg-cls1-writer
+      {{ keepalived_replica_vip }}  docpg-cls1-reader
+      # END ANSIBLE MANAGED — docpg-cls1 cluster hosts
+
+- name: Update /etc/hosts in-place (Docker bind-mount safe — no rename)
+  ansible.builtin.shell: |
+    TMPFILE=$(mktemp /tmp/hosts_XXXXXX)
+    # Keep all non-managed lines (idempotent removal of existing block)
+    awk '/# BEGIN ANSIBLE MANAGED — docpg-cls1 cluster hosts/{f=1} !f{print} /# END ANSIBLE MANAGED — docpg-cls1 cluster hosts/{f=0}' /etc/hosts > "$TMPFILE"
+    # Append the freshly rendered block
+    cat /tmp/cluster_hosts_block >> "$TMPFILE"
+    # Overwrite /etc/hosts via truncate+write — same inode, no rename
+    cat "$TMPFILE" > /etc/hosts
+    rm -f "$TMPFILE" /tmp/cluster_hosts_block
+  args:
+    executable: /bin/bash
+  changed_when: true

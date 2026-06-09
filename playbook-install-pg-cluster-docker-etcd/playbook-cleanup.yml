@@ -2,29 +2,29 @@
 # Cleanup playbook — tears down the PostgreSQL Docker cluster so the full setup
 # can be run again from scratch. Designed for repeated learning / testing cycles.
 #
-# NOTE: 'lab-network' is a SHARED network used by other lab containers (postgres,
-# mongo, cadvisor, etc.) and is NEVER removed by this playbook. Only pg cluster
-# containers and volumes are cleaned up.
+# NOTE: The Docker network (docker_network from hosts.yml) is a SHARED network used
+# by other lab containers (postgres, mongo, cadvisor, etc.) and is NEVER removed by
+# this playbook. Only pg cluster containers and volumes are cleaned up.
 #
 # USAGE
 # ─────
 # Standard cleanup (containers + volumes, keeps image + network):
-#   ansible-playbook playbook-cleanup.yml
+#   ansible-playbook -i hosts.yml playbook-cleanup.yml
 #
 # Skip the confirmation prompt (for scripting / full cycle):
-#   ansible-playbook playbook-cleanup.yml -e skip_confirm=true
+#   ansible-playbook -i hosts.yml playbook-cleanup.yml -e skip_confirm=true
 #
 # Also remove the Docker image (forces a full image rebuild on next run):
-#   ansible-playbook playbook-cleanup.yml -e remove_image=true
+#   ansible-playbook -i hosts.yml playbook-cleanup.yml -e remove_image=true
 #
 # Selective cleanup using tags:
-#   ansible-playbook playbook-cleanup.yml --tags containers  # only containers
-#   ansible-playbook playbook-cleanup.yml --tags volumes     # only volumes
-#   ansible-playbook playbook-cleanup.yml --tags image       # only image
+#   ansible-playbook -i hosts.yml playbook-cleanup.yml --tags containers  # only containers
+#   ansible-playbook -i hosts.yml playbook-cleanup.yml --tags volumes     # only volumes
+#   ansible-playbook -i hosts.yml playbook-cleanup.yml --tags image       # only image
 #
 # Full cycle (cleanup → infra → install) in one command:
-#   ansible-playbook playbook-cleanup.yml -e skip_confirm=true && \
-#   ansible-playbook playbook-setup-docker.yml && \
+#   ansible-playbook -i hosts.yml playbook-cleanup.yml -e skip_confirm=true && \
+#   ansible-playbook -i hosts.yml playbook-setup-primary-cluster-containers.yml && \
 #   ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
 
 - name: Cleanup Docker PostgreSQL Cluster
@@ -34,33 +34,26 @@
 
   vars:
     # --- what to clean (override with -e) ---
-    remove_containers: true    # stop + remove pg1, pg2, pg3, pg-bouncer
+    remove_containers: true    # stop + remove all pg cluster containers + pg-bouncer
     remove_volumes:    true    # remove all named Docker volumes (pg-data-*, pg-logs-*, pg-backups)
     remove_image:      false   # remove pg-cluster-node:latest (slow to rebuild — off by default)
     skip_confirm:      false   # set true to bypass the confirmation prompt
 
     # NOTE: remove_network is intentionally absent.
-    # lab-network is a SHARED network used by other containers (postgres, mongo, cadvisor…)
-    # and must NEVER be removed. The pg containers are simply detached when removed.
+    # docker_network (from hosts.yml) is a SHARED network used by other containers
+    # (postgres, mongo, cadvisor…) and must NEVER be removed. The pg containers are
+    # simply detached when removed.
 
-    # --- derived from docker_infrastructure defaults ---
-    _all_containers:
-      - pg1
-      - pg2
-      - pg3
-      - pg-bouncer
-
-    _all_volumes:
-      - pg-data-pg1
-      - pg-data-pg2
-      - pg-data-pg3
-      - pg-logs-pg1
-      - pg-logs-pg2
-      - pg-logs-pg3
-      - pg-backups
+    # --- derived from inventory groups in hosts.yml ---
+    # Must be invoked with `-i hosts.yml` so primary_cluster / standby_cluster are resolved.
+    _pg_nodes: "{{ (groups['primary_cluster'] | default([])) + (groups['standby_cluster'] | default([])) }}"
+    _all_containers: "{{ _pg_nodes + ['pg-bouncer'] }}"
+    _all_volumes: "{{ (_pg_nodes | map('regex_replace', '^', 'pg-data-') | list)
+                       + (_pg_nodes | map('regex_replace', '^', 'pg-logs-') | list)
+                       + ['pg-backups'] }}"
 
     _docker_image:   "pg-cluster-node:latest"
-    # lab-network intentionally excluded — it is shared with other lab containers
+    # docker_network intentionally excluded — it is shared with other lab containers
 
   pre_tasks:
     - name: Show cleanup plan
@@ -72,7 +65,7 @@
           - "  Containers  : {{ _all_containers | join(', ') }}"
           - "  Volumes     : {{ _all_volumes | join(', ') }}"
           - "  Image       : {{ _docker_image }}  (remove={{ remove_image }})"
-          - "  Network     : lab-network (never removed — shared with other lab containers)"
+          - "  Network     : {{ hostvars[groups['primary_cluster'][0]]['docker_network'] | default('lab-network') }} (never removed — shared with other lab containers)"
           - "======================================================"
 
     - name: Confirm destructive cleanup
@@ -154,21 +147,6 @@
         msg: "Image '{{ _docker_image }}' removed — will be rebuilt on next Phase 1 run"
       tags: image
       when: remove_image | bool
-
-    # ------------------------------------------------------------------ #
-    #  KNOWN HOSTS — remove stale SSH entries for containers              #
-    # ------------------------------------------------------------------ #
-    - name: Remove stale SSH known_hosts entries for container ports
-      ansible.builtin.known_hosts:
-        name: "[127.0.0.1]:{{ item }}"
-        state: absent
-      loop:
-        - 2221
-        - 2222
-        - 2223
-        - 2224
-      ignore_errors: true
-      tags: containers
 
   post_tasks:
     - name: Cleanup complete — ready for a fresh setup run

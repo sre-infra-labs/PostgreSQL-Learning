@@ -1,35 +1,30 @@
 ---
-- name: Build list of active standby containers from inventory
-  ansible.builtin.set_fact:
-    active_standby_containers: "{{ standby_containers | selectattr('name', 'in', groups['standby_cluster']) | list }}"
+# Container name = inventory_hostname (e.g., docpg-cls1-pg4)
+# IP            = hostvars[<name>].ip  (defined in hosts.yml)
+# No host port mappings — Ansible uses community.docker.docker connection plugin.
 
 - name: Fail if no standby cluster hosts are enabled in hosts.yml
   ansible.builtin.fail:
     msg: >
       No hosts found in the 'standby_cluster' inventory group.
-      Run with: ansible-playbook -i hosts.yml playbook-setup-standby-docker.yml
-  when: active_standby_containers | length == 0
-
-- name: Read SSH public key from local machine
-  ansible.builtin.slurp:
-    src: "{{ ansible_ssh_public_key_path | expanduser }}"
-  register: ssh_pub_key
+      Run with: ansible-playbook -i hosts.yml playbook-setup-standby-cluster-containers.yml
+  when: groups['standby_cluster'] | default([]) | length == 0
 
 - name: Create per-node PostgreSQL data volumes (standby)
   community.docker.docker_volume:
-    name: "{{ pg_data_volume_prefix }}-{{ item.name }}"
+    name: "{{ pg_data_volume_prefix }}-{{ item }}"
     state: present
-  loop: "{{ active_standby_containers }}"
+  loop: "{{ groups['standby_cluster'] }}"
 
 - name: Create per-node PostgreSQL log volumes (standby)
   community.docker.docker_volume:
-    name: "{{ pg_log_volume_prefix }}-{{ item.name }}"
+    name: "{{ pg_log_volume_prefix }}-{{ item }}"
     state: present
-  loop: "{{ active_standby_containers }}"
+  loop: "{{ groups['standby_cluster'] }}"
 
 - name: Create PostgreSQL standby node containers
   community.docker.docker_container:
-    name: "{{ item.name }}"
+    name: "{{ item }}"
     image: "{{ pg_node_image }}"
     state: started
     restart_policy: unless-stopped
@@ -42,55 +37,34 @@
       - /run
       - /run/lock
     networks:
-      - name: "{{ docker_network_name }}"
-        ipv4_address: "{{ item.ip }}"
-    ports:
-      - "{{ item.ssh_port }}:22"
-      - "{{ item.pg_port }}:5432"
-      - "{{ item.patroni_port }}:8008"
-      - "{{ item.pg_exporter_port }}:9194"
-      - "{{ item.haproxy_write_port }}:5000"
-      - "{{ item.haproxy_read_port }}:5001"
-      - "{{ item.haproxy_stats_port }}:7000"
+      - name: "{{ docker_network }}"
+        ipv4_address: "{{ hostvars[item].ip }}"
     volumes:
-      - "{{ pg_data_volume_prefix }}-{{ item.name }}:/var/lib/postgresql"
-      - "{{ pg_log_volume_prefix }}-{{ item.name }}:/var/log"
+      - "{{ pg_data_volume_prefix }}-{{ item }}:/var/lib/postgresql"
+      - "{{ pg_log_volume_prefix }}-{{ item }}:/var/log"
       - "{{ pg_backup_volume }}:/var/lib/pgbackrest"
       - "/sys/fs/cgroup:/sys/fs/cgroup:rw"
-    hostname: "{{ item.name }}"
-  loop: "{{ active_standby_containers }}"
+    hostname: "{{ item }}"
+  loop: "{{ groups['standby_cluster'] }}"
 
-- name: Inject SSH public key into standby containers
-  ansible.builtin.shell: |
-    docker exec {{ item.name }} bash -c "
-      mkdir -p /home/ansible/.ssh
-      chmod 700 /home/ansible/.ssh
-      echo '{{ ssh_pub_key.content | b64decode | trim }}' >> /home/ansible/.ssh/authorized_keys
-      sort -u /home/ansible/.ssh/authorized_keys -o /home/ansible/.ssh/authorized_keys
-      chmod 600 /home/ansible/.ssh/authorized_keys
-      chown -R ansible:ansible /home/ansible/.ssh
-    "
-  loop: "{{ active_standby_containers }}"
-  changed_when: true
-
-- name: Wait for SSH to be available on standby containers
-  ansible.builtin.wait_for:
-    host: "127.0.0.1"
-    port: "{{ item.ssh_port }}"
-    state: started
-    timeout: 90
-    delay: 3
-  loop: "{{ active_standby_containers }}"
+- name: Wait for standby containers to be reachable via docker exec
+  ansible.builtin.command: docker exec {{ item }} true
+  loop: "{{ groups['standby_cluster'] }}"
+  register: docker_exec_check
+  retries: 30
+  delay: 2
+  until: docker_exec_check.rc == 0
+  changed_when: false
 
 - name: Standby container connectivity summary
   ansible.builtin.debug:
     msg:
-      - "{{ item.name }} | IP: {{ item.ip }}"
-      - "  SSH:           localhost:{{ item.ssh_port }}"
-      - "  PostgreSQL:    localhost:{{ item.pg_port }}"
-      - "  Patroni:       localhost:{{ item.patroni_port }}"
-      - "  pg_exporter:   localhost:{{ item.pg_exporter_port }}"
-      - "  HAProxy write: localhost:{{ item.haproxy_write_port }}"
-      - "  HAProxy read:  localhost:{{ item.haproxy_read_port }}"
-      - "  HAProxy stats: localhost:{{ item.haproxy_stats_port }}"
-  loop: "{{ active_standby_containers }}"
+      - "{{ item }} | IP: {{ hostvars[item].ip }}"
+      - "  PostgreSQL    (in-container): {{ hostvars[item].ip }}:5432"
+      - "  Patroni REST  (in-container): {{ hostvars[item].ip }}:8008"
+      - "  pg_exporter   (in-container): {{ hostvars[item].ip }}:9194"
+      - "  HAProxy write (in-container): {{ hostvars[item].ip }}:5000"
+      - "  HAProxy read  (in-container): {{ hostvars[item].ip }}:5001"
+      - "  HAProxy stats (in-container): {{ hostvars[item].ip }}:7000"
+      - "  Access from Mac host: docker exec {{ item }} <command>"
+  loop: "{{ groups['standby_cluster'] }}"

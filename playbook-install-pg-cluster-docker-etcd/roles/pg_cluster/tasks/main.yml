@@ -54,6 +54,20 @@
       tags: pgpass
   tags: pgpass
 
+- name: Set container environment variables (PATH, PGDATA, PGPORT, PGPASSFILE)
+  include_tasks:
+    file: custom/container_env.yml
+    apply:
+      tags: container_env
+  tags: container_env
+
+- name: Populate /etc/hosts with cluster node entries and VIPs
+  include_tasks:
+    file: custom/container_hosts.yml
+    apply:
+      tags: container_hosts
+  tags: container_hosts
+
 - name: Install and configure etcd (inside container, 3-member cluster)
   include_tasks:
     file: custom/etcd.yml
@@ -73,20 +87,31 @@
   # This PATCH keeps the DCS in sync on every playbook run (idempotent).
   # PATCH merges — it never overwrites unrelated DCS settings.
   # Targets the primary VIP so the request always reaches the current leader.
+  # Slot name comes from standby cluster inventory (patroni_standby_cluster_slot_name),
+  # falling back to the default patroni_standby_primary_slot_name.
+  vars:
+    _standby_leader: "{{ groups['standby_cluster_leader'] | default([]) | first | default('') }}"
+    _slot_name: >-
+      {{
+        (hostvars[_standby_leader]['patroni_standby_cluster_slot_name']
+         | default(patroni_standby_primary_slot_name))
+        if _standby_leader else patroni_standby_primary_slot_name
+      }}
   ansible.builtin.uri:
-    url: "http://{{ keepalived_vip }}:{{ patroni_restapi_port }}/config"
+    url: "http://127.0.0.1:{{ patroni_restapi_port }}/config"
     method: PATCH
     body_format: json
     body:
       slots:
-        "{{ patroni_standby_primary_slot_name }}":
+        "{{ _slot_name }}":
           type: physical
     status_code: [200, 201]
   run_once: true
+  delegate_to: "{{ groups['primary_cluster_leader'][0] }}"
   when:
     - inventory_hostname in groups['primary_cluster']
     - groups['standby_cluster'] | default([]) | length > 0
-    - patroni_standby_primary_slot_name | default('') | length > 0
+    - _slot_name | length > 0
   tags: patroni
 
 - name: Configure pgBackRest

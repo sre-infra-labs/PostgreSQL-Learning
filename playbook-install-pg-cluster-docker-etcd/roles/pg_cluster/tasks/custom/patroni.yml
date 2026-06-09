@@ -76,20 +76,17 @@
     state: directory
     mode: "0700"
 
-- name: Check if PostgreSQL data directory is already initialized
-  ansible.builtin.stat:
-    path: "{{ postgresql_data_dir }}/PG_VERSION"
-  register: _pg_data_initialized
+- name: Check if PostgreSQL data directory is empty
+  ansible.builtin.shell: "ls -A {{ postgresql_data_dir }} 2>/dev/null"
+  register: _pg_data_contents
+  changed_when: false
 
-- name: Ensure data directory is empty before init
-  ansible.builtin.file:
-    path: "{{ postgresql_data_dir }}"
-    state: "{{ item }}"
-    mode: "0700"
-  loop:
-    - absent
-    - directory
-  when: not _pg_data_initialized.stat.exists
+- name: Fail if data directory is not empty before init
+  ansible.builtin.fail:
+    msg: "Data directory {{ postgresql_data_dir }} is not empty. Please use -e reinit_cluster=true to clean up an existing cluster."
+  when:
+    - _pg_data_contents.stdout is defined
+    - _pg_data_contents.stdout | length > 0
 
 - name: Create PostgreSQL stats temp directory
   ansible.builtin.file:

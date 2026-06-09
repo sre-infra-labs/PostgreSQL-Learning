@@ -12,19 +12,19 @@
 # -------------------------------------------------------------------
 #  FRESH INSTALL GUARDS — skip these on reinit
 # -------------------------------------------------------------------
-- name: Check if data directory is already initialized
-  ansible.builtin.stat:
-    path: "{{ postgresql_data_dir }}/PG_VERSION"
-  register: pgdata_initialized
+- name: Check if data directory is empty
+  ansible.builtin.shell: "ls -A {{ postgresql_data_dir }} 2>/dev/null"
+  register: pgdata_contents
+  changed_when: false
   when: not (reinit_cluster is defined and reinit_cluster | bool)
 
-- name: Fail if data directory is already initialized
+- name: Fail if data directory is not empty
   ansible.builtin.fail:
-    msg: "Data directory {{ postgresql_data_dir }} is already initialized. Use -e reinit_cluster=true to reinitialize."
+    msg: "Data directory {{ postgresql_data_dir }} is not empty. Use -e reinit_cluster=true to reinitialize."
   when:
     - not (reinit_cluster is defined and reinit_cluster | bool)
-    - pgdata_initialized.stat is defined
-    - pgdata_initialized.stat.exists | default(false)
+    - pgdata_contents.stdout is defined
+    - pgdata_contents.stdout | length > 0
 
 # -------------------------------------------------------------------
 #  REINIT CLEANUP — only runs when reinit_cluster=true

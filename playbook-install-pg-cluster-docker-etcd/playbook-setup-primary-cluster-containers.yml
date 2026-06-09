@@ -11,7 +11,7 @@
   pre_tasks:
     - name: Starting Docker Infrastructure Setup (Primary Cluster)
       ansible.builtin.debug:
-        msg: "Setting up Docker infrastructure for primary cluster: pg1, pg2, pg3 (Patroni + etcd)"
+        msg: "Setting up Docker infrastructure for primary cluster: {{ groups['primary_cluster'] | default([]) | join(', ') }} (Patroni + etcd)"
 
   roles:
     - role: roles/docker_infrastructure
@@ -21,14 +21,13 @@
       ansible.builtin.debug:
         msg:
           - "Docker infrastructure is ready!"
-          - "  pg1 => SSH:2221 | PG:5433 | Patroni:8011 | pgBouncer:6433 | HAProxy write:15000 read:15001 stats:17000"
-          - "  pg2 => SSH:2222 | PG:5434 | Patroni:8012 | pgBouncer:6434 | HAProxy write:25000 read:25001 stats:27000"
-          - "  pg3 => SSH:2223 | PG:5435 | Patroni:8013 | pgBouncer:6435 | HAProxy write:35000 read:35001 stats:37000"
+          - "Containers (no host port mappings — reach them via `docker exec <name>`):"
+          - "{% for h in groups['primary_cluster'] | default([]) %}  {{ h }} => IP {{ hostvars[h].ip }} | PG:5432 | Patroni:8008 | pgBouncer:6432 | HAProxy write:5000 read:5001 stats:7000{% if not loop.last %}\n{% endif %}{% endfor %}"
           - "  etcd (inside each container) => client :2379, peer :2380"
-          - "  Keepalived VIP => 172.18.0.10 (follows Patroni primary)"
+          - "  Keepalived VIP => {{ keepalived_vip }} (follows Patroni primary)"
           - ""
           - "Next: ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass"
 
-# ansible-playbook -i hosts.yml playbook-setup-docker.yml
-# ansible-playbook -i hosts.yml playbook-setup-docker.yml --tags network     # only network
-# ansible-playbook -i hosts.yml playbook-setup-docker.yml --tags containers  # containers only
+# ansible-playbook -i hosts.yml playbook-setup-primary-cluster-containers.yml
+# ansible-playbook -i hosts.yml playbook-setup-primary-cluster-containers.yml --tags network     # only network
+# ansible-playbook -i hosts.yml playbook-setup-primary-cluster-containers.yml --tags containers  # containers only
