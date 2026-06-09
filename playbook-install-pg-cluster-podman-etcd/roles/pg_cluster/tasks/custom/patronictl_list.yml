@@ -1,12 +1,25 @@
 ---
+- name: Check if Patroni service is active
+  ansible.builtin.command: systemctl is-active patroni
+  register: patroni_active
+  failed_when: false
+  changed_when: false
+
 - name: Get Patroni cluster state
   ansible.builtin.shell: |
     patronictl -c /etc/patroni/patroni.yml list
   become_user: postgres
   register: patronictl_output
   changed_when: false
-  ignore_errors: true
+  failed_when: false
+  when: patroni_active.rc == 0
 
 - name: Display Patroni cluster state
   ansible.builtin.debug:
     var: patronictl_output.stdout_lines
+  when: patroni_active.rc == 0
+
+- name: Patroni not yet active — skipping patronictl list
+  ansible.builtin.debug:
+    msg: "Patroni service is not active on {{ inventory_hostname }} — patronictl list skipped"
+  when: patroni_active.rc != 0

@@ -151,13 +151,14 @@
     # ------------------------------------------------------------------ #
     - name: Remove stale SSH known_hosts entries for container ports
       ansible.builtin.known_hosts:
-        name: "[127.0.0.1]:{{ item }}"
+        name: "[127.0.0.1]:{{ hostvars[item].ansible_port }}"
         state: absent
-      loop:
-        - 2221
-        - 2222
-        - 2223
-        - 2224
+      loop: >-
+        {{
+          (groups['primary_cluster_leader'] | default([]))
+          + (groups['primary_cluster_replica'] | default([]))
+          + (groups['standby_cluster'] | default([]))
+        }}
       ignore_errors: true
       tags: containers
 

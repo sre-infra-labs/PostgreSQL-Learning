@@ -1,6 +1,6 @@
 ---
-- name: Install PostgreSQL 18 Cluster in Docker containers
-  hosts: all
+- name: Install PostgreSQL Primary Cluster in Podman containers
+  hosts: primary_cluster
   become: true
   become_user: root
   gather_facts: true
@@ -11,17 +11,23 @@
     - community.postgresql
 
   pre_tasks:
-    - name: Starting PostgreSQL Cluster Installation
+    - name: Starting PostgreSQL Primary Cluster Installation
       ansible.builtin.debug:
-        msg: "Installing PostgreSQL 18 with Patroni + etcd + pgbackrest + pgbouncer + pg_exporter + HAProxy + Keepalived"
+        msg: "Installing PostgreSQL {{ postgresql_version }} ({{ patroni_cluster_name }}) with Patroni + etcd + pgbackrest + pgbouncer + pg_exporter + HAProxy + Keepalived"
 
   roles:
     - role: roles/pg_cluster
 
   post_tasks:
-    - name: PostgreSQL Cluster Installation Completed
+    - name: PostgreSQL Primary Cluster Installation Completed
       ansible.builtin.debug:
-        msg: "PostgreSQL 18 cluster installation completed successfully!"
+        msg:
+          - "PostgreSQL {{ postgresql_version }} primary cluster ({{ patroni_cluster_name }}) installation completed!"
+          - "  Nodes: {{ groups['primary_cluster'] | join(', ') }}"
+          - ""
+          - "Next — install standby cluster:"
+          - "  ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass"
+      run_once: true
 
 # Full install:
 #   ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass

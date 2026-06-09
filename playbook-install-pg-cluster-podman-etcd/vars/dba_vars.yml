@@ -3,9 +3,7 @@
 
 debug: true
 
-# Cluster name — must be unique across all clusters
-patroni_cluster_name: "podpg-cls1"
-pgbackrest_stanza_name: "podpg-cls1"
+# Cluster name and stanza are set per-group in hosts.yml (primary_cluster.vars / standby_cluster.vars)
 
 # ReInit Standby — set to true ONLY when rebuilding after a failure (skips package install)
 # reinit_cluster: true
@@ -31,10 +29,8 @@ db_name: "dba"
 db_user_rw: dba_rw
 db_user_ro: dba_ro
 
-# Podman network — pre-existing lab-network (172.18.0.0/16)
-# All lab containers (postgres, mongo, cadvisor, etc.) already use this network
+# Podman network — defined in hosts.yml (all.vars: podman_network, podman_network_subnet)
 # Create once: podman network create --driver bridge --subnet=172.18.0.0/16 lab-network
-podman_network_name: "lab-network"
 
 # etcd DCS — runs INSIDE each pg container (3-member cluster)
 # etcd_hosts is auto-built from inventory IPs in defaults/main.yml — no override needed
@@ -56,10 +52,10 @@ haproxy_stats_port: 7000
 haproxy_stats_user: admin
 
 # Keepalived VRRP settings (installed inside each pg container)
-# VIP 172.18.0.10 floats to whichever node is the Patroni primary
+# VIPs are defined in hosts.yml (all.vars) as podpg_cls1_writer and podpg_cls1_reader.
 # Connect via VIP:5000 (write) or VIP:5001 (read) for fully HA access
-keepalived_vip: "172.18.0.10"          # primary/write VIP → always points to Patroni leader
-keepalived_replica_vip: "172.18.0.9"  # replica VIP → sync standby (sync mode) or any healthy replica
+keepalived_vip: "{{ podpg_cls1_writer }}"         # primary/write VIP → always points to Patroni leader
+keepalived_replica_vip: "{{ podpg_cls1_reader }}"  # replica VIP → sync standby (sync mode) or any healthy replica
 keepalived_vip_prefix: "24"
 keepalived_interface: "eth0"
 keepalived_virtual_router_id: 51      # VI_PRIMARY=51, VI_REPLICA=52

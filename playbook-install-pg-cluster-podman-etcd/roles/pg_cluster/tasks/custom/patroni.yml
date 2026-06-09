@@ -125,7 +125,7 @@
 
 # --- Start Patroni on Leader first, then Replicas ---
 
-- name: Start Patroni on Leader (initializes the cluster)
+- name: Start Patroni on Primary Cluster Leader (initializes the cluster)
   block:
     - name: Start and enable Patroni service on leader
       ansible.builtin.systemd:
@@ -151,9 +151,9 @@
       until: leader_check.status == 200
       retries: 30
       delay: 5
-  when: inventory_hostname in groups['leader']
+  when: inventory_hostname in groups['primary_cluster_leader']
 
-- name: Start Patroni on Replicas (stream from leader)
+- name: Start Patroni on Primary Cluster Replicas (stream from leader)
   block:
     - name: Start and enable Patroni service on replicas
       ansible.builtin.systemd:
@@ -169,4 +169,22 @@
         state: started
         timeout: 300
         delay: 10
-  when: inventory_hostname in groups['replica']
+  when: inventory_hostname in groups['primary_cluster_replica']
+
+- name: Start Patroni on Standby Cluster nodes (stream from primary cluster)
+  block:
+    - name: Start and enable Patroni service on standby cluster node
+      ansible.builtin.systemd:
+        name: patroni
+        state: restarted
+        enabled: true
+        daemon_reload: true
+
+    - name: Wait for Patroni REST API to become available on standby cluster node
+      ansible.builtin.wait_for:
+        port: "{{ patroni_restapi_port }}"
+        host: "0.0.0.0"
+        state: started
+        timeout: 300
+        delay: 10
+  when: inventory_hostname in groups['standby_cluster']

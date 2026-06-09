@@ -24,12 +24,14 @@ restapi:
 
 # etcd3 DCS configuration
 etcd3:
-  {% if inventory_hostname in groups['standby'] %}
-  # Standby cluster in Region B: single-node etcd on pg4
-  hosts: {{ ip }}:2379
+  {% if inventory_hostname in groups['standby_cluster'] %}
+  {% set _standby_all = groups['standby_cluster_leader'] + groups['standby_cluster_replica'] %}
+  # Standby cluster: etcd endpoints for all active standby nodes
+  hosts: {{ _standby_all | map('extract', hostvars, 'ip') | product([':2379']) | map('join') | join(',') }}
   {% else %}
-  # Primary cluster in Region A: 3-member etcd cluster (pg1, pg2, pg3)
-  hosts: {{ groups['leader'] | map('extract', hostvars, 'ip') | product([':2379']) | map('join') | join(',') }},{{ groups['replica'] | map('extract', hostvars, 'ip') | product([':2379']) | map('join') | join(',') }}
+  {% set _primary_all = groups['primary_cluster_leader'] + groups['primary_cluster_replica'] %}
+  # Primary cluster: etcd endpoints for all active primary nodes
+  hosts: {{ _primary_all | map('extract', hostvars, 'ip') | product([':2379']) | map('join') | join(',') }}
   {% endif %}
   protocol: http
 
@@ -51,16 +53,28 @@ bootstrap:
       {% for parameter in postgresql_parameters if parameter is mapping and 'option' in parameter and 'value' in parameter %}
         {{ parameter.option }}: "{{ parameter.value }}"
       {% endfor %}
-    {% if patroni_standby_cluster is defined and patroni_standby_cluster.host is defined and patroni_standby_cluster.host | length > 0 %}
+    {% if inventory_hostname in groups['standby_cluster'] and patroni_standby_cluster is defined and patroni_standby_cluster.host is defined and patroni_standby_cluster.host | length > 0 %}
+    {% set _slot_name = patroni_standby_cluster.primary_slot_name | default(patroni_standby_cluster_slot_name | default(patroni_standby_primary_slot_name)) %}
     standby_cluster:
       host: {{ patroni_standby_cluster.host }}
       port: {{ patroni_standby_cluster.port | default(5432) }}
-      {% if patroni_standby_cluster.primary_slot_name is defined and patroni_standby_cluster.primary_slot_name | length > 0 %}
-      primary_slot_name: "{{ patroni_standby_cluster.primary_slot_name }}"
+      {% if _slot_name | length > 0 %}
+      primary_slot_name: "{{ _slot_name }}"
       {% endif %}
       {% if patroni_standby_cluster.restore_command is defined and patroni_standby_cluster.restore_command | length > 0 %}
       restore_command: "{{ patroni_standby_cluster.restore_command }}"
       {% endif %}
+    {% endif %}
+    {% if inventory_hostname in groups['primary_cluster'] and groups['standby_cluster'] | default([]) | length > 0 %}
+    {% set _sbl = groups['standby_cluster_leader'] | default([]) | first | default('') %}
+    {% set _slot_name = (hostvars[_sbl].patroni_standby_cluster_slot_name | default(patroni_standby_primary_slot_name)) if _sbl else patroni_standby_primary_slot_name %}
+    {% if _slot_name | length > 0 %}
+    # Permanent physical slot — Patroni creates and maintains this on the current primary.
+    # Survives switchover/failover automatically. pg4 uses it to stream from the primary.
+    slots:
+      {{ _slot_name }}:
+        type: physical
+    {% endif %}
     {% endif %}
 
   initdb:
@@ -69,17 +83,9 @@ bootstrap:
     - data-checksums
 
   pg_hba:
-    # Local connections (superuser via unix socket)
-    - local all postgres                           peer
-    - host  all all      127.0.0.1/32              {{ postgresql_password_encryption_algorithm }}
-    # Cluster-internal replication (all container IPs)
-    {% for host in groups['all'] %}
-    - host replication replicator {{ hostvars[host].ip }}/32 scram-sha-256
+    {% for rule in postgresql_pg_hba %}
+    - {{ rule }}
     {% endfor %}
-    # Wide-open for Docker learning environment — restrict in production
-    - host replication replicator 0.0.0.0/0        scram-sha-256
-    - host all          all       0.0.0.0/0         scram-sha-256
-    - host all          all       ::/0              scram-sha-256
 
   users:
     {{ patroni_superuser_username }}:
@@ -100,7 +106,7 @@ postgresql:
   data_dir: {{ postgresql_data_dir }}
   bin_dir: {{ postgresql_bin_dir }}
   config_dir: {{ postgresql_conf_dir }}
-  pgpass: {{ postgresql_home_dir }}/.pgpass
+  pgpass: {{ postgresql_home_dir }}/.pgpass_patroni
 
   authentication:
     replication:
@@ -148,7 +154,7 @@ watchdog:
   mode: {{ patroni_watchdog_mode }}  # off — Podman containers have no /dev/watchdog
 
 tags:
-  nofailover: false
+  nofailover: {{ patroni_tag_nofailover | default(false) | lower }}
   noloadbalance: false
   clonefrom: false
   nosync: {{ patroni_tag_nosync | default(false) | lower }}

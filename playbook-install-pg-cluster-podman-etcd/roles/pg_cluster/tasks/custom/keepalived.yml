@@ -20,9 +20,8 @@
     mode: "0644"
 
 - name: Apply keepalived sysctl
-  ansible.builtin.command: sysctl -p /etc/sysctl.d/99-keepalived.conf
-  changed_when: true
-  ignore_errors: true
+  ansible.builtin.shell: sysctl -p /etc/sysctl.d/99-keepalived.conf 2>/dev/null || true
+  changed_when: false
 
 - name: Deploy Keepalived primary VIP notify script
   ansible.builtin.copy:

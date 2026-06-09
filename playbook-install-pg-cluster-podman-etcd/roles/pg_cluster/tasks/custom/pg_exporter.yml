@@ -54,7 +54,7 @@
       User=postgres_exporter
       EnvironmentFile=/etc/systemd/postgres_exporter.env
       ExecStart=/usr/local/bin/postgres_exporter \
-        --web.listen-address=:9194 \
+        --web.listen-address=:{{ pg_exporter_listen_port }} \
         --log.level=info
       Restart=on-failure
       RestartSec=5

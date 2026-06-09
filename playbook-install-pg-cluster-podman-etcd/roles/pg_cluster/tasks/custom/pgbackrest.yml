@@ -28,7 +28,7 @@
     state: started
     timeout: 120
     delay: 5
-  when: inventory_hostname in groups['leader']
+  when: inventory_hostname in groups['primary_cluster_leader']
 
 - name: Create pgBackRest stanza
   ansible.builtin.command:
@@ -38,13 +38,13 @@
   retries: 3
   delay: 10
   failed_when: false
-  when: inventory_hostname in groups['leader']
+  when: inventory_hostname in groups['primary_cluster_leader']
 
 - name: Fail if stanza-create returned real errors
   ansible.builtin.fail:
     msg: "pgbackrest stanza-create failed: {{ stanza_result.stdout | default('Unknown') }}"
   when:
-    - inventory_hostname in groups['leader']
+    - inventory_hostname in groups['primary_cluster_leader']
     - stanza_result is defined
     - stanza_result.rc is defined
     - stanza_result.rc != 0
@@ -56,7 +56,7 @@
     cmd: pgbackrest --stanza={{ pgbackrest_stanza_name }} --log-level-console=info stanza-upgrade
   become_user: postgres
   when:
-    - inventory_hostname in groups['leader']
+    - inventory_hostname in groups['primary_cluster_leader']
     - stanza_result is defined
     - stanza_result.rc is defined
     - stanza_result.rc != 0

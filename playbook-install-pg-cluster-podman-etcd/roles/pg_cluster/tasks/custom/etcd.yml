@@ -84,12 +84,12 @@
     timeout: 60
     delay: 5
   register: etcd_wait
-  ignore_errors: true
+  failed_when: false
 
 - name: Check etcd service logs if port wait failed
-  ansible.builtin.shell: journalctl -xeu etcd.service 2>&1 | tail -30
-  when: etcd_wait is failed
-  ignore_errors: true
+  ansible.builtin.shell: journalctl -xeu etcd.service 2>&1 | tail -30 || true
+  changed_when: false
+  when: etcd_wait.state is not defined or etcd_wait.state != 'started'
 
 - name: Verify etcd health on {{ inventory_hostname }}
   ansible.builtin.uri:
@@ -97,10 +97,10 @@
     method: GET
     status_code: 200
   register: etcd_health
-  until: etcd_health.status == 200
+  until: etcd_health.status is defined and etcd_health.status == 200
   retries: 15
   delay: 3
-  ignore_errors: true
+  failed_when: etcd_health.status is not defined or etcd_health.status != 200
 
 - name: etcd is healthy on {{ inventory_hostname }}
   ansible.builtin.debug:

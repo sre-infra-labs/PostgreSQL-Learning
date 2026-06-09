@@ -17,17 +17,19 @@
   post_tasks:
     - name: Podman Infrastructure Setup Completed
       ansible.builtin.debug:
+        msg: "{{ item }} | IP: {{ hostvars[item].ip }} | SSH: 127.0.0.1:{{ hostvars[item].ansible_port }}"
+      loop: >-
+        {{
+          (groups['primary_cluster_leader'] | default([]))
+          + (groups['primary_cluster_replica'] | default([]))
+          + (groups['standby_cluster'] | default([]))
+        }}
+
+    - name: Podman Infrastructure — cluster summary
+      ansible.builtin.debug:
         msg:
-          - "Podman infrastructure is ready!"
-          - "  --- Primary Cluster (Region A) ---"
-          - "  podpg-cls1-pg1 => SSH:2221 | PG:5433 | Patroni:8011 | pgBouncer:6433 | HAProxy write:15000 read:15001 stats:17000"
-          - "  podpg-cls1-pg2 => SSH:2222 | PG:5434 | Patroni:8012 | pgBouncer:6434 | HAProxy write:25000 read:25001 stats:27000"
-          - "  podpg-cls1-pg3 => SSH:2223 | PG:5435 | Patroni:8013 | pgBouncer:6435 | HAProxy write:35000 read:35001 stats:37000"
-          - "  --- Standby Cluster (Region B / Secondary DC) ---"
-          - "  podpg-cls1-pg4 => SSH:2224 | PG:5437 | Patroni:8014 | pgBouncer:6436 | HAProxy write:45000 read:45001 stats:47000"
-          - "  etcd (inside each container) => client :2379, peer :2380"
-          - "  Keepalived VIP => 172.18.0.10 (follows Patroni primary)"
-          - "  Network => lab-network (172.18.0.0/16)"
+          - "Only SSH ports are published to the host. All other services are internal to {{ podman_network }} ({{ podman_network_subnet }})."
+          - "Keepalived VIP => {{ podpg_cls1_writer }} (write) / {{ podpg_cls1_reader }} (read)"
           - ""
           - "Next (Primary Cluster): ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass"
           - "Next (Standby Cluster): ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass"

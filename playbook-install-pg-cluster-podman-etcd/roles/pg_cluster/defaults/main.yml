@@ -3,9 +3,16 @@ patroni_install_version: "4.0.6"
 postgres_exporter_version: "0.17.1"
 etcd_version: "3.5.17"   # etcd binary version (downloaded from GitHub releases)
 
-# etcd cluster hosts — built dynamically from inventory IPs
-# Patroni connects to all 3 etcd members for HA DCS
-etcd_hosts: "{{ groups['all'] | map('extract', hostvars, 'ip') | product([':2379']) | map('join') | join(',') }}"
+# etcd cluster hosts — built dynamically from primary cluster inventory IPs
+# Patroni on primary cluster connects to all primary cluster etcd members for HA DCS
+etcd_hosts: >-
+  {{
+    (groups['primary_cluster_leader'] + groups['primary_cluster_replica'])
+    | map('extract', hostvars, 'ip')
+    | product([':2379'])
+    | map('join')
+    | join(',')
+  }}
 
 # -------------------------------------------------------------------
 # Package lists
@@ -23,6 +30,7 @@ system_packages:
   - acl
   - libpq-dev
   - curl
+  - vim
   - gnupg2
   - wget
   - lsb-release
@@ -73,6 +81,8 @@ db_user_ro:          "dba_ro"
 
 pgbouncer_listen_port:      6432
 pgbouncer_pool_mode:        "transaction"
+
+pg_exporter_listen_port:    9194   # container-internal listen port for postgres_exporter
 pgbouncer_max_client_conn:  200
 pgbouncer_default_pool_size: 25
 
@@ -105,9 +115,27 @@ postgresql_data_checksums: true
 postgresql_password_encryption_algorithm: "scram-sha-256"
 
 # -------------------------------------------------------------------
+# pg_hba.conf rules — managed by Patroni (bootstrap.dcs.postgresql.pg_hba).
+# Patroni rewrites pg_hba.conf and reloads PostgreSQL on every loop iteration,
+# so this list is the single source of truth for access control.
+# -------------------------------------------------------------------
+postgresql_pg_hba:
+  - "local  all          all       trust"
+  - "host   all          all       127.0.0.1/32  trust"
+  - "host   all          all       ::1/128        trust"
+  - "local  all          postgres  peer"
+  - "local  replication  all       trust"
+  - "host   replication  all       127.0.0.1/32  trust"
+  - "host   replication  all       ::1/128        trust"
+  - "host   replication  all       0.0.0.0/0     scram-sha-256"
+  - "host   replication  all       ::/0           scram-sha-256"
+  - "host   all          all       0.0.0.0/0     scram-sha-256"
+  - "host   all          all       ::/0           scram-sha-256"
+
+# -------------------------------------------------------------------
 # Replication / HA settings
 # -------------------------------------------------------------------
-synchronous_mode: true         # podpg-cls1-podpg-cls1-pg2 = Sync Standby; podpg-cls1-podpg-cls1-pg3 excluded via patroni_tag_nosync
+synchronous_mode: true         # pg2 = Sync Standby; pg3 excluded via patroni_tag_nosync
 synchronous_mode_strict: false
 synchronous_node_count: 1
 
@@ -192,6 +220,15 @@ patroni_superuser_username: "{{ postgres_user }}"
 patroni_replication_username: "replicator"
 patroni_superuser_password:   "{{ creds.PG_SUPERUSER_PWD }}"
 patroni_replication_password: "{{ creds.PG_SUPERUSER_PWD }}"
+
+# Per-node failover / sync tags — override in hosts.yml per host (patroni_tag_nofailover: true)
+patroni_tag_nofailover: false
+patroni_tag_nosync: false
+
+# Replication slot name created on the primary for the standby cluster.
+# Set at standby_cluster group level in hosts.yml: patroni_standby_cluster_slot_name
+patroni_standby_primary_slot_name: "standby_cluster_slot"
+
 patroni_restapi_port: 8008
 patroni_ttl: 30
 patroni_loop_wait: 10
@@ -260,10 +297,10 @@ haproxy_stats_user: admin
 haproxy_stats_password: "{{ creds.PG_SUPERUSER_PWD }}"
 
 # -------------------------------------------------------------------
-# Keepalived VRRP (VIP follows Patroni primary inside the Docker network)
+# Keepalived VRRP (VIP follows Patroni primary inside the Podman network)
+# VIP IPs are sourced from hosts.yml (all.vars: podpg_cls1_writer / podpg_cls1_reader)
+# and mapped to keepalived_vip / keepalived_replica_vip in vars/dba_vars.yml.
 # -------------------------------------------------------------------
-keepalived_vip: "172.18.0.10"          # primary/write VIP — follows Patroni leader
-keepalived_replica_vip: "172.18.0.9"  # replica/standby VIP — follows sync standby (or any replica)
 keepalived_vip_prefix: "24"
 keepalived_interface: "eth0"
 keepalived_virtual_router_id: 51      # VI_PRIMARY uses 51, VI_REPLICA uses 52

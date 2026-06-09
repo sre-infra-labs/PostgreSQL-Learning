@@ -81,6 +81,12 @@ This setup uses **Podman** on Ubuntu 24.04 with a **multi-datacenter** architect
 ```bash
 cd playbook-install-pg-cluster-podman-etcd/
 
+# podman stop podpg-cls1-pg4 podpg-cls1-pg3 podpg-cls1-pg2 podpg-cls1-pg1
+# podman rm podpg-cls1-pg4 podpg-cls1-pg3 podpg-cls1-pg2 podpg-cls1-pg1
+# podman start podpg-cls1-pg4 podpg-cls1-pg3 podpg-cls1-pg2 podpg-cls1-pg1
+
+ansible-playbook playbook-cleanup.yml -e skip_confirm=true --tags containers 2>&1 | tee logs/playbook-cleanup.yml.log
+
 # ── PRIMARY CLUSTER (Region A: podpg-cls1-pg1, podpg-cls1-pg2, podpg-cls1-pg3) ────────────────────────────────
 # Phase 1: Create Podman containers
 export ANSIBLE_FORCE_COLOR=1
@@ -88,7 +94,7 @@ ansible-playbook playbook-setup-podman.yml 2>&1 | tee logs/playbook-setup-podman
 
 # Phase 2: Install PostgreSQL 18 primary cluster
 export ANSIBLE_FORCE_COLOR=1
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass 2>&1 | tee logs/playbook-install-pg-cluster.yml.log
+ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass -e reinit_cluster=true 2>&1 | tee logs/playbook-install-pg-cluster.yml.log
 
 # Verify primary cluster status
 podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
@@ -96,7 +102,7 @@ podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
 # ── STANDBY CLUSTER (Region B: podpg-cls1-pg4) ─────────────────────────────────────────
 # podpg-cls1-pg4 container is created together with podpg-cls1-pg1/pg2/pg3 in Phase 1.
 # Only pg_cluster installation is separate:
-ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass 2>&1 | tee logs/playbook-install-standby-cluster.yml.log
+ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass -e reinit_cluster=true 2>&1 | tee logs/playbook-install-standby-cluster.yml.log
 
 # Verify podpg-cls1-pg4 is streaming from primary
 podman exec podpg-cls1-pg4 patronictl -c /etc/patroni/patroni.yml list
@@ -173,10 +179,10 @@ hold the Sync Standby role. podpg-cls1-pg4 stays in standby mode until a Region 
 │ Container│ SSH  │ PG   │ Patroni │ pg_exporter │ pgBouncer│ HAProxy (host ports — needs new    │
 │          │      │      │ REST    │             │          │  container creation to take effect) │
 ├──────────┼──────┼──────┼─────────┼─────────────┼──────────┼────────┬──────────┬───────────────┤
-│ podpg-cls1-pg1      │ 2221 │ 5433 │ 8011    │ 9194        │ 6433     │ 15000  │ 15001    │ 17000         │
-│ podpg-cls1-pg2      │ 2222 │ 5434 │ 8012    │ 9195        │ 6434     │ 25000  │ 25001    │ 27000         │
-│ podpg-cls1-pg3      │ 2223 │ 5435 │ 8013    │ 9196        │ 6435     │ 35000  │ 35001    │ 37000         │
-│ podpg-cls1-pg4 *    │ 2224 │ 5437 │ 8014    │ —           │ 6436     │ 45000  │ 45001    │ 47000         │
+│ podpg-cls1-pg1      │ 2211 │ 5433 │ 8011    │ 9194        │ 6433     │ 15000  │ 15001    │ 17000         │
+│ podpg-cls1-pg2      │ 2212 │ 5434 │ 8012    │ 9195        │ 6434     │ 25000  │ 25001    │ 27000         │
+│ podpg-cls1-pg3      │ 2213 │ 5435 │ 8013    │ 9196        │ 6435     │ 35000  │ 35001    │ 37000         │
+│ podpg-cls1-pg4 *    │ 2214 │ 5437 │ 8014    │ —           │ 6436     │ 45000  │ 45001    │ 47000         │
 └──────────┴──────┴──────┴─────────┴─────────────┴──────────┴────────┴──────────┴───────────────┘
                                                              write    read      stats
                                                              port     port      UI
@@ -2453,10 +2459,10 @@ ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml \
 ansible-vault edit sensitive-values --vault-password-file=vault-pass
 
 # ── SSH INTO CONTAINERS ───────────────────────────────────────────────────────
-ssh -i ~/.ssh/id_ed25519 -p 2221 -o StrictHostKeyChecking=no ansible@127.0.0.1   # podpg-cls1-pg1
-ssh -i ~/.ssh/id_ed25519 -p 2222 -o StrictHostKeyChecking=no ansible@127.0.0.1   # podpg-cls1-pg2
-ssh -i ~/.ssh/id_ed25519 -p 2223 -o StrictHostKeyChecking=no ansible@127.0.0.1   # podpg-cls1-pg3
-ssh -i ~/.ssh/id_ed25519 -p 2224 -o StrictHostKeyChecking=no ansible@127.0.0.1   # podpg-cls1-pg4 (standby)
+ssh -i ~/.ssh/id_ed25519 -p 2211 -o StrictHostKeyChecking=no ansible@127.0.0.1   # podpg-cls1-pg1
+ssh -i ~/.ssh/id_ed25519 -p 2212 -o StrictHostKeyChecking=no ansible@127.0.0.1   # podpg-cls1-pg2
+ssh -i ~/.ssh/id_ed25519 -p 2213 -o StrictHostKeyChecking=no ansible@127.0.0.1   # podpg-cls1-pg3
+ssh -i ~/.ssh/id_ed25519 -p 2214 -o StrictHostKeyChecking=no ansible@127.0.0.1   # podpg-cls1-pg4 (standby)
 
 # ── CONTAINER LIFECYCLE ───────────────────────────────────────────────────────
 # Stop/start all containers (primary + standby)
@@ -2888,8 +2894,8 @@ EOF
 ### Take SSH of containers
 ```bash
 # Primary DC
-ssh -p 2221 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_ed25519 ansible@127.0.0.1 "patronictl -c /etc/patroni/patroni.yml list" 2>/dev/null  # podpg-cls1-pg1
-ssh -p 2224 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_ed25519 ansible@127.0.0.1 "patronictl -c /etc/patroni/patroni.yml list" 2>/dev/null  # podpg-cls1-pg4 (standby)
+ssh -p 2211 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_ed25519 ansible@127.0.0.1 "patronictl -c /etc/patroni/patroni.yml list" 2>/dev/null  # podpg-cls1-pg1
+ssh -p 2214 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_ed25519 ansible@127.0.0.1 "patronictl -c /etc/patroni/patroni.yml list" 2>/dev/null  # podpg-cls1-pg4 (standby)
 ```
 
 ### Quick status check (all nodes)

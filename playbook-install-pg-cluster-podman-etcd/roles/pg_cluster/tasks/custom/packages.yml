@@ -45,11 +45,10 @@
     removes: "/etc/postgresql/{{ postgresql_version }}/main"
 
 - name: Disable and stop the default PostgreSQL systemd service
-  ansible.builtin.systemd:
-    name: "postgresql@{{ postgresql_version }}-main"
-    state: stopped
-    enabled: no
-  ignore_errors: true
+  ansible.builtin.shell: >
+    systemctl stop postgresql@{{ postgresql_version }}-main 2>/dev/null || true &&
+    systemctl disable postgresql@{{ postgresql_version }}-main 2>/dev/null || true
+  changed_when: false
 
 - name: Install Patroni apt dependencies (shell — no python3-apt required)
   ansible.builtin.shell: >

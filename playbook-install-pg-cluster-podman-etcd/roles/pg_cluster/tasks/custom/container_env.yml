@@ -1,0 +1,71 @@
+---
+# Set standard PostgreSQL / Patroni environment variables inside every container.
+#
+# Three layers are written so the vars are visible in ALL shell entry points:
+#   /etc/environment          → PAM / systemd services (no variable expansion)
+#   /etc/profile.d/pg_env.sh  → login shells (su -, bash --login, podman exec ... bash -l)
+#   /root/.bashrc             → interactive podman exec sessions as root
+#   postgresql_home_dir/.bashrc → interactive podman exec sessions as postgres
+#
+# /etc/bash.bashrc is intentionally skipped — Ubuntu's default has
+# [ -z "$PS1" ] && return at the top so it exits in non-interactive shells.
+
+# ---------------------------------------------------------------------------
+# /etc/environment  (no variable expansion; PATH must be written literally)
+# ---------------------------------------------------------------------------
+- name: Set PostgreSQL env vars in /etc/environment
+  ansible.builtin.blockinfile:
+    path: /etc/environment
+    create: true
+    mode: "0644"
+    marker: "# {mark} ANSIBLE MANAGED — PostgreSQL env"
+    block: |
+      PGDATA={{ postgresql_data_dir }}
+      PGPORT={{ postgresql_port }}
+      PGPASSFILE={{ postgresql_home_dir }}/.pgpass
+
+# ---------------------------------------------------------------------------
+# /etc/profile.d/pg_env.sh  (login shells — supports $PATH expansion)
+# ---------------------------------------------------------------------------
+- name: Set PostgreSQL env vars in /etc/profile.d/pg_env.sh
+  ansible.builtin.copy:
+    dest: /etc/profile.d/pg_env.sh
+    mode: "0644"
+    content: |
+      # Managed by Ansible — PostgreSQL {{ postgresql_version }} environment
+      export PATH="{{ postgresql_bin_dir }}:$PATH"
+      export PGDATA="{{ postgresql_data_dir }}"
+      export PGPORT="{{ postgresql_port }}"
+      export PGPASSFILE="{{ postgresql_home_dir }}/.pgpass"
+
+# ---------------------------------------------------------------------------
+# /root/.bashrc  (interactive podman exec as root)
+# ---------------------------------------------------------------------------
+- name: Set PostgreSQL env vars in /root/.bashrc
+  ansible.builtin.blockinfile:
+    path: /root/.bashrc
+    create: true
+    mode: "0644"
+    marker: "# {mark} ANSIBLE MANAGED — PostgreSQL env"
+    block: |
+      export PATH="{{ postgresql_bin_dir }}:$PATH"
+      export PGDATA="{{ postgresql_data_dir }}"
+      export PGPORT="{{ postgresql_port }}"
+      export PGPASSFILE="{{ postgresql_home_dir }}/.pgpass"
+
+# ---------------------------------------------------------------------------
+# postgres .bashrc  (interactive podman exec as postgres)
+# ---------------------------------------------------------------------------
+- name: Set PostgreSQL env vars in postgres .bashrc
+  ansible.builtin.blockinfile:
+    path: "{{ postgresql_home_dir }}/.bashrc"
+    create: true
+    owner: "{{ postgres_user }}"
+    group: "{{ postgres_user }}"
+    mode: "0640"
+    marker: "# {mark} ANSIBLE MANAGED — PostgreSQL env"
+    block: |
+      export PATH="{{ postgresql_bin_dir }}:$PATH"
+      export PGDATA="{{ postgresql_data_dir }}"
+      export PGPORT="{{ postgresql_port }}"
+      export PGPASSFILE="{{ postgresql_home_dir }}/.pgpass"

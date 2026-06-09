@@ -1,19 +1,32 @@
 ---
+# All per-host port variables (pg_port, patroni_port, pg_exporter_port, pgbouncer_port,
+# haproxy_write_host_port, haproxy_read_host_port, haproxy_stats_host_port, ansible_port)
+# are defined in hosts.yml under each host's vars — no hardcoded values here.
+
+- name: Build combined container host list from inventory
+  ansible.builtin.set_fact:
+    pg_all_hosts: >-
+      {{
+        (groups['primary_cluster_leader'] | default([]))
+        + (groups['primary_cluster_replica'] | default([]))
+        + (groups['standby_cluster'] | default([]))
+      }}
+
 - name: Read SSH public key from local machine
   ansible.builtin.slurp:
     src: "{{ ansible_ssh_public_key_path | expanduser }}"
   register: ssh_pub_key
 
 - name: Create per-node PostgreSQL data volumes
-  ansible.builtin.command: podman volume create {{ pg_data_volume_prefix }}-{{ item.name }}
-  loop: "{{ pg_containers }}"
+  ansible.builtin.command: podman volume create {{ pg_data_volume_prefix }}-{{ item }}
+  loop: "{{ pg_all_hosts }}"
   register: data_volume_result
   failed_when: false
   changed_when: "'Error' not in data_volume_result.stdout and data_volume_result.rc == 0"
 
 - name: Create per-node PostgreSQL log volumes
-  ansible.builtin.command: podman volume create {{ pg_log_volume_prefix }}-{{ item.name }}
-  loop: "{{ pg_containers }}"
+  ansible.builtin.command: podman volume create {{ pg_log_volume_prefix }}-{{ item }}
+  loop: "{{ pg_all_hosts }}"
   register: log_volume_result
   failed_when: false
   changed_when: "'Error' not in log_volume_result.stdout and log_volume_result.rc == 0"
@@ -24,56 +37,59 @@
   failed_when: false
   changed_when: "'Error' not in backup_volume_result.stdout and backup_volume_result.rc == 0"
 
-- name: Remove stale podpg-cls1-pg4 container if deploying standby only
-  ansible.builtin.command: podman rm -f podpg-cls1-pg4
-  ignore_errors: true
-  when: target_hosts is defined and target_hosts == 'standby'
+- name: Check which standby containers exist before removal
+  ansible.builtin.command: podman container exists {{ item }}
+  loop: "{{ groups['standby_cluster'] | default([]) }}"
+  register: standby_container_exists
+  failed_when: false
+  changed_when: false
+  when: target_hosts is defined and target_hosts == 'standby_cluster'
 
-- name: Wait for port to be released
+- name: Remove stale standby containers if deploying standby only
+  ansible.builtin.command: podman rm -f {{ item.item }}
+  loop: "{{ standby_container_exists.results | default([]) }}"
+  when:
+    - target_hosts is defined and target_hosts == 'standby_cluster'
+    - item.rc == 0
+
+- name: Wait for ports to be released
   ansible.builtin.pause:
     seconds: 3
-  when: target_hosts is defined and target_hosts == 'standby'
+  when: target_hosts is defined and target_hosts == 'standby_cluster'
 
 - name: Create PostgreSQL node containers
   ansible.builtin.command: >
     podman run -d
-    --name {{ item.name }}
-    --hostname {{ item.name }}
-    --network {{ podman_network_name }}:ip={{ item.ip }}
+    --name {{ item }}
+    --hostname {{ item }}
+    --network {{ podman_network }}:ip={{ hostvars[item].ip }}
     --privileged
     --cgroupns=host
     --dns 8.8.8.8
     --dns 1.1.1.1
     --tmpfs /run
     --tmpfs /run/lock
-    --volume {{ pg_data_volume_prefix }}-{{ item.name }}:/var/lib/postgresql
-    --volume {{ pg_log_volume_prefix }}-{{ item.name }}:/var/log
+    --volume {{ pg_data_volume_prefix }}-{{ item }}:/var/lib/postgresql
+    --volume {{ pg_log_volume_prefix }}-{{ item }}:/var/log
     --volume {{ pg_backup_volume }}:/var/lib/pgbackrest
     --volume /sys/fs/cgroup:/sys/fs/cgroup:rw
-    --publish {{ item.ssh_port }}:22
-    --publish {{ item.pg_port }}:5432
-    --publish {{ item.patroni_port }}:8008
-    --publish {{ item.pg_exporter_port }}:9194
-    --publish {{ item.pgbouncer_port }}:6432
-    --publish {{ item.haproxy_write_port }}:5000
-    --publish {{ item.haproxy_read_port }}:5001
-    --publish {{ item.haproxy_stats_port }}:7000
+    --publish {{ hostvars[item].ansible_port }}:22
     --restart=unless-stopped
     {{ pg_node_image }}
-  loop: "{{ pg_containers }}"
+  loop: "{{ pg_all_hosts }}"
   register: container_create
   failed_when: false
   changed_when: "'Error' not in container_create.stdout and container_create.rc == 0"
 
 - name: Handle containers that already exist
   ansible.builtin.debug:
-    msg: "Container {{ item.item.name }} already exists or network attachment failed: {{ item.stdout }}"
+    msg: "Container {{ item.item }} already exists or network attachment failed: {{ item.stdout }}"
   when: item.rc != 0
   loop: "{{ container_create.results }}"
 
 - name: Inject SSH public key into containers
   ansible.builtin.shell: |
-    podman exec {{ item.name }} bash -c "
+    podman exec {{ item }} bash -c "
       mkdir -p /home/ansible/.ssh
       chmod 700 /home/ansible/.ssh
       echo '{{ ssh_pub_key.content | b64decode | trim }}' >> /home/ansible/.ssh/authorized_keys
@@ -81,73 +97,67 @@
       chmod 600 /home/ansible/.ssh/authorized_keys
       chown -R ansible:ansible /home/ansible/.ssh
     "
-  loop: "{{ pg_containers }}"
+  loop: "{{ pg_all_hosts }}"
   changed_when: true
   register: ssh_inject
   failed_when: ssh_inject.rc != 0
 
 - name: Configure DNS resolvers in containers (/etc/resolv.conf)
   ansible.builtin.shell: |
-    podman exec {{ item.name }} bash -c '
+    podman exec {{ item }} bash -c '
       echo "nameserver 8.8.8.8" > /etc/resolv.conf
       echo "nameserver 1.1.1.1" >> /etc/resolv.conf
       echo "options ndots:0" >> /etc/resolv.conf
     '
-  loop: "{{ pg_containers }}"
+  loop: "{{ pg_all_hosts }}"
   changed_when: true
 
 - name: Remove apt proxy config (direct downloads — proxy not reachable from Podman bridge)
   ansible.builtin.shell: |
-    podman exec {{ item.name }} bash -c 'rm -f /etc/apt/apt.conf.d/01proxy'
-  loop: "{{ pg_containers }}"
+    podman exec {{ item }} bash -c 'rm -f /etc/apt/apt.conf.d/01proxy'
+  loop: "{{ pg_all_hosts }}"
   changed_when: true
 
 - name: Force apt to use IPv4 to prevent 'Waiting for headers' IPv6 timeouts
   ansible.builtin.shell: |
-    podman exec {{ item.name }} bash -c '
+    podman exec {{ item }} bash -c '
       echo "Acquire::ForceIPv4 \"true\";" > /etc/apt/apt.conf.d/99force-ipv4
     '
-  loop: "{{ pg_containers }}"
+  loop: "{{ pg_all_hosts }}"
   changed_when: true
 
 - name: Disable IPv6 in containers via sysctl
   ansible.builtin.shell: |
-    podman exec {{ item.name }} bash -c '
+    podman exec {{ item }} bash -c '
       sysctl -w net.ipv6.conf.all.disable_ipv6=1
       sysctl -w net.ipv6.conf.default.disable_ipv6=1
     '
-  loop: "{{ pg_containers }}"
+  loop: "{{ pg_all_hosts }}"
   changed_when: true
 
 - name: Stop and mask apt-daily timers to prevent apt lock conflicts
   ansible.builtin.shell: |
-    podman exec {{ item.name }} bash -c '
+    podman exec {{ item }} bash -c '
       systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service 2>/dev/null || true
       systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
       systemctl mask apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service 2>/dev/null || true
     '
-  loop: "{{ pg_containers }}"
+  loop: "{{ pg_all_hosts }}"
   changed_when: true
 
 - name: Wait for SSH to be available on all containers
   ansible.builtin.wait_for:
     host: "127.0.0.1"
-    port: "{{ item.ssh_port }}"
+    port: "{{ hostvars[item].ansible_port }}"
     state: started
     timeout: 90
     delay: 3
-  loop: "{{ pg_containers }}"
+  loop: "{{ pg_all_hosts }}"
 
 - name: Container connectivity summary
   ansible.builtin.debug:
     msg:
-      - "{{ item.name }} | IP: {{ item.ip }}"
-      - "  SSH:           localhost:{{ item.ssh_port }}"
-      - "  PostgreSQL:    localhost:{{ item.pg_port }}"
-      - "  Patroni:       localhost:{{ item.patroni_port }}"
-      - "  pg_exporter:   localhost:{{ item.pg_exporter_port }}"
-      - "  pgBouncer:     localhost:{{ item.pgbouncer_port }}"
-      - "  HAProxy write: localhost:{{ item.haproxy_write_port }} (primary only)"
-      - "  HAProxy read:  localhost:{{ item.haproxy_read_port }}  (replicas)"
-      - "  HAProxy stats: localhost:{{ item.haproxy_stats_port }} (HTTP UI)"
-  loop: "{{ pg_containers }}"
+      - "{{ item }} | IP: {{ hostvars[item].ip }}"
+      - "  SSH (host):  127.0.0.1:{{ hostvars[item].ansible_port }}"
+      - "  All other services reachable only within the container network (172.18.0.0/16)"
+  loop: "{{ pg_all_hosts }}"
