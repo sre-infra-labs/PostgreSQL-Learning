@@ -27,6 +27,60 @@ point during this procedure.**
 
 ---
 
+### Step 0 - Check current `standby_cluster` config on both primary & standby cluster side
+
+```bash
+patronictl -c /etc/patroni/patroni.yml show-config docpg-cls1 | grep -A5 standby_cluster
+```
+
+> Output on Primary Cluster (docpg-cls1-pg1) -
+```
+ajaydwivedi@Ajays-MacBook-Pro Office % docker exec -it docpg-cls1-pg4 bash
+root@docpg-cls1-pg4:/# patronictl -c /etc/patroni/patroni.yml show-config docpg-cls1 | grep -A5 standby_cluster
+standby_cluster:
+  host: 172.18.0.10
+  port: 5432
+  primary_slot_name: standby_cluster_slot
+synchronous_mode: true
+synchronous_mode_strict: false
+synchronous_node_count: 1
+ttl: 30
+
+root@docpg-cls1-pg4:/# 
+root@docpg-cls1-pg4:/# 
+root@docpg-cls1-pg4:/# patronictl list
++ Cluster: docpg-cls1 (7649402051775700970) ----+-----------+----+-----------+
+| Member         | Host        | Role           | State     | TL | Lag in MB |
++----------------+-------------+----------------+-----------+----+-----------+
+| docpg-cls1-pg4 | 172.18.0.14 | Standby Leader | streaming |  2 |           |
++----------------+-------------+----------------+-----------+----+-----------+
+root@docpg-cls1-pg4:/# 
+```
+
+> Output on Standby Cluster (docpg-cls1-pg4) -
+```
+ajaydwivedi@Ajays-MacBook-Pro Office % docker exec -it docpg-cls1-pg4 bash
+root@docpg-cls1-pg4:/# patronictl -c /etc/patroni/patroni.yml show-config docpg-cls1 | grep -A5 standby_cluster
+standby_cluster:
+  host: 172.18.0.10
+  port: 5432
+  primary_slot_name: standby_cluster_slot
+synchronous_mode: true
+synchronous_mode_strict: false
+synchronous_node_count: 1
+ttl: 30
+
+root@docpg-cls1-pg4:/# 
+root@docpg-cls1-pg4:/# 
+root@docpg-cls1-pg4:/# patronictl list
++ Cluster: docpg-cls1 (7649402051775700970) ----+-----------+----+-----------+
+| Member         | Host        | Role           | State     | TL | Lag in MB |
++----------------+-------------+----------------+-----------+----+-----------+
+| docpg-cls1-pg4 | 172.18.0.14 | Standby Leader | streaming |  2 |           |
++----------------+-------------+----------------+-----------+----+-----------+
+root@docpg-cls1-pg4:/# 
+```
+
 ### Step 1 — Put Primary Cluster in Maintenance Mode
 
 Pausing Patroni prevents automatic leader elections while you drain connections and confirm

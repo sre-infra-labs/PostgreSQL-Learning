@@ -101,10 +101,7 @@
     url: "http://127.0.0.1:{{ patroni_restapi_port }}/config"
     method: PATCH
     body_format: json
-    body:
-      slots:
-        "{{ _slot_name }}":
-          type: physical
+    body: "{{ {'slots': { _slot_name: {'type': 'physical'} } } }}"
     status_code: [200, 201]
   run_once: true
   delegate_to: "{{ groups['primary_cluster_leader'][0] }}"
