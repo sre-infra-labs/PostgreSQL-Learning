@@ -313,11 +313,8 @@ Configuration changed
 root@docpg-cls1-pg4:/# 
 ```
 
-Restart Patroni on pg4 to ensure the promotion is applied immediately:
-
-```bash
-docker exec docpg-cls1-pg4 systemctl restart patroni
-```
+Patroni cluster should automatically get promoted with above config change.
+Now, we should see a member with "Leader" role.
 
 > Output -
 ```
@@ -359,75 +356,19 @@ docker exec docpg-cls1-pg4 \
 
 ---
 
-### Step 7 — Restart New Primary Members 3 Times to Advance Timeline
-
-Advancing the PostgreSQL timeline on pg4 ensures the old primary cluster members (pg1/pg2/pg3)
-will unambiguously recognise pg4 as the upstream when they return as the new standby cluster.
-Patroni performs a clean stop-and-start of PostgreSQL on each cycle.
-
-> Before each restart, wait for pg4 to be healthy (Leader, `pg_is_in_recovery = f`).
-> If there are replicas in the new primary cluster, also wait for them to return to
-> `streaming` state before triggering the next restart.
-
-**Restart 1 of 3:**
-
+### Step 7 - Increase Timeline on New Primary Cluster by at least 3 by doing switchover/failover among nodes of same cluster
 ```bash
-docker exec docpg-cls1-pg4 \
-  patronictl -c /etc/patroni/patroni.yml \
-  restart docpg-cls1 docpg-cls1-pg4 --force
+# Check timeline
+pg_controldata $PGDATA | grep Timeline
+ls $PGDATA/pg_wal/*.history
 
-until docker exec docpg-cls1-pg4 \
-        curl -sf http://172.18.0.14:8008/primary > /dev/null 2>&1; do
-  echo "Waiting..."; sleep 3
-done && echo "✅ pg4 healthy after restart 1"
-
-docker exec docpg-cls1-pg4 psql -h 172.18.0.14 -U postgres -At -c \
-  "SELECT timeline_id FROM pg_control_checkpoint();"
+# Failover to next node to increase timeline
+patronictl -c /etc/patroni/patroni.yml failover docpg-cls1 --candidate docpg-cls1-pg2 --force
 ```
 
-**Restart 2 of 3:**
 
-```bash
-docker exec docpg-cls1-pg4 \
-  patronictl -c /etc/patroni/patroni.yml \
-  restart docpg-cls1 docpg-cls1-pg4 --force
 
-until docker exec docpg-cls1-pg4 \
-        curl -sf http://172.18.0.14:8008/primary > /dev/null 2>&1; do
-  echo "Waiting..."; sleep 3
-done && echo "✅ pg4 healthy after restart 2"
-
-docker exec docpg-cls1-pg4 psql -h 172.18.0.14 -U postgres -At -c \
-  "SELECT timeline_id FROM pg_control_checkpoint();"
-```
-
-**Restart 3 of 3:**
-
-```bash
-docker exec docpg-cls1-pg4 \
-  patronictl -c /etc/patroni/patroni.yml \
-  restart docpg-cls1 docpg-cls1-pg4 --force
-
-until docker exec docpg-cls1-pg4 \
-        curl -sf http://172.18.0.14:8008/primary > /dev/null 2>&1; do
-  echo "Waiting..."; sleep 3
-done && echo "✅ pg4 healthy after restart 3"
-
-docker exec docpg-cls1-pg4 psql -h 172.18.0.14 -U postgres -At -c \
-  "SELECT timeline_id FROM pg_control_checkpoint();"
-```
-
-Final new-primary state check:
-
-```bash
-docker exec docpg-cls1-pg4 \
-  patronictl -c /etc/patroni/patroni.yml list docpg-cls1
-# ✅ docpg-cls1-pg4 — Leader — running — TL advanced
-```
-
----
-
-### Step 8 — Bring Old Primary Cluster Back Up
+### Step 7 — Bring Old Primary Cluster Back Up
 
 Start the old primary cluster containers and Patroni. Because the old cluster's etcd DCS still
 holds the previous leader state and has **no `standby_cluster` config yet**, Patroni will elect
@@ -455,7 +396,7 @@ Scenario 02: In DR Drill, the old primary members would NOT come online. Would b
 
 ---
 
-### Step 9 — Add `standby_cluster` Config to Old Primary Cluster
+### Step 8 — Add `standby_cluster` Config to Old Primary Cluster
 
 Write the `standby_cluster` block into the old cluster's DCS, pointing it at pg4. Patroni
 propagates this to all members automatically.
@@ -528,7 +469,7 @@ docker exec docpg-cls1-pg1 \
 
 ---
 
-### Step 10 — Remove Old Primary Cluster from Maintenance Mode
+### Step 9 — Remove Old Primary Cluster from Maintenance Mode
 
 Resume Patroni on the old cluster so it can carry out the demotion in Step 11.
 
@@ -604,9 +545,12 @@ docker exec docpg-cls1-pg1 \
 # ✅ "(paused)" should no longer appear
 ```
 
+!IMPORTANT If the old primary cluster is showing TL greater than new primary cluster, then it means the old primary cluster was not shutdown properly before DR promotion.
+In that case, by default, cluster members will enter into `start failed` state.
+
 ---
 
-### Step 11 — Verify New Standby Cluster
+### Step 10 — Verify New Standby Cluster
 
 **On the new standby cluster (old primary):**
 
