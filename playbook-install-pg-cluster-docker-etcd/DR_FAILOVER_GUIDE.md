@@ -537,6 +537,65 @@ docker exec docpg-cls1-pg1 \
   patronictl -c /etc/patroni/patroni.yml resume --wait docpg-cls1
 ```
 
+> Output -
+```
+root@docpg-cls1-pg1:/# 
+root@docpg-cls1-pg1:/# patronictl -c /etc/patroni/patroni.yml resume --wait docpg-cls1
+'resume' request sent, waiting until it is recognized by all nodes
+Success: cluster management is resumed
+root@docpg-cls1-pg1:/# 
+root@docpg-cls1-pg1:/# 
+root@docpg-cls1-pg1:/# patronictl list
++ Cluster: docpg-cls1 (7649402051775700970) ----+---------------------+----+-----------+------------------+
+| Member         | Host        | Role           | State               | TL | Lag in MB | Tags             |
++----------------+-------------+----------------+---------------------+----+-----------+------------------+
+| docpg-cls1-pg1 | 172.18.0.11 | Replica        | in archive recovery |  4 |         0 |                  |
+| docpg-cls1-pg2 | 172.18.0.12 | Standby Leader | in archive recovery |  2 |           |                  |
+| docpg-cls1-pg3 | 172.18.0.13 | Replica        | streaming           |  4 |         0 | nofailover: true |
++----------------+-------------+----------------+---------------------+----+-----------+------------------+
+root@docpg-cls1-pg1:/# 
+root@docpg-cls1-pg1:/# patronictl list
++ Cluster: docpg-cls1 (7649402051775700970) ----+-----------+----+-----------+------------------+
+| Member         | Host        | Role           | State     | TL | Lag in MB | Tags             |
++----------------+-------------+----------------+-----------+----+-----------+------------------+
+| docpg-cls1-pg1 | 172.18.0.11 | Replica        | streaming |  4 |         0 |                  |
+| docpg-cls1-pg2 | 172.18.0.12 | Standby Leader | streaming |  4 |           |                  |
+| docpg-cls1-pg3 | 172.18.0.13 | Replica        | streaming |  4 |         0 | nofailover: true |
++----------------+-------------+----------------+-----------+----+-----------+------------------+
+
+root@docpg-cls1-pg1:/# 
+root@docpg-cls1-pg1:/# patronictl failover 
+Current cluster topology
++ Cluster: docpg-cls1 (7649402051775700970) ----+-----------+----+-----------+------------------+
+| Member         | Host        | Role           | State     | TL | Lag in MB | Tags             |
++----------------+-------------+----------------+-----------+----+-----------+------------------+
+| docpg-cls1-pg1 | 172.18.0.11 | Replica        | streaming |  4 |         0 |                  |
+| docpg-cls1-pg2 | 172.18.0.12 | Standby Leader | streaming |  4 |           |                  |
+| docpg-cls1-pg3 | 172.18.0.13 | Replica        | streaming |  4 |         0 | nofailover: true |
++----------------+-------------+----------------+-----------+----+-----------+------------------+
+Candidate ['docpg-cls1-pg1'] []: docpg-cls1-pg1
+Are you sure you want to failover cluster docpg-cls1, demoting current leader docpg-cls1-pg2? [y/N]: y
+2026-06-09 15:08:24.81776 Successfully failed over to "docpg-cls1-pg1"
++ Cluster: docpg-cls1 (7649402051775700970) ----+---------------------+----+-----------+------------------+
+| Member         | Host        | Role           | State               | TL | Lag in MB | Tags             |
++----------------+-------------+----------------+---------------------+----+-----------+------------------+
+| docpg-cls1-pg1 | 172.18.0.11 | Standby Leader | in archive recovery |  2 |           |                  |
+| docpg-cls1-pg2 | 172.18.0.12 | Replica        | stopped             |    |   unknown |                  |
+| docpg-cls1-pg3 | 172.18.0.13 | Replica        | streaming           |  4 |         0 | nofailover: true |
++----------------+-------------+----------------+---------------------+----+-----------+------------------+
+root@docpg-cls1-pg1:/# 
+
+root@docpg-cls1-pg1:/# 
+root@docpg-cls1-pg1:/# patronictl list
++ Cluster: docpg-cls1 (7649402051775700970) ----+-----------+----+-----------+------------------+
+| Member         | Host        | Role           | State     | TL | Lag in MB | Tags             |
++----------------+-------------+----------------+-----------+----+-----------+------------------+
+| docpg-cls1-pg1 | 172.18.0.11 | Standby Leader | streaming |  4 |           |                  |
+| docpg-cls1-pg2 | 172.18.0.12 | Replica        | streaming |  4 |         0 |                  |
+| docpg-cls1-pg3 | 172.18.0.13 | Replica        | streaming |  4 |         0 | nofailover: true |
++----------------+-------------+----------------+-----------+----+-----------+------------------+
+```
+
 Verify maintenance mode is lifted:
 
 ```bash
