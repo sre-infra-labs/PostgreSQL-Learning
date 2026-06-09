@@ -1,181 +1,368 @@
 # DR Split Brain Resolution Guide
 
-## When Does Split Brain Occur?
+## What Is Split Brain?
 
-Split brain arises when the **old primary cluster (pg1/pg2/pg3) comes back online after an
-unplanned outage** while the **standby cluster (pg4) has already been promoted** to a new primary.
-Both sides now believe they own the dataset and Patroni on pg1/pg2/pg3 may elect a Leader.
+Split brain is a condition where **two independent PostgreSQL clusters simultaneously believe they
+are the authoritative primary** for the same dataset. Both accept writes, their WAL histories
+diverge, and without intervention, data on one side will be permanently lost.
+
+In a Patroni multi-DC setup, this happens specifically when:
+1. The primary cluster (`docpg-cls1-pg1/pg2/pg3`) suffers an **unplanned outage**.
+2. The standby cluster (`docpg-cls1-pg4`) is **promoted** to a new primary (timeline advances).
+3. The old primary cluster **recovers and comes back online** — but with no `standby_cluster` config,
+   Patroni elects a leader among pg1/pg2/pg3, creating a second independent primary.
+
+---
+
+## Real-World Example: 2026-06-09 on docpg-cls1
+
+### Initial state (before split brain)
 
 ```
-OLD PRIMARY  →  went down unplanned
-                ↓
-STANDBY (pg4)  →  promoted (timeline advances, e.g. TL3 → TL4)
-                ↓
-OLD PRIMARY  →  comes back online, elects a leader on its OWN timeline (TL3+)
-                ↓
-SPLIT BRAIN: two writable primaries, diverged WAL histories
+docpg-cls1-pg1  Leader        TL2  running   (primary cluster)
+docpg-cls1-pg2  Sync Standby  TL2  streaming
+docpg-cls1-pg3  Replica       TL2  streaming
+docpg-cls1-pg4  Standby Leader TL1 streaming  (DR standby cluster)
 ```
 
-## Topology Reference
+### How the split brain was created
 
-| Cluster | Members | Role (post-split-brain) | Container IP |
-|---------|---------|------------------------|-------------|
-| **New Primary** | docpg-cls1-pg4 | Leader (pg4 was promoted) | 172.18.0.14 |
-| **Old Primary** (stale) | docpg-cls1-pg1 | Stale Leader — must be demoted | 172.18.0.11 |
-| | docpg-cls1-pg2 | Replica (stale) | 172.18.0.12 |
-| | docpg-cls1-pg3 | Replica (stale) | 172.18.0.13 |
+**Step A** — `docpg-cls1-pg1/pg2/pg3` containers were stopped (`docker stop`), simulating
+a datacenter outage. `pg4` entered `in archive recovery` state:
+
+```
+docpg-cls1-pg4  Standby Leader  TL1  in archive recovery
+```
+
+**Step B** — `docpg-cls1-pg4` was promoted by removing the `standby_cluster` block from
+the DCS. Timeline advanced: TL1 → TL2 → TL3.
+
+```
+docpg-cls1-pg4  Leader  TL3  running  ← new authoritative primary
+```
+
+**Step C** — `docker start docpg-cls1-pg1 docpg-cls1-pg2 docpg-cls1-pg3`. The containers
+came back online with their old etcd DCS state (no `standby_cluster` config). Patroni elected
+`docpg-cls1-pg2` as the leader, creating its own timeline promotion: TL3 → TL4.
+
+```
+docpg-cls1-pg1  Sync Standby  TL4  streaming  ← stale, diverged
+docpg-cls1-pg2  Leader        TL4  running    ← SPLIT BRAIN: second primary
+docpg-cls1-pg3  Replica       TL4  streaming  ← stale, diverged
+```
+
+### Why it is dangerous
+
+At this point:
+- **pg4 (TL3)** is the correct primary. Any application writes here are valid.
+- **pg2 (TL4)** is a stale primary. Any writes here are silently diverged from pg4's history and
+  will be **permanently lost** when the split brain is resolved.
+- The two sides diverged at WAL location `0/7000000` on timeline 3.
+
+### Topology reference (post-split-brain)
+
+| Node | Role | Timeline | IP | Status |
+|------|------|----------|----|--------|
+| docpg-cls1-pg4 | **Authoritative New Primary** | TL3 | 172.18.0.14 | ✅ Keep |
+| docpg-cls1-pg2 | **Stale Leader** (must be demoted) | TL4 | 172.18.0.12 | ⚠ Fence |
+| docpg-cls1-pg1 | Stale Replica | TL4 | 172.18.0.11 | ⚠ Rewind |
+| docpg-cls1-pg3 | Stale Replica | TL4 | 172.18.0.13 | ⚠ Rewind |
+
+---
+
+## How to Detect Split Brain
+
+```bash
+# Check both clusters simultaneously
+docker exec docpg-cls1-pg4 patronictl -c /etc/patroni/patroni.yml list
+docker exec docpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
+```
+
+**Split brain is confirmed when BOTH outputs show a `Leader` in `running` state:**
+
+```
+# pg4 side
++ Cluster: docpg-cls1 (7649421311168285384) ------+----+-----------+
+| Member         | Host        | Role   | State   | TL | Lag in MB |
++----------------+-------------+--------+---------+----+-----------+
+| docpg-cls1-pg4 | 172.18.0.14 | Leader | running |  3 |           |
++----------------+-------------+--------+---------+----+-----------+
+
+# pg1/pg2/pg3 side — SECOND LEADER = SPLIT BRAIN
++ Cluster: docpg-cls1 (7649421311168285384) --+-----------+----+-----------+
+| Member         | Host        | Role         | State     | TL | Lag in MB |
++----------------+-------------+--------------+-----------+----+-----------+
+| docpg-cls1-pg1 | 172.18.0.11 | Sync Standby | streaming |  4 |         0 |
+| docpg-cls1-pg2 | 172.18.0.12 | Leader       | running   |  4 |           |
+| docpg-cls1-pg3 | 172.18.0.13 | Replica      | streaming |  4 |         0 |
++----------------+-------------+--------------+-----------+----+-----------+
+```
 
 ---
 
 ## Resolution Runbook
 
 > **⚠ Work fast.** Every write accepted by the old primary widens the divergence.
-> Run Steps 1 and 2 first — in parallel if possible.
+> Run Steps 1 and 2 simultaneously if possible.
 
 ---
 
 ### Step 1 — Fence the Old Primary: Block All Application Writes Immediately
 
-The moment you detect split brain, cut off application traffic to the old primary.
+The moment you detect split brain, cut off application traffic to the stale leader.
+Use the **local Unix socket** (`-U postgres` without `-h`) — the stale primary rejects
+remote connections if `pg_hba.conf` requires a password that isn't in `.pgpass`.
 
 ```bash
-# Kill all non-superuser connections on old primary leader
-docker exec docpg-cls1-pg1 psql -h 172.18.0.11 -U postgres -c "
+# Identify which node became the stale leader
+docker exec docpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
+# In the 2026-06-09 incident: docpg-cls1-pg2 was the stale leader
+
+# Kill all non-superuser connections via local socket on the stale leader
+docker exec docpg-cls1-pg2 psql -U postgres -c "
 SELECT count(pg_terminate_backend(pid))
 FROM pg_stat_activity
 WHERE usename NOT IN ('postgres', 'replicator')
   AND pid <> pg_backend_pid();"
-
-# Set connection limit to 0 on all application databases
-docker exec docpg-cls1-pg1 psql -h 172.18.0.11 -U postgres -c "
-  ALTER DATABASE dba CONNECTION LIMIT 0;"
 ```
 
-Then immediately put the old primary cluster into Patroni **maintenance mode** to prevent automatic
-leader elections from restarting:
+> Output:
+```
+ count
+-------
+     0
+(1 row)
+```
+
+Immediately put the old cluster into Patroni **maintenance mode** to prevent automatic
+leader elections while you work:
 
 ```bash
 docker exec docpg-cls1-pg1 \
   patronictl -c /etc/patroni/patroni.yml pause --wait docpg-cls1
 ```
 
----
-
-### Step 2 — Identify the Authoritative Primary and Assess Divergence
-
-Check the timeline and latest LSN on **both** sides to understand how far apart they are.
-
-```bash
-# --- New primary (pg4) ---
-docker exec docpg-cls1-pg4 psql -h 172.18.0.14 -U postgres -c \
-  "SELECT pg_is_in_recovery(), timeline_id, redo_lsn FROM pg_control_checkpoint();"
-
-docker exec docpg-cls1-pg4 psql -h 172.18.0.14 -U postgres -c \
-  "SELECT pg_current_wal_lsn();"
-
-# --- Old primary leader (pg1) ---
-docker exec docpg-cls1-pg1 psql -h 172.18.0.11 -U postgres -c \
-  "SELECT pg_is_in_recovery(), timeline_id, redo_lsn FROM pg_control_checkpoint();"
-
-docker exec docpg-cls1-pg1 psql -h 172.18.0.11 -U postgres -c \
-  "SELECT pg_current_wal_lsn();"
+> Output (if not already paused):
+```
+Success: cluster management is paused
 ```
 
-**Interpret the output:**
+> Output (if already paused from a previous DR drill):
+```
+Error: Cluster is already paused
+```
 
-| Scenario | Meaning | Fix |
+Confirm maintenance mode is active:
+
+```bash
+docker exec docpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
+```
+
+> Output:
+```
++ Cluster: docpg-cls1 (7649421311168285384) --+-----------+----+-----------+------------------+
+| Member         | Host        | Role         | State     | TL | Lag in MB | Tags             |
++----------------+-------------+--------------+-----------+----+-----------+------------------+
+| docpg-cls1-pg1 | 172.18.0.11 | Sync Standby | streaming |  4 |         0 |                  |
+| docpg-cls1-pg2 | 172.18.0.12 | Leader       | running   |  4 |           |                  |
+| docpg-cls1-pg3 | 172.18.0.13 | Replica      | streaming |  4 |         0 | nofailover: true |
++----------------+-------------+--------------+-----------+----+-----------+------------------+
+ Maintenance mode: on
+```
+
+---
+
+### Step 2 — Assess Timeline Divergence
+
+Check timeline and current LSN on both the new primary (pg4) and the stale leader (pg2).
+
+```bash
+# New primary (pg4)
+docker exec docpg-cls1-pg4 psql -U postgres -At -c \
+  "SELECT 'is_in_recovery='||pg_is_in_recovery()||' tl='||timeline_id||' lsn='||pg_current_wal_lsn()
+   FROM pg_control_checkpoint();"
+
+# Stale leader (pg2)
+docker exec docpg-cls1-pg2 psql -U postgres -At -c \
+  "SELECT 'is_in_recovery='||pg_is_in_recovery()||' tl='||timeline_id||' lsn='||pg_current_wal_lsn()
+   FROM pg_control_checkpoint();"
+```
+
+> Output from the 2026-06-09 incident:
+```
+is_in_recovery=false tl=3 lsn=0/70001E0    ← pg4: new primary, TL3
+
+is_in_recovery=false tl=4 lsn=0/7007D60    ← pg2: stale leader, TL4 (HIGHER than pg4!)
+```
+
+**Interpretation table:**
+
+| Scenario | What happened | Method |
 |---|---|---|
-| pg4 timeline > pg1 timeline | pg4 promoted cleanly after pg1 went down; pg1 has no divergent writes | `pg_rewind` (fast path) |
-| pg1 timeline = pg4 timeline | Both advanced independently → true split brain with possible data divergence | `pg_rewind` or `reinit` |
-| pg1 timeline > pg4 timeline | pg1 accepted writes after pg4 promoted → data may be lost on demotion | `reinit` (safest) |
+| pg4 TL > stale TL | pg1/pg2/pg3 stayed down while pg4 ran ahead | `pg_rewind` ✅ |
+| pg4 TL = stale TL | Both promoted independently | `pg_rewind` ✅, fallback reinit |
+| **pg4 TL < stale TL** | **Old primary promoted itself after pg4 — true split brain** | **`pg_rewind` still works** ✅ |
+
+> **Lesson from 2026-06-09:** `pg_rewind` worked correctly even though the stale side (TL4)
+> had a *higher* timeline than the new primary (TL3). pg_rewind found the common fork point on
+> TL2 and rewound each node cleanly.
 
 ---
 
-### Step 3 — Stop Patroni on Old Primary Cluster Members
+### Step 3 — Stop Patroni and PostgreSQL on Old Primary Cluster Members
 
-Stop replicas first, then the stale leader, to prevent any further writes or elections.
+Patroni and PostgreSQL must both be fully stopped before running `pg_rewind`.
+Stop replicas first, then the stale leader.
 
 ```bash
+# Stop Patroni (Patroni will stop PostgreSQL gracefully when it stops)
 docker exec docpg-cls1-pg3 systemctl stop patroni
-docker exec docpg-cls1-pg2 systemctl stop patroni
 docker exec docpg-cls1-pg1 systemctl stop patroni
+docker exec docpg-cls1-pg2 systemctl stop patroni
 ```
 
-Verify all stopped:
+Verify Patroni is stopped, then verify PostgreSQL is also stopped:
 
 ```bash
 for n in docpg-cls1-pg1 docpg-cls1-pg2 docpg-cls1-pg3; do
-  echo -n "$n patroni: "
-  docker exec $n systemctl is-active patroni 2>&1
+  echo -n "$n patroni: "; docker exec $n systemctl is-active patroni 2>&1
+  echo -n "$n postgres: "; docker exec $n bash -c "pgrep -x postgres >/dev/null && echo running || echo stopped"
 done
-# ✅ Expected: inactive (or failed) for all three
+```
+
+> Output after Patroni stop:
+```
+docpg-cls1-pg1 patroni: inactive
+docpg-cls1-pg1 postgres: running      ← PostgreSQL may still be up
+docpg-cls1-pg2 patroni: inactive
+docpg-cls1-pg2 postgres: running
+docpg-cls1-pg3 patroni: inactive
+docpg-cls1-pg3 postgres: running
+```
+
+If PostgreSQL is still running, stop it cleanly with `pg_ctl`:
+
+```bash
+for n in docpg-cls1-pg3 docpg-cls1-pg1 docpg-cls1-pg2; do
+  echo "=== Stopping postgres on $n ==="
+  docker exec $n su -c \
+    "/usr/lib/postgresql/18/bin/pg_ctl stop -D /var/lib/postgresql/18/main -m fast" postgres
+done
+```
+
+> Output:
+```
+=== Stopping postgres on docpg-cls1-pg3 ===
+waiting for server to shut down.... done
+server stopped
+=== Stopping postgres on docpg-cls1-pg1 ===
+waiting for server to shut down.... done
+server stopped
+=== Stopping postgres on docpg-cls1-pg2 ===
+waiting for server to shut down.... done
+server stopped
+```
+
+Confirm all PostgreSQL processes are gone:
+
+```bash
+for n in docpg-cls1-pg1 docpg-cls1-pg2 docpg-cls1-pg3; do
+  echo -n "$n postgres: "
+  docker exec $n bash -c "pgrep -x postgres >/dev/null && echo running || echo stopped"
+done
+```
+
+> Output:
+```
+docpg-cls1-pg1 postgres: stopped
+docpg-cls1-pg2 postgres: stopped
+docpg-cls1-pg3 postgres: stopped
 ```
 
 ---
 
-### Step 4 — Rewind or Reinitialise the Old Primary Cluster Members
+### Step 4 — Run `pg_rewind` on Each Old Primary Member
 
-Choose the correct method based on Step 2's assessment.
+`pg_rewind` syncs the stale data directory to match the new primary (pg4).
+It finds the last common WAL fork point and copies only the changed data blocks.
+The process is non-destructive — no data from pg4 is deleted.
 
-#### Option A — `pg_rewind` (preferred when timelines diverged cleanly)
-
-`pg_rewind` rewinds pg1's data directory to the point where it diverged from pg4's timeline,
-then lets Patroni re-apply WAL from the archive. This is non-destructive: only divergent WAL
-blocks are overwritten.
+Must be run as the **`postgres` OS user** using `su -c`:
 
 ```bash
-# Run pg_rewind on each old primary member against the new primary (pg4)
 for node in docpg-cls1-pg1 docpg-cls1-pg2 docpg-cls1-pg3; do
-  echo "=== Rewinding $node ==="
-  docker exec $node bash -c "
+  echo ""; echo "=== pg_rewind on $node (source = pg4) ==="
+  docker exec $node su -c "
     /usr/lib/postgresql/18/bin/pg_rewind \
       --target-pgdata=/var/lib/postgresql/18/main \
       --source-server='host=172.18.0.14 port=5432 user=postgres dbname=postgres' \
       --progress \
       --no-ensure-shutdown
-  "
+  " postgres
+  echo "exit: $?"
 done
 ```
 
-After `pg_rewind` completes on each node, verify:
+> Output from the 2026-06-09 incident (same for all three nodes):
+```
+=== pg_rewind on docpg-cls1-pg1 (source = pg4) ===
+pg_rewind: connected to server
+pg_rewind: servers diverged at WAL location 0/7000000 on timeline 3
+pg_rewind: rewinding from last common checkpoint at 0/60001C0 on timeline 2
+pg_rewind: reading source file list
+pg_rewind: reading target file list
+pg_rewind: reading WAL in target
+pg_rewind: need to copy 84 MB (total source directory size is 110 MB)
+    0/86969 kB (0%) copied
+86969/86969 kB (100%) copied
+pg_rewind: creating backup label and updating control file
+pg_rewind: syncing target data directory
+pg_rewind: Done!
+exit: 0
 
-```bash
-docker exec docpg-cls1-pg1 bash -c \
-  "/usr/lib/postgresql/18/bin/pg_controldata /var/lib/postgresql/18/main \
-   | grep -E 'Timeline|checkpoint'"
-# ✅ TimeLineID should now match pg4's timeline
+=== pg_rewind on docpg-cls1-pg2 (source = pg4) ===
+... (identical output) ...
+pg_rewind: Done!
+exit: 0
+
+=== pg_rewind on docpg-cls1-pg3 (source = pg4) ===
+... (identical output) ...
+pg_rewind: Done!
+exit: 0
 ```
 
-#### Option B — `patronictl reinit` (use when pg_rewind fails or data is unrecoverable)
-
-This wipes the data directory and clones from the new primary. **All local data divergence is
-discarded.** Suitable when the timeline mismatch is too wide for pg_rewind.
-
-```bash
-# Start Patroni first (it is needed to issue reinit), but keep pause mode on
-docker exec docpg-cls1-pg1 systemctl start patroni
-docker exec docpg-cls1-pg2 systemctl start patroni
-docker exec docpg-cls1-pg3 systemctl start patroni
-
-# Reinit replicas first, then the stale leader
-docker exec docpg-cls1-pg1 \
-  patronictl -c /etc/patroni/patroni.yml reinit docpg-cls1 docpg-cls1-pg3 --force
-docker exec docpg-cls1-pg1 \
-  patronictl -c /etc/patroni/patroni.yml reinit docpg-cls1 docpg-cls1-pg2 --force
-docker exec docpg-cls1-pg1 \
-  patronictl -c /etc/patroni/patroni.yml reinit docpg-cls1 docpg-cls1-pg1 --force
-```
-
-> **Note:** `reinit` streams a fresh base backup from the new standby leader (pg4 → pg1 via the
-> `standby_cluster_slot`). Make sure Step 5 is done **before** resuming so Patroni knows where to
-> stream from.
+**What pg_rewind did:**
+- Found the divergence at `0/7000000` on TL3 — the point where the old primary promoted to TL4
+  while pg4 was already on TL3.
+- Rewound to the last common checkpoint at `0/60001C0` on TL2.
+- Copied 84 MB per node (out of 110 MB total) to make the data directory consistent with pg4.
+- Created a `backup_label` file marking the minimum recovery point: `0/7006260` on TL3
+  (pg4's last checkpoint at the time of rewind).
 
 ---
 
-### Step 5 — Write `standby_cluster` Config to Old Primary Cluster DCS
+### Step 5 — Write `standby_cluster` Config to Old Cluster DCS
 
-Point the old cluster at pg4 as its upstream. This tells Patroni to manage pg1/pg2/pg3
-as a streaming standby cluster rather than an independent primary.
+Start Patroni briefly on one node to issue `patronictl` commands against the old cluster's etcd.
+The cluster is still in maintenance mode, so PostgreSQL will not be started yet.
+
+```bash
+docker exec docpg-cls1-pg1 systemctl start patroni
+sleep 5
+docker exec docpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
+```
+
+> Output:
+```
++ Cluster: docpg-cls1 (7649421311168285384) --+---------+----+-----------+
+| Member         | Host        | Role         | State   | TL | Lag in MB |
++----------------+-------------+--------------+---------+----+-----------+
+| docpg-cls1-pg1 | 172.18.0.11 | Sync Standby | stopped |    |   unknown |
++----------------+-------------+--------------+---------+----+-----------+
+ Maintenance mode: on
+```
+
+Now write the `standby_cluster` config pointing to pg4:
 
 ```bash
 docker exec docpg-cls1-pg1 \
@@ -187,26 +374,42 @@ docker exec docpg-cls1-pg1 \
   --set "slots.standby_cluster_slot.type=null"
 ```
 
-Verify the config was applied:
+> Output:
+```
+---
++++
+@@ -88,9 +88,10 @@
+   use_pg_rewind: true
+   use_slots: true
+ retry_timeout: 10
+-slots:
+-  standby_cluster_slot:
+-    type: physical
++standby_cluster:
++  host: docpg-cls1-pg4
++  port: 5432
++  primary_slot_name: standby_cluster_slot
+ synchronous_mode: true
+ synchronous_mode_strict: false
+ synchronous_node_count: 1
 
-```bash
-docker exec docpg-cls1-pg1 \
-  patronictl -c /etc/patroni/patroni.yml show-config docpg-cls1 | grep -A5 standby_cluster
-# ✅ Expected: host: docpg-cls1-pg4, port: 5432, primary_slot_name: standby_cluster_slot
+Configuration changed
 ```
 
-Also verify `standby_cluster_slot` is active on pg4 (should have been provisioned during
-pg4's promotion per the DR_FAILOVER_GUIDE Step 6):
+Verify `standby_cluster_slot` exists on pg4 (provisioned during pg4's promotion in Step 6 of
+DR_FAILOVER_GUIDE). It will show `active=false` until pg1 connects:
 
 ```bash
-docker exec docpg-cls1-pg4 psql -h 172.18.0.14 -U postgres -c "
-SELECT slot_name, slot_type, active, restart_lsn
-FROM pg_replication_slots
-WHERE slot_name = 'standby_cluster_slot';"
-# ✅ active = t  (becomes true once pg1 connects)
+docker exec docpg-cls1-pg4 psql -U postgres -At -c \
+  "SELECT slot_name, active FROM pg_replication_slots WHERE slot_name='standby_cluster_slot';"
 ```
 
-If the slot does **NOT** exist on pg4, create it now before resuming:
+> Output:
+```
+standby_cluster_slot|f
+```
+
+If the slot does **NOT** exist on pg4, create it before proceeding:
 
 ```bash
 docker exec docpg-cls1-pg4 \
@@ -217,80 +420,249 @@ docker exec docpg-cls1-pg4 \
 
 ---
 
-### Step 6 — Remove Old Primary Cluster from Maintenance Mode
+### Step 6 — Resume Maintenance Mode and Start Patroni on All Nodes
 
 ```bash
 docker exec docpg-cls1-pg1 \
   patronictl -c /etc/patroni/patroni.yml resume --wait docpg-cls1
-```
 
-Start Patroni on any nodes that were fully stopped (not just paused):
-
-```bash
-docker exec docpg-cls1-pg1 systemctl start patroni
 docker exec docpg-cls1-pg2 systemctl start patroni
 docker exec docpg-cls1-pg3 systemctl start patroni
 ```
 
+> Output:
+```
+'resume' request sent, waiting until it is recognized by all nodes
+Success: cluster management is resumed
+```
+
 ---
 
-### Step 7 — Verify Old Primary is Now a Healthy Standby
+### Step 7 — Handle `start failed` State After pg_rewind
+
+> ⚠ **This step is required after every `pg_rewind`.** Do not skip it.
+
+After `pg_rewind`, PostgreSQL may enter `start failed` state with this error in the log:
+
+```
+FATAL: requested timeline 4 does not contain minimum recovery point 0/7006260 on timeline 3
+```
+
+**Why this happens:**
+
+`pg_rewind` creates a `backup_label` that sets the minimum recovery point to `0/7006260` on TL3
+(pg4's state). When PostgreSQL starts with `recovery_target_timeline = 'latest'`, it scans the
+pgbackrest archive for history files. Because the old primary pushed `00000004.history` to the
+archive AND left a local copy in its own `pg_wal/` directory, PostgreSQL finds TL4 as the
+"latest" timeline. But TL4 diverged from TL3 at `0/7000000` — before the minimum recovery
+point — so PostgreSQL correctly rejects it and crashes.
+
+**Fix: remove the rogue TL4 history from two locations:**
+
+#### 7a — Remove from the pgbackrest archive
+
+Identify which archive the current stanza uses and remove the rogue TL4.history:
 
 ```bash
-# On the old primary cluster members — expect Standby Leader + Replicas streaming
-docker exec docpg-cls1-pg1 \
-  patronictl -c /etc/patroni/patroni.yml list docpg-cls1
-# ✅ Expected:
-# | docpg-cls1-pg1 | ... | Standby Leader | streaming | <TL matching pg4> | 0 |
-# | docpg-cls1-pg2 | ... | Replica        | streaming | <TL matching pg4> | 0 |
-# | docpg-cls1-pg3 | ... | Replica        | streaming | <TL matching pg4> | 0 |
+# Identify the active archive directory (highest 18-N)
+docker exec docpg-cls1-pg4 bash -c \
+  "find /var/lib/pgbackrest/archive/docpg-cls1 -name '00000004.history' | sort"
+```
 
-# Confirm pg1 is in standby/recovery mode
-docker exec docpg-cls1-pg1 psql -h 172.18.0.11 -U postgres -c \
-  "SELECT pg_is_in_recovery(), timeline_id FROM pg_control_checkpoint();"
-# ✅ pg_is_in_recovery = t
+> Output:
+```
+/var/lib/pgbackrest/archive/docpg-cls1/18-5/00000004.history
+```
 
-# Check replication lag from pg4 to pg1
-docker exec docpg-cls1-pg4 psql -h 172.18.0.14 -U postgres -c "
-SELECT application_name, state, sync_state,
+Confirm the content is a rogue history (TL3 ends at the split-brain fork point):
+
+```bash
+docker exec docpg-cls1-pg4 \
+  cat /var/lib/pgbackrest/archive/docpg-cls1/18-5/00000004.history
+```
+
+> Output:
+```
+1	0/6000000	no recovery target specified
+
+2	0/70000A0	no recovery target specified
+
+3	0/7000000	no recovery target specified
+```
+
+This is the rogue entry — TL3 is listed as ended at `0/7000000`, which is exactly the
+split-brain divergence point. Compare to the correct TL3.history on pg4:
+
+```bash
+docker exec docpg-cls1-pg4 \
+  cat /var/lib/pgbackrest/archive/docpg-cls1/18-5/00000003.history
+```
+
+> Output (correct — TL3 is the current timeline, no entry for it):
+```
+1	0/6000000	no recovery target specified
+
+2	0/70000A0	no recovery target specified
+```
+
+Remove the rogue TL4.history and its associated WAL segments from the archive:
+
+```bash
+docker exec docpg-cls1-pg4 bash -c "
+  rm -v /var/lib/pgbackrest/archive/docpg-cls1/18-5/00000004.history
+  rm -rv /var/lib/pgbackrest/archive/docpg-cls1/18-5/0000000400000000
+"
+```
+
+> Output:
+```
+removed '/var/lib/pgbackrest/archive/docpg-cls1/18-5/00000004.history'
+removed '/var/lib/pgbackrest/archive/docpg-cls1/18-5/0000000400000000/000000040000000000000007-b23c843fb3067598a12a990523f32ac178667a95.lz4'
+removed directory '/var/lib/pgbackrest/archive/docpg-cls1/18-5/0000000400000000'
+```
+
+#### 7b — Remove from each node's local `pg_wal/` directory
+
+`pg_rewind` copies files from the source but does **not** purge old history files from the
+local `pg_wal/` directory. The stale `00000004.history` created when the node ran as a TL4
+primary is still present and must be removed manually:
+
+```bash
+for node in docpg-cls1-pg1 docpg-cls1-pg2 docpg-cls1-pg3; do
+  echo "=== $node ==="
+  docker exec $node bash -c "ls /var/lib/postgresql/18/main/pg_wal/*.history"
+  docker exec $node bash -c "rm -v /var/lib/postgresql/18/main/pg_wal/00000004.history"
+  docker exec $node bash -c "ls /var/lib/postgresql/18/main/pg_wal/*.history"
+done
+```
+
+> Output:
+```
+=== docpg-cls1-pg1 ===
+/var/lib/postgresql/18/main/pg_wal/00000002.history
+/var/lib/postgresql/18/main/pg_wal/00000003.history
+/var/lib/postgresql/18/main/pg_wal/00000004.history   ← rogue
+removed '/var/lib/postgresql/18/main/pg_wal/00000004.history'
+/var/lib/postgresql/18/main/pg_wal/00000002.history
+/var/lib/postgresql/18/main/pg_wal/00000003.history   ← only valid history remains
+
+=== docpg-cls1-pg2 ===
+... (same) ...
+
+=== docpg-cls1-pg3 ===
+... (same) ...
+```
+
+#### 7c — Restart Patroni on all old primary nodes
+
+```bash
+docker exec docpg-cls1-pg1 systemctl restart patroni
+docker exec docpg-cls1-pg2 systemctl restart patroni
+docker exec docpg-cls1-pg3 systemctl restart patroni
+```
+
+Wait ~20 seconds, then check:
+
+```bash
+docker exec docpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
+```
+
+> Output:
+```
++ Cluster: docpg-cls1 (7649421311168285384) ----+-----------+----+-----------+------------------+
+| Member         | Host        | Role           | State     | TL | Lag in MB | Tags             |
++----------------+-------------+----------------+-----------+----+-----------+------------------+
+| docpg-cls1-pg1 | 172.18.0.11 | Standby Leader | streaming |  3 |           |                  |
+| docpg-cls1-pg2 | 172.18.0.12 | Replica        | streaming |  3 |         0 |                  |
+| docpg-cls1-pg3 | 172.18.0.13 | Replica        | streaming |  3 |         0 | nofailover: true |
++----------------+-------------+----------------+-----------+----+-----------+------------------+
+```
+
+✅ All nodes are streaming on TL3 (matching pg4).
+
+---
+
+### Step 8 — Final Verification
+
+```bash
+echo "=== Old cluster (now standby) ==="
+docker exec docpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
+
+echo ""
+echo "=== New primary (pg4) ==="
+docker exec docpg-cls1-pg4 patronictl -c /etc/patroni/patroni.yml list
+
+echo ""
+echo "=== pg1 is in recovery (not writable) ==="
+docker exec docpg-cls1-pg1 psql -U postgres -At -c \
+  "SELECT pg_is_in_recovery() FROM pg_control_checkpoint();"
+# ✅ Expected: t
+
+echo ""
+echo "=== standby_cluster_slot on pg4 is active ==="
+docker exec docpg-cls1-pg4 psql -U postgres -c "
+SELECT slot_name, slot_type, active, restart_lsn
+FROM pg_replication_slots
+WHERE slot_name = 'standby_cluster_slot';"
+# ✅ Expected: active = t, restart_lsn non-null
+
+echo ""
+echo "=== Replication lag from pg4 to pg1 ==="
+docker exec docpg-cls1-pg4 psql -U postgres -c "
+SELECT application_name, state,
        pg_wal_lsn_diff(pg_current_wal_lsn(), flush_lsn) AS flush_lag_bytes,
        replay_lag
 FROM pg_stat_replication
 WHERE application_name = 'docpg-cls1-pg1';"
-# ✅ state = streaming, flush_lag_bytes approaching 0
+# ✅ Expected: state = streaming, flush_lag_bytes = 0
+```
+
+> Output from the 2026-06-09 resolution:
+```
+=== standby_cluster_slot on pg4 is active ===
+     slot_name       | slot_type | active | restart_lsn
+----------------------+-----------+--------+-------------
+ standby_cluster_slot | physical  | t      | 0/700F4A8
+(1 row)
+
+=== Replication lag from pg4 to pg1 ===
+ application_name |   state   | flush_lag_bytes | replay_lag
+------------------+-----------+-----------------+------------
+ docpg-cls1-pg1   | streaming |               0 |
+(1 row)
 ```
 
 ---
 
-### Step 8 — Restore Application Connection Limits
-
-Once the old cluster is confirmed to be a healthy standby (not a primary), restore connection
-limits so that if it ever needs to serve read traffic in the future, it can.
+### Step 9 — Restore Application Connection Limits
 
 ```bash
-docker exec docpg-cls1-pg1 psql -h 172.18.0.11 -U postgres -c "
-  ALTER DATABASE dba CONNECTION LIMIT -1;"
+docker exec docpg-cls1-pg2 psql -U postgres -c \
+  "ALTER DATABASE dba CONNECTION LIMIT -1;" 2>/dev/null || echo "(no dba db)"
 ```
 
 ---
 
-## Timeline Mismatch After Old Primary Returns (Nodes in `start failed` state)
+## Critical Lesson: pg_rewind + Rogue Timeline History Files
 
-If pg1/pg2/pg3 members enter `start failed` state with:
+When the split brain is resolved using `pg_rewind`, two sets of rogue timeline history files
+**always** exist and **always** cause `start failed` unless manually removed:
+
+| Location | File | Why it exists |
+|---|---|---|
+| pgbackrest archive (`18-5/`) | `00000004.history` | Old primary pushed it when it promoted to TL4 |
+| Each node's `pg_wal/` dir | `00000004.history` | Local file from when node ran as TL4 primary |
+
+`pg_rewind` does **not** clean up these files. After every split brain resolution via
+`pg_rewind`, Step 7 (history file cleanup) is mandatory.
+
+The specific error you will see if you skip Step 7:
+
 ```
-FATAL: requested timeline N is not a child of this server's history
-```
-
-This means their local `pg_control` diverges from the pgbackrest archive. Use `reinit` to
-wipe and reclone each affected member from the current standby leader (pg1) once it is healthy:
-
-```bash
-# First bring pg1 back as standby leader (via Steps 4B and 5-6 above)
-# Then reinit the failed members
-docker exec docpg-cls1-pg1 \
-  patronictl -c /etc/patroni/patroni.yml reinit docpg-cls1 docpg-cls1-pg2 --force
-docker exec docpg-cls1-pg1 \
-  patronictl -c /etc/patroni/patroni.yml reinit docpg-cls1 docpg-cls1-pg3 --force
+FATAL: requested timeline 4 does not contain minimum recovery point 0/7006260 on timeline 3
+DETAIL: The backup_label from pg_rewind requires ending on timeline 3, but
+        the archive presents timeline 4 as the latest, which forked at 0/7000000
+        — before the required minimum recovery end point.
 ```
 
 ---
@@ -299,16 +671,24 @@ docker exec docpg-cls1-pg1 \
 
 ```
 Old primary comes back online after pg4 was promoted
-       |
-       ├── Is pg1 cluster still in maintenance mode? ──yes──> Skip Step 1 (already fenced)
-       |         no
-       |          ↓
-       |    FENCE IMMEDIATELY (Step 1)
-       |
-       ├── pg4 TL > pg1 TL? ──yes──> pg_rewind (Step 4A) → configure standby_cluster (Step 5)
-       |
-       ├── pg4 TL = pg1 TL? ──yes──> pg_rewind first; if fails → reinit (Step 4B)
-       |
-       └── pg1 TL > pg4 TL? ──yes──> reinit (Step 4B) → configure standby_cluster (Step 5)
-                                      ⚠ Data written to old primary after pg4 promoted is LOST
+       │
+       ├─ Is pg1 cluster still in maintenance mode? ──yes──► Skip Step 1 (already fenced)
+       │          no
+       │           ↓
+       │     FENCE IMMEDIATELY (Step 1)
+       │
+       ├─ Assess timeline (Step 2)
+       │
+       ├─ pg4 TL ≥ stale TL? ──yes──► pg_rewind (Steps 3-4) → standby_cluster config (Step 5)
+       │                                → history file cleanup (Step 7) → verify (Step 8)
+       │
+       └─ pg4 TL < stale TL? ──yes──► pg_rewind still works! (same path)
+            (true split brain)          Divergence point is on a common ancestor TL.
+                                        ⚠ Writes on stale side after fork point are LOST.
+                                        → history file cleanup (Step 7) is CRITICAL here.
 ```
+
+> **Note:** `reinit` (wipe and reclone) is only needed if `pg_rewind` explicitly fails with
+> an error such as "could not find common ancestor" or the data directories are corrupt beyond
+> what pg_rewind can handle. In the 2026-06-09 incident, `pg_rewind` succeeded with the stale
+> side on a **higher** timeline (TL4) than the new primary (TL3).
