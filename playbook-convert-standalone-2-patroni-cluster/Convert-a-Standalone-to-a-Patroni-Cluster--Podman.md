@@ -1026,6 +1026,402 @@ systemctl restart patroni
 
 ---
 
+# Part 9 — Set up podpg-cls2-pg4 as a Standby Cluster
+
+> `podpg-cls2-pg4` runs in **Patroni standby cluster mode**. It streams WAL from the
+> primary cluster leader (`podpg-cls2-pg1`, 172.18.0.21) and remains read-only until
+> explicitly promoted. It has its **own single-node etcd** — it does **not** join the
+> pg1/pg2/pg3 etcd cluster.
+>
+> Commands marked **[host]** run on **ryzen9**; all others run **inside the container**.
+
+## Key Differences from pg2/pg3
+
+| Feature                  | pg2 / pg3 (primary-cluster replicas) | pg4 (standby cluster)              |
+|--------------------------|--------------------------------------|------------------------------------|
+| etcd                     | Shared 3-node cluster (pg1+pg2+pg3)  | Own single-node etcd on pg4        |
+| Patroni scope            | podpg-cls2                           | podpg-cls2 (same — enables failback)|
+| Streams from             | Primary cluster leader               | Primary cluster leader (172.18.0.21)|
+| `standby_cluster` block  | Not set                              | Set — host: 172.18.0.21, port: 5432|
+| Write queries            | Via leader only                      | Read-only until promoted           |
+
+---
+
+## [host] Create volumes and container
+
+```bash
+podman volume create pg-cls2-data-pg4
+podman volume create pg-cls2-logs-pg4
+
+podman run -d \
+  --name podpg-cls2-pg4 \
+  --hostname podpg-cls2-pg4 \
+  --network lab-network:ip=172.18.0.24 \
+  --privileged \
+  --cgroupns=host \
+  --dns 8.8.8.8 \
+  --dns 1.1.1.1 \
+  --tmpfs /run \
+  --tmpfs /run/lock \
+  --volume pg-cls2-data-pg4:/var/lib/postgresql \
+  --volume pg-cls2-logs-pg4:/var/log \
+  --volume /stale-storage/share-stalestorage/pgbackrest_backups_cls2:/mnt/pgbackrest-repo \
+  --volume /sys/fs/cgroup:/sys/fs/cgroup:rw \
+  --restart=unless-stopped \
+  pg-cluster-node:latest
+
+# Verify container is up
+podman ps --filter name=podpg-cls2-pg4
+
+podman exec -it podpg-cls2-pg4 bash
+```
+
+---
+
+## [inside podpg-cls2-pg4] /etc/hosts
+
+```bash
+cat >> /etc/hosts << 'EOF'
+172.18.0.21     podpg-cls2-pg1
+172.18.0.22     podpg-cls2-pg2
+172.18.0.23     podpg-cls2-pg3
+172.18.0.24     podpg-cls2-pg4
+172.18.0.25     podpg-cls2-pg5
+172.18.0.26     podpg-cls2-pg6
+EOF
+```
+
+---
+
+## [inside podpg-cls2-pg4] Install packages
+
+```bash
+apt-get update
+install -d /usr/share/postgresql-common/pgdg
+curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+  -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+  https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo $VERSION_CODENAME)-pgdg main" \
+  > /etc/apt/sources.list.d/pgdg.list
+
+apt-get update
+
+apt-get install -y \
+  postgresql-18 postgresql-client-18 postgresql-contrib-18 \
+  pgbackrest \
+  python3 python3-pip python3-dev gcc curl wget jq acl less vim
+
+pg_dropcluster --stop 18 main 2>/dev/null || true
+
+mkdir -p /var/lib/postgresql/{18/main,log,scripts}
+chown -R postgres:postgres /var/lib/postgresql
+chmod -R 0750 /var/lib/postgresql
+
+sudo -u postgres tee /var/lib/postgresql/.bash_profile > /dev/null << 'EOF2'
+export PATH=/usr/lib/postgresql/18/bin:$PATH
+export PGDATA=/var/lib/postgresql/18/main
+export PGPORT=5432
+export PGPASSFILE=/var/lib/postgresql/.pgpass
+export PATRONICTL_CONFIG_FILE=/etc/patroni/patroni.yml
+EOF2
+
+sudo -u postgres tee /var/lib/postgresql/.pgpass > /dev/null << 'EOF2'
+*:*:*:postgres:YourSuperUserPassword
+*:5432:*:replicator:YourReplicatorPassword
+EOF2
+
+chmod 0750 -R /var/lib/postgresql
+chmod 0600 /var/lib/postgresql/.pgpass
+```
+
+---
+
+## [inside podpg-cls2-pg4] Install etcd and Patroni
+
+> pg4 runs its **own standalone etcd** — do **not** run `etcdctl member add` on pg1.
+
+```bash
+ETCD_VER=v3.6.12
+
+curl -L \
+  https://github.com/etcd-io/etcd/releases/download/${ETCD_VER}/etcd-${ETCD_VER}-linux-amd64.tar.gz \
+  -o /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz
+
+tar -xzf /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz -C /usr/local/bin/ \
+  --strip-components=1 \
+  etcd-${ETCD_VER}-linux-amd64/etcd \
+  etcd-${ETCD_VER}-linux-amd64/etcdctl
+
+rm /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz
+etcd --version
+
+pip3 install patroni[etcd3] 'psycopg[binary]' --break-system-packages
+
+# Create etcd user and data directory
+useradd -r -s /sbin/nologin etcd 2>/dev/null || true
+mkdir -p /var/lib/etcd
+chown etcd:etcd /var/lib/etcd
+chmod 0700 /var/lib/etcd
+```
+
+### Configure etcd (single-node)
+
+```bash
+mkdir -p /etc/etcd
+
+tee /etc/etcd/etcd.conf > /dev/null << 'EOF'
+ETCD_NAME="podpg-cls2-pg4"
+ETCD_DATA_DIR="/var/lib/etcd"
+ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379"
+ETCD_ADVERTISE_CLIENT_URLS="http://172.18.0.24:2379"
+ETCD_LISTEN_PEER_URLS="http://0.0.0.0:2380"
+ETCD_INITIAL_ADVERTISE_PEER_URLS="http://172.18.0.24:2380"
+ETCD_INITIAL_CLUSTER="podpg-cls2-pg4=http://172.18.0.24:2380"
+ETCD_INITIAL_CLUSTER_STATE="new"
+ETCD_INITIAL_CLUSTER_TOKEN="podpg-cls2-etcd"
+EOF
+
+tee /etc/systemd/system/etcd.service > /dev/null << 'EOF'
+[Unit]
+Description=etcd distributed key-value store
+After=network.target
+
+[Service]
+Type=notify
+User=etcd
+Group=etcd
+EnvironmentFile=/etc/etcd/etcd.conf
+ExecStart=/usr/local/bin/etcd
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now etcd
+systemctl status etcd
+
+# Verify single-node etcd is healthy
+etcdctl --endpoints=http://172.18.0.24:2379 endpoint health
+```
+
+---
+
+## [inside podpg-cls2-pg4] Configure pgbackrest
+
+> pg4 uses the same shared backup repository as pg1/pg2/pg3 (read-only for restore).
+> No stanza-create is needed — the stanza already exists on the shared mount.
+
+```bash
+mkdir -p /etc/pgbackrest
+
+tee /etc/pgbackrest/pgbackrest.conf > /dev/null << 'EOF'
+[global]
+# Host directory bind-mounted into the container at /var/lib/pgbackrest
+repo1-path=/mnt/pgbackrest-repo
+repo1-retention-full=2
+repo1-retention-diff=7
+log-level-console=info
+log-level-file=detail
+log-path=/var/log/pgbackrest
+
+process-max=4
+compress-type=lz4
+compress-level=3
+
+archive-async=y
+spool-path=/var/spool/pgbackrest
+archive-queue-max=268435456
+archive-timeout=1800
+
+[podpg-cls2]
+pg1-path=/var/lib/postgresql/18/main
+pg1-port=5432
+pg1-user=postgres
+EOF
+
+chmod 755 /etc/pgbackrest/
+chmod 644 /etc/pgbackrest/pgbackrest.conf
+mkdir -p /var/log/pgbackrest /var/spool/pgbackrest
+chown postgres:postgres /var/log/pgbackrest /var/spool/pgbackrest
+```
+
+---
+
+## [inside podpg-cls2-pg4] Configure Patroni (standby cluster mode)
+
+```bash
+mkdir -p /etc/patroni
+
+tee /etc/patroni/patroni.yml > /dev/null << 'EOF'
+scope: podpg-cls2
+namespace: /db/
+name: podpg-cls2-pg4
+
+restapi:
+  listen: 172.18.0.24:8008
+  connect_address: 172.18.0.24:8008
+
+etcd3:
+  hosts: 172.18.0.24:2379
+
+bootstrap:
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    standby_cluster:
+      host: 172.18.0.21
+      port: 5432
+    postgresql:
+      use_pg_rewind: true
+      use_slots: true
+      parameters:
+        wal_level: replica
+        hot_standby: "on"
+        wal_keep_size: 1GB
+        max_wal_senders: 10
+        max_replication_slots: 10
+        checkpoint_timeout: 30
+        archive_mode: "on"
+        archive_command: "pgbackrest --stanza=podpg-cls2 archive-push %p"
+        restore_command: "pgbackrest --stanza=podpg-cls2 archive-get %f %p"
+
+  pg_hba:
+    - "local   all             postgres                            peer"
+    - "local   all             all                                 scram-sha-256"
+    - "host    all             all             127.0.0.1/32        scram-sha-256"
+    - "host    all             all             ::1/128             scram-sha-256"
+    - "host    replication     replicator      127.0.0.1/32        scram-sha-256"
+    - "host    replication     replicator      ::1/128             scram-sha-256"
+    - "host    replication     replicator      172.18.0.0/24       scram-sha-256"
+    - "host    all             all             172.18.0.0/24       scram-sha-256"
+    - "host    all             all             192.168.100.0/24    scram-sha-256"
+
+postgresql:
+  listen: "0.0.0.0:5432"
+  connect_address: "172.18.0.24:5432"
+  data_dir: /var/lib/postgresql/18/main
+  bin_dir: /usr/lib/postgresql/18/bin
+  config_dir: /var/lib/postgresql/18/main
+  pgpass: /var/lib/postgresql/.pgpass_patroni
+  authentication:
+    replication:
+      username: replicator
+      password: YourReplicatorPassword
+    superuser:
+      username: postgres
+      password: YourSuperUserPassword
+    rewind:
+      username: postgres
+      password: YourSuperUserPassword
+  parameters:
+    unix_socket_directories: "/var/run/postgresql,/tmp"
+    log_directory: /var/log/postgresql
+    log_filename: "postgresql-%Y-%m-%d_%H%M%S.log"
+    logging_collector: "on"
+    shared_buffers: 256MB
+
+tags:
+  nofailover: false
+  noloadbalance: false
+  clonefrom: false
+  nosync: false
+EOF
+
+chown postgres:postgres /etc/patroni/ /etc/patroni/patroni.yml
+chmod 0755 /etc/patroni/
+chmod 0600 /etc/patroni/patroni.yml
+
+tee /etc/systemd/system/patroni.service > /dev/null << 'EOF'
+[Unit]
+Description=Patroni — High Availability PostgreSQL Cluster Manager
+After=syslog.target network.target etcd.service
+Wants=etcd.service
+
+[Service]
+Type=simple
+User=postgres
+Group=postgres
+ExecStart=/usr/local/bin/patroni /etc/patroni/patroni.yml
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=process
+TimeoutSec=30
+Restart=on-failure
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=patroni
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+
+# Start Patroni — it will pg_basebackup from podpg-cls2-pg1 automatically
+systemctl enable --now patroni
+
+# Follow clone + startup progress
+journalctl -u patroni -f
+```
+
+---
+
+## Verify the Standby Cluster
+
+```bash
+# From podpg-cls2-pg4 — check Patroni sees it as Standby Leader
+patronictl -c /etc/patroni/patroni.yml list
+# Expected:
+# + Cluster: podpg-cls2 (standby) ---+----------------+----+-----+
+# | Member         | Host        | Role           | State     | TL | Lag |
+# +----------------+-------------+----------------+-----------+----+-----+
+# | podpg-cls2-pg4 | 172.18.0.24 | Standby Leader | streaming |  N |   0 |
+
+# From podpg-cls2-pg1 — confirm pg4 appears as a streaming replica
+sudo -u postgres psql -h 127.0.0.1 -p 5432 -d postgres \
+  -c "SELECT client_addr, state, sync_state, sent_lsn, replay_lsn,
+             ROUND((sent_lsn - replay_lsn)/1048576.0,2) AS lag_mb
+      FROM pg_stat_replication
+      WHERE client_addr = '172.18.0.24';"
+
+# Verify pg4 is in recovery (standby mode)
+sudo -u postgres psql -h 172.18.0.24 -p 5432 -d postgres \
+  -c "SELECT pg_is_in_recovery();"
+# Expected: t
+
+# Check streaming lag on pg4
+sudo -u postgres psql -h 172.18.0.24 -p 5432 -d postgres \
+  -c "SELECT now() - pg_last_xact_replay_timestamp() AS replication_lag;"
+
+# Verify pg4's local etcd is healthy
+etcdctl --endpoints=http://172.18.0.24:2379 endpoint health
+
+# Monitor pg4 Patroni log
+journalctl -u patroni -f
+```
+
+---
+
+## Promote the Standby Cluster (DR only)
+
+Use this only when the entire primary cluster (pg1/pg2/pg3) is down and pg4 must accept writes.
+
+```bash
+# On podpg-cls2-pg4 — promote the standby to become an autonomous primary
+patronictl -c /etc/patroni/patroni.yml edit-config podpg-cls2 \
+  --force --set standby_cluster=null
+
+# Patroni will restart PostgreSQL in read-write mode and elect pg4 as Leader
+patronictl -c /etc/patroni/patroni.yml list
+```
+
+---
+
 # Useful Commands
 
 > Run as postgres user: `sudo su - postgres` or use full path `/usr/local/bin/patronictl`
