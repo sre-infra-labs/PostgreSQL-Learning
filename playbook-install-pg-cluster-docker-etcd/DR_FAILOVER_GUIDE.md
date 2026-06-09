@@ -54,6 +54,15 @@ root@docpg-cls1-pg1:/# patronictl list
 +----------------+-------------+--------------+-----------+----+-----------+------------------+
 root@docpg-cls1-pg1:/# 
 root@docpg-cls1-pg1:/# 
+root@docpg-cls1-pg1:/# psql -h localhost -U postgres -c "select slot_name, slot_type, temporary, active, xmin, wal_status, synced from pg_replication_slots;"
+      slot_name       | slot_type | temporary | active | xmin | wal_status | synced 
+----------------------+-----------+-----------+--------+------+------------+--------
+ docpg_cls1_pg2       | physical  | f         | t      |  804 | reserved   | f
+ standby_cluster_slot | physical  | f         | t      |  804 | reserved   | f
+ docpg_cls1_pg3       | physical  | f         | t      |  804 | reserved   | f
+(3 rows)
+
+root@docpg-cls1-pg1:/# 
 ```
 
 > Output on Standby Cluster (docpg-cls1-pg4) -
@@ -80,7 +89,7 @@ root@docpg-cls1-pg4:/# patronictl list
 root@docpg-cls1-pg4:/# 
 ```
 
-### Step 1 — Put Primary Cluster in Maintenance Mode
+### Step 1 — Put Primary Cluster in Maintenance Mode during DR Drill
 
 Pausing Patroni prevents automatic leader elections while you drain connections and confirm
 replication lag. Maintenance mode does **not** stop PostgreSQL or replication.
@@ -237,13 +246,36 @@ docker ps --filter name=docpg-cls1-pg --format "table {{.Names}}\t{{.Status}}"
 # ✅ pg1, pg2, pg3 should be absent or show Exited
 ```
 
+Post this, the standby cluster leader will go into `in archive recovery` state.
+
+```bash
+root@docpg-cls1-pg4:/# # *************** WHEN PRIMARY CLUSTER IS ONLINE ********************************
+root@docpg-cls1-pg4:/# patronictl list
++ Cluster: docpg-cls1 (7649402051775700970) ----+-----------+----+-----------+
+| Member         | Host        | Role           | State     | TL | Lag in MB |
++----------------+-------------+----------------+-----------+----+-----------+
+| docpg-cls1-pg4 | 172.18.0.14 | Standby Leader | streaming |  2 |           |
++----------------+-------------+----------------+-----------+----+-----------+
+root@docpg-cls1-pg4:/# 
+
+
+root@docpg-cls1-pg4:/# # *************** WHEN PRIMARY CLUSTER IS OFFLINE ********************************
+root@docpg-cls1-pg4:/# patronictl list
++ Cluster: docpg-cls1 (7649402051775700970) ----+---------------------+----+-----------+
+| Member         | Host        | Role           | State               | TL | Lag in MB |
++----------------+-------------+----------------+---------------------+----+-----------+
+| docpg-cls1-pg4 | 172.18.0.14 | Standby Leader | in archive recovery |  2 |           |
++----------------+-------------+----------------+---------------------+----+-----------+
+root@docpg-cls1-pg4:/# 
+```
+
 ---
 
 ### Step 6 — Promote Standby Cluster to Primary
 
-Remove the `standby_cluster` block from the DCS configuration. Patroni on `docpg-cls1-pg4`
-detects this change and promotes PostgreSQL from a streaming standby to a normal read-write
-primary. At the same time, provision a permanent physical slot (`standby_cluster_slot`) so that the old primary cluster can securely stream from pg4 when it returns as the new standby.
+Remove the `standby_cluster` block from the DCS configuration. 
+Patroni on `docpg-cls1-pg4` detects this change and promotes PostgreSQL from a streaming standby to a normal read-write primary.
+At the same time, provision a permanent physical slot (`standby_cluster_slot`) so that the old primary cluster can securely stream from pg4 when it returns as the new standby.
 
 ```bash
 docker exec docpg-cls1-pg4 \
@@ -253,10 +285,52 @@ docker exec docpg-cls1-pg4 \
   --set "slots.standby_cluster_slot.type=physical"
 ```
 
+> Output -
+```
+root@docpg-cls1-pg4:/#
+root@docpg-cls1-pg4:/# patronictl -c /etc/patroni/patroni.yml \
+  edit-config docpg-cls1 --force \
+  --set "standby_cluster=null" \
+  --set "slots.standby_cluster_slot.type=physical"
+--- 
++++ 
+@@ -87,10 +87,9 @@
+   use_pg_rewind: true
+   use_slots: true
+ retry_timeout: 10
++slots:
+-standby_cluster:
++  standby_cluster_slot:
+-  host: 172.18.0.10
++    type: physical
+-  port: 5432
+-  primary_slot_name: standby_cluster_slot
+ synchronous_mode: true
+ synchronous_mode_strict: false
+ synchronous_node_count: 1
+
+Configuration changed
+root@docpg-cls1-pg4:/# 
+```
+
 Restart Patroni on pg4 to ensure the promotion is applied immediately:
 
 ```bash
 docker exec docpg-cls1-pg4 systemctl restart patroni
+```
+
+> Output -
+```
+root@docpg-cls1-pg4:/# 
+root@docpg-cls1-pg4:/# systemctl restart patroni
+root@docpg-cls1-pg4:/# 
+root@docpg-cls1-pg4:/# patronictl list
++ Cluster: docpg-cls1 (7649402051775700970) ------+----+-----------+
+| Member         | Host        | Role   | State   | TL | Lag in MB |
++----------------+-------------+--------+---------+----+-----------+
+| docpg-cls1-pg4 | 172.18.0.14 | Leader | running |  4 |           |
++----------------+-------------+--------+---------+----+-----------+
+root@docpg-cls1-pg4:/# 
 ```
 
 Wait for pg4 to become the primary leader:
@@ -396,15 +470,59 @@ docker exec docpg-cls1-pg1 \
   edit-config docpg-cls1 --force \
   --set "standby_cluster.host=docpg-cls1-pg4" \
   --set "standby_cluster.port=5432" \
+  --set "standby_cluster.primary_slot_name=standby_cluster_slot" \
+  --set "slots.standby_cluster_slot.type=null"
+```
+
+> Output -
+```
+root@docpg-cls1-pg1:/# 
+root@docpg-cls1-pg1:/# patronictl list
++ Cluster: docpg-cls1 (7649402051775700970) --+---------+----+-----------+------------------+
+| Member         | Host        | Role         | State   | TL | Lag in MB | Tags             |
++----------------+-------------+--------------+---------+----+-----------+------------------+
+| docpg-cls1-pg1 | 172.18.0.11 | Replica      | stopped |    |   unknown |                  |
+| docpg-cls1-pg2 | 172.18.0.12 | Sync Standby | stopped |    |   unknown |                  |
+| docpg-cls1-pg3 | 172.18.0.13 | Replica      | stopped |    |   unknown | nofailover: true |
++----------------+-------------+--------------+---------+----+-----------+------------------+
+ Maintenance mode: on
+root@docpg-cls1-pg1:/# 
+root@docpg-cls1-pg1:/# patronictl -c /etc/patroni/patroni.yml \
+  edit-config docpg-cls1 --force \
+  --set "standby_cluster.host=docpg-cls1-pg4" \
+  --set "standby_cluster.port=5432" \
   --set "standby_cluster.primary_slot_name=standby_cluster_slot"
+--- 
++++ 
+@@ -88,9 +88,6 @@
+   use_pg_rewind: true
+   use_slots: true
+ retry_timeout: 10
+-slots:
+-  standby_cluster_slot:
+-    type: physical
++++
+@@ -91,6 +91,10 @@
+ slots:
+   standby_cluster_slot:
+     type: physical
++standby_cluster:
++  host: docpg-cls1-pg4
++  port: 5432
++  primary_slot_name: standby_cluster_slot
+ synchronous_mode: true
+ synchronous_mode_strict: false
+ synchronous_node_count: 1
+
+Configuration changed
+root@docpg-cls1-pg1:/# 
 ```
 
 Verify the config was written to DCS:
 
 ```bash
 docker exec docpg-cls1-pg1 \
-  patronictl -c /etc/patroni/patroni.yml \
-  show-config docpg-cls1 | grep -A5 standby_cluster
+  patronictl -c /etc/patroni/patroni.yml show-config docpg-cls1 | grep -A5 standby_cluster
 # ✅ host: 172.18.0.14, port: 5432, primary_slot_name: standby_cluster_slot
 ```
 
