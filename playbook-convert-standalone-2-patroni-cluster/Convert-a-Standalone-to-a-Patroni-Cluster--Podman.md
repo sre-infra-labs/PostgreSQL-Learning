@@ -535,7 +535,7 @@ postgresql:
   data_dir: /var/lib/postgresql/18/main
   bin_dir: /usr/lib/postgresql/18/bin
   config_dir: /var/lib/postgresql/18/main
-  pgpass: /var/lib/postgresql/.pgpass
+  pgpass: /var/lib/postgresql/.pgpass_patroni
   authentication:
     replication:
       username: replicator
@@ -874,7 +874,7 @@ postgresql:
   data_dir: /var/lib/postgresql/18/main
   bin_dir: /usr/lib/postgresql/18/bin
   config_dir: /var/lib/postgresql/18/main
-  pgpass: /var/lib/postgresql/.pgpass
+  pgpass: /var/lib/postgresql/.pgpass_patroni
   authentication:
     replication:
       username: replicator
@@ -993,6 +993,35 @@ sudo -u postgres psql -h 127.0.0.1 -p 5432 -d postgres \
 
 # Verify backups
 podman exec podpg-cls2-pg1 pgbackrest --stanza=podpg-cls2 info
+```
+
+---
+
+# Part 7 — Edit the 3-Node Cluster to have one synchronous replica
+
+```bash
+# Enable synchronous mode — one replica becomes Sync Standby
+patronictl -c /etc/patroni/patroni.yml edit-config podpg-cls2 \
+  --force --set synchronous_mode=true --set synchronous_node_count=1
+```
+
+---
+
+# Part 8 — Update podpg-cls2-pg3 to be `nofailover` but allow to be sync standby
+
+```bash
+# Tag podpg-cls2-pg3 as nosync + nofailover
+# Per-node tags are LOCAL settings — edit patroni.yml on pg3 directly, then reload.
+#
+# On podpg-cls2-pg3
+vim /etc/patroni/patroni.yml
+
+tags:
+  nofailover: true
+  nosync: false
+
+
+systemctl restart patroni
 ```
 
 ---
