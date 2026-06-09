@@ -35,26 +35,25 @@ patronictl -c /etc/patroni/patroni.yml show-config docpg-cls1 | grep -A5 standby
 
 > Output on Primary Cluster (docpg-cls1-pg1) -
 ```
-ajaydwivedi@Ajays-MacBook-Pro Office % docker exec -it docpg-cls1-pg4 bash
-root@docpg-cls1-pg4:/# patronictl -c /etc/patroni/patroni.yml show-config docpg-cls1 | grep -A5 standby_cluster
-standby_cluster:
-  host: 172.18.0.10
-  port: 5432
-  primary_slot_name: standby_cluster_slot
+ajaydwivedi@Ajays-MacBook-Pro Office % docker exec -it docpg-cls1-pg1 bash
+root@docpg-cls1-pg1:/# patronictl -c /etc/patroni/patroni.yml show-config docpg-cls1 | grep -A5 standby_cluster
+  standby_cluster_slot:
+    type: physical
 synchronous_mode: true
 synchronous_mode_strict: false
 synchronous_node_count: 1
 ttl: 30
-
-root@docpg-cls1-pg4:/# 
-root@docpg-cls1-pg4:/# 
-root@docpg-cls1-pg4:/# patronictl list
-+ Cluster: docpg-cls1 (7649402051775700970) ----+-----------+----+-----------+
-| Member         | Host        | Role           | State     | TL | Lag in MB |
-+----------------+-------------+----------------+-----------+----+-----------+
-| docpg-cls1-pg4 | 172.18.0.14 | Standby Leader | streaming |  2 |           |
-+----------------+-------------+----------------+-----------+----+-----------+
-root@docpg-cls1-pg4:/# 
+root@docpg-cls1-pg1:/# 
+root@docpg-cls1-pg1:/# patronictl list
++ Cluster: docpg-cls1 (7649402051775700970) --+-----------+----+-----------+------------------+
+| Member         | Host        | Role         | State     | TL | Lag in MB | Tags             |
++----------------+-------------+--------------+-----------+----+-----------+------------------+
+| docpg-cls1-pg1 | 172.18.0.11 | Leader       | running   |  2 |           |                  |
+| docpg-cls1-pg2 | 172.18.0.12 | Sync Standby | streaming |  2 |         0 |                  |
+| docpg-cls1-pg3 | 172.18.0.13 | Replica      | streaming |  2 |         0 | nofailover: true |
++----------------+-------------+--------------+-----------+----+-----------+------------------+
+root@docpg-cls1-pg1:/# 
+root@docpg-cls1-pg1:/# 
 ```
 
 > Output on Standby Cluster (docpg-cls1-pg4) -
