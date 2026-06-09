@@ -606,41 +606,7 @@ docker exec docpg-cls1-pg1 \
 
 ---
 
-### Step 11 — Restart Old Cluster Members to Demote to Standby
-
-Restarting each member with the `standby_cluster` config active causes Patroni to stop
-PostgreSQL, align the WAL position against pg4 (via `pg_rewind` or `pg_basebackup` if
-needed), and restart as a streaming standby.
-
-Restart the **intended standby leader first** (the node that was elected leader in Step 8),
-then the remaining replicas:
-
-```bash
-# Restart the standby leader candidate first
-docker exec docpg-cls1-pg1 \
-  patronictl -c /etc/patroni/patroni.yml \
-  restart docpg-cls1 docpg-cls1-pg1 --force
-
-# Wait for pg1 to reach standby-leader state
-until docker exec docpg-cls1-pg1 \
-        curl -sf http://172.18.0.11:8008/standby-leader > /dev/null 2>&1; do
-  echo "Waiting for pg1 to become standby leader..."; sleep 3
-done
-echo "✅ pg1 is standby leader"
-
-# Restart remaining replicas
-docker exec docpg-cls1-pg2 \
-  patronictl -c /etc/patroni/patroni.yml \
-  restart docpg-cls1 docpg-cls1-pg2 --force
-
-docker exec docpg-cls1-pg3 \
-  patronictl -c /etc/patroni/patroni.yml \
-  restart docpg-cls1 docpg-cls1-pg3 --force
-```
-
----
-
-### Step 12 — Verify New Standby Cluster
+### Step 11 — Verify New Standby Cluster
 
 **On the new standby cluster (old primary):**
 
