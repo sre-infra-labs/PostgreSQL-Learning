@@ -356,18 +356,6 @@ docker exec docpg-cls1-pg4 \
 
 ---
 
-### Step 7 - Increase Timeline on New Primary Cluster by at least 3 by doing switchover/failover among nodes of same cluster
-```bash
-# Check timeline
-pg_controldata $PGDATA | grep Timeline
-ls $PGDATA/pg_wal/*.history
-
-# Failover to next node to increase timeline
-patronictl -c /etc/patroni/patroni.yml failover docpg-cls1 --candidate docpg-cls1-pg2 --force
-```
-
-
-
 ### Step 7 — Bring Old Primary Cluster Back Up
 
 Start the old primary cluster containers and Patroni. Because the old cluster's etcd DCS still
@@ -396,7 +384,26 @@ Scenario 02: In DR Drill, the old primary members would NOT come online. Would b
 
 ---
 
-### Step 8 — Add `standby_cluster` Config to Old Primary Cluster
+### Step 8 - Put the old primary cluster in "maintenance" mode to prevent further issues
+```bash
+docker exec docpg-cls1-pg1 \
+  patronictl -c /etc/patroni/patroni.yml pause --wait docpg-cls1
+```
+
+---
+
+### Step 9 - After putting old primary in "maintenance" mode, Increase TL on new primary cluster by 2 by doing switchover/failover among nodes of same cluster
+```bash
+# Check timeline
+pg_controldata $PGDATA | grep Timeline
+ls $PGDATA/pg_wal/*.history
+
+# Failover to next node to increase timeline. Repeat this 4 times
+patronictl -c /etc/patroni/patroni.yml switchover docpg-cls1 --force
+patronictl -c /etc/patroni/patroni.yml failover docpg-cls1 --candidate docpg-cls1-pg1 --force
+```
+
+### Step 10 — Add `standby_cluster` Config to Old Primary Cluster
 
 Write the `standby_cluster` block into the old cluster's DCS, pointing it at pg4. Patroni
 propagates this to all members automatically.
@@ -406,6 +413,9 @@ The old primary cluster will connect to the new primary (pg4) and stream using t
 ```bash
 # Run from any member of the old primary cluster.
 # The change is stored in etcd and applies cluster-wide.
+docker exec docpg-cls1-pg1 \
+  patronictl -c /etc/patroni/patroni.yml pause --wait docpg-cls1
+
 docker exec docpg-cls1-pg1 \
   patronictl -c /etc/patroni/patroni.yml \
   edit-config docpg-cls1 --force \
@@ -469,9 +479,10 @@ docker exec docpg-cls1-pg1 \
 
 ---
 
-### Step 9 — Remove Old Primary Cluster from Maintenance Mode
+### Step 11 — Remove Old Primary Cluster from Maintenance Mode
 
-Resume Patroni on the old cluster so it can carry out the demotion in Step 11.
+Resume Patroni on the old cluster so it can carry out the demotion.
+Initially it will go in failed state, and the pg_rewind will track timeline, and sync with new primary.
 
 ```bash
 docker exec docpg-cls1-pg1 \
@@ -550,7 +561,7 @@ In that case, by default, cluster members will enter into `start failed` state.
 
 ---
 
-### Step 10 — Verify New Standby Cluster
+### Step 12 — Verify New Standby Cluster
 
 **On the new standby cluster (old primary):**
 
