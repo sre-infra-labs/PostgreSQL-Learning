@@ -660,3 +660,43 @@ docker exec docpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
 |                |             |                |           |    |           | nosync: true     |
 +----------------+-------------+----------------+-----------+----+-----------+------------------+
 ```
+
+
+---
+
+### Step 13 - Make data entries on new primary cluster after old primary cluster has joined as new standby cluster
+```bash
+psql -h localhost -U postgres -d dba << 'EOF'
+INSERT INTO public.multi_dc_failover_test (action)
+VALUES ('During DR situation: pg1 cluster has joined as new standby cluster');
+
+SELECT * FROM public.multi_dc_failover_test ORDER BY create_datetime DESC limit 10;
+
+EOF
+```
+
+> Output
+
+```
+root@docpg-cls1-pg4:/# psql -h localhost -U postgres -d dba << 'EOF'
+INSERT INTO public.multi_dc_failover_test (action)
+VALUES ('During DR situation: pg1 cluster has joined as new standby cluster');
+
+SELECT * FROM public.multi_dc_failover_test ORDER BY create_datetime DESC limit 10;
+
+EOF
+
+INSERT 0 1
+        create_datetime        |                               action                               
+-------------------------------+--------------------------------------------------------------------
+ 2026-06-10 06:25:19.277654+00 | During DR situation: pg1 cluster has joined as new standby cluster
+ 2026-06-10 05:49:01.959929+00 | During DR situation: pg4 is primary
+ 2026-06-10 05:49:01.959929+00 | During DR situation: This is written from DR site
+ 2026-06-10 05:38:03.774701+00 | Initial state: pg1 is primary
+(4 rows)
+```
+
+---
+
+### Failback to old primary cluster
+
