@@ -492,15 +492,9 @@ ansible-playbook -i hosts.yml playbook-add-replicas.yml --vault-password-file=va
   -e host_group_for_new_replica=primary_cluster 2>&1 | tee logs/playbook-add-replicas.log
 ```
 
-### Step 10 - Increment timeline by switchover/failover
-```
-# Failover to next node to increase timeline. Repeat this 4 times
-patronictl -c /etc/patroni/patroni.yml switchover podpg-cls1 --force
-patronictl -c /etc/patroni/patroni.yml failover podpg-cls1 --candidate podpg-cls1-pg1 --force
-```
+--
 
-
-### Step 11 — Bring Old Primary Cluster Back Up
+### Step 10 — Bring Old Primary Cluster Back Up
 
 Start the old primary cluster containers and Patroni. Because the old cluster's etcd DCS still
 holds the previous leader state and has **no `standby_cluster` config yet**, Patroni will elect
@@ -518,12 +512,13 @@ podman exec podpg-cls1-pg2 systemctl start patroni
 podman exec podpg-cls1-pg3 systemctl start patroni
 ```
 
-Wait for patroni service to start, and patronictl command to return member list
+---
 
-> In DR Drill, the old primary members would NOT come online. Would be in STOPPED state due to "maintenance" mode config before DR promotion.
+### Step 11 — Set old primary cluster into maintanenance mode
 
-> **⚠️ Do not allow application traffic to this cluster.**
-> It holds a stale copy of data and will be demoted to standby in the next steps.
+```bash
+podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml pause --wait podpg-cls1
+```
 
 ---
 
@@ -537,6 +532,7 @@ The old primary cluster will connect to the new primary (pg4) and stream using t
 ```bash
 # Run from any member of the old primary cluster.
 # The change is stored in etcd and applies cluster-wide.
+
 podman exec podpg-cls1-pg1 \
   patronictl -c /etc/patroni/patroni.yml \
   edit-config podpg-cls1 --force \
@@ -611,9 +607,22 @@ synchronous_node_count: 1
 ttl: 30
 ```
 
+
+> **⚠️ Do not allow application traffic to this cluster.**
+> It holds a stale copy of data and will be demoted to standby in the next steps.
+
 ---
 
-### Step 13 - Observe the Cluster State & Timeline
+### Step 13 - Increment new primary cluster timeline by switchover/failover
+```
+# Failover to next node to increase timeline. Repeat this 4 times
+patronictl -c /etc/patroni/patroni.yml switchover podpg-cls1 --force
+patronictl -c /etc/patroni/patroni.yml failover podpg-cls1 --candidate podpg-cls1-pg4 --force
+```
+
+---
+
+### Step 14 - Observe the Cluster State & Timeline
 
 > Timeline situation on new primary cluster (pg4) - Timeline 3
 
@@ -647,22 +656,7 @@ ttl: 30
 
 ---
 
-> [! CAUTION]
-> Since old primary was put in maintenance mode before the DR promotion, both new standby cluster (pg1/pg2/pg3) and new primary cluster (pg4) are at same timeline (TL3).
-> Since both clusters are on same timeline, there is no need to increase the timeline on new primary cluster by doing switchover/failover.
-
-> [! IMPORTANT]
-> If new primary cluster has more than 1 member, the switchover/failover will help in increasing Timeline. This would make multiple DC setup more robust.
-
-```bash
-# Failover to next node to increase timeline. Repeat this 4 times
-patronictl -c /etc/patroni/patroni.yml switchover podpg-cls1 --force
-patronictl -c /etc/patroni/patroni.yml failover podpg-cls1 --candidate podpg-cls1-pg1 --force
-```
-
----
-
-### Step 14 - Remove old primary cluster, ie, new standby cluster (pg1/pg2/pg3) from maintenance mode
+### Step 15 - Remove old primary cluster, ie, new standby cluster (pg1/pg2/pg3) from maintenance mode
 
 ```bash
 echo "=== Resume old primary cluster (pg1/pg2/pg3) ==="
@@ -706,7 +700,7 @@ podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
 
 ---
 
-### Step 15 - Make data entries on new primary cluster after old primary cluster has joined as new standby cluster
+### Step 16 - Make data entries on new primary cluster after old primary cluster has joined as new standby cluster
 ```bash
 psql -h localhost -U postgres -d dba << 'EOF'
 INSERT INTO public.multi_dc_failover_test (action)
