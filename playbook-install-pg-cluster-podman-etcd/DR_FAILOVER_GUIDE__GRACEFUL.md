@@ -608,6 +608,15 @@ ttl: 30
 > Since old primary was put in maintenance mode before the DR promotion, both new standby cluster (pg1/pg2/pg3) and new primary cluster (pg4) are at same timeline (TL3).
 > Since both clusters are on same timeline, there is no need to increase the timeline on new primary cluster by doing switchover/failover.
 
+> [! IMPORTANT]
+> If new primary cluster has more than 1 member, the switchover/failover will help in increasing Timeline. This would make multiple DC setup more robust.
+
+```bash
+# Failover to next node to increase timeline. Repeat this 4 times
+patronictl -c /etc/patroni/patroni.yml switchover podpg-cls1 --force
+patronictl -c /etc/patroni/patroni.yml failover podpg-cls1 --candidate podpg-cls1-pg1 --force
+```
+
 ---
 
 ### Step 12 - Remove old primary cluster, ie, new standby cluster (pg1/pg2/pg3) from maintenance mode
