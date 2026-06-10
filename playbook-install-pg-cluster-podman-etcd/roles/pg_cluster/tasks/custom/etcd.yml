@@ -40,6 +40,19 @@
     home: /var/lib/etcd
     create_home: no
 
+- name: Stop etcd service before wiping stale data directory
+  ansible.builtin.systemd:
+    name: etcd
+    state: stopped
+  failed_when: false
+  when: etcd_cluster_state | default('new') == 'existing'
+
+- name: Wipe stale etcd data directory before joining existing cluster
+  ansible.builtin.file:
+    path: /var/lib/etcd
+    state: absent
+  when: etcd_cluster_state | default('new') == 'existing'
+
 - name: Create etcd data directory
   ansible.builtin.file:
     path: /var/lib/etcd
@@ -69,39 +82,46 @@
     mode: '0644'
   notify: reload systemd daemon
 
-- name: Reload systemd and enable etcd service
+# enable + daemon-reload always; the actual start is deferred when
+# pg_cluster_activate_services is false (e.g. playbook-add-replicas.yml installs
+# and configures the node first, then activates etcd in a short final window only
+# after the member has been registered on the leader).
+- name: Reload systemd and enable etcd service (start deferred until activation)
   ansible.builtin.systemd:
     name: etcd
-    state: started
     enabled: true
     daemon_reload: true
+    state: "{{ 'started' if (pg_cluster_activate_services | default(true)) else 'stopped' }}"
 
-- name: Wait for etcd client port on this node
-  ansible.builtin.wait_for:
-    host: localhost
-    port: 2379
-    state: started
-    timeout: 60
-    delay: 5
-  register: etcd_wait
-  failed_when: false
+- name: Verify etcd is up and healthy on {{ inventory_hostname }}
+  when: pg_cluster_activate_services | default(true)
+  block:
+    - name: Wait for etcd client port on this node
+      ansible.builtin.wait_for:
+        host: localhost
+        port: 2379
+        state: started
+        timeout: 60
+        delay: 5
+      register: etcd_wait
+      failed_when: false
 
-- name: Check etcd service logs if port wait failed
-  ansible.builtin.shell: journalctl -xeu etcd.service 2>&1 | tail -30 || true
-  changed_when: false
-  when: etcd_wait.state is not defined or etcd_wait.state != 'started'
+    - name: Check etcd service logs if port wait failed
+      ansible.builtin.shell: journalctl -xeu etcd.service 2>&1 | tail -30 || true
+      changed_when: false
+      when: etcd_wait.state is not defined or etcd_wait.state != 'started'
 
-- name: Verify etcd health on {{ inventory_hostname }}
-  ansible.builtin.uri:
-    url: "http://{{ ip }}:2379/health"
-    method: GET
-    status_code: 200
-  register: etcd_health
-  until: etcd_health.status is defined and etcd_health.status == 200
-  retries: 15
-  delay: 3
-  failed_when: etcd_health.status is not defined or etcd_health.status != 200
+    - name: Verify etcd health on {{ inventory_hostname }}
+      ansible.builtin.uri:
+        url: "http://{{ ip }}:2379/health"
+        method: GET
+        status_code: 200
+      register: etcd_health
+      until: etcd_health.status is defined and etcd_health.status == 200
+      retries: 15
+      delay: 3
+      failed_when: etcd_health.status is not defined or etcd_health.status != 200
 
-- name: etcd is healthy on {{ inventory_hostname }}
-  ansible.builtin.debug:
-    msg: "etcd running on {{ inventory_hostname }} ({{ ip }}:2379)"
+    - name: etcd is healthy on {{ inventory_hostname }}
+      ansible.builtin.debug:
+        msg: "etcd running on {{ inventory_hostname }} ({{ ip }}:2379)"

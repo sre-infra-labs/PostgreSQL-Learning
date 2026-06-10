@@ -9,6 +9,9 @@
     name: patroni
     state: restarted
   listen: 'restart patroni'
+  # Skipped when service activation is deferred (playbook-add-replicas.yml installs
+  # and configures first, then starts patroni explicitly in its activation phase).
+  when: pg_cluster_activate_services | default(true)
 
 - name: reload pgbouncer
   ansible.builtin.service:

@@ -151,7 +151,9 @@
       until: leader_check.status == 200
       retries: 30
       delay: 5
-  when: inventory_hostname in groups['primary_cluster_leader']
+  when:
+    - inventory_hostname in groups['primary_cluster_leader']
+    - pg_cluster_activate_services | default(true)
 
 - name: Start Patroni on Primary Cluster Replicas (stream from leader)
   block:
@@ -169,7 +171,9 @@
         state: started
         timeout: 300
         delay: 10
-  when: inventory_hostname in groups['primary_cluster_replica']
+  when:
+    - inventory_hostname in groups['primary_cluster_replica']
+    - pg_cluster_activate_services | default(true)
 
 - name: Start Patroni on Standby Cluster nodes (stream from primary cluster)
   block:
@@ -187,4 +191,6 @@
         state: started
         timeout: 300
         delay: 10
-  when: inventory_hostname in groups['standby_cluster']
+  when:
+    - inventory_hostname in groups['standby_cluster']
+    - pg_cluster_activate_services | default(true)
