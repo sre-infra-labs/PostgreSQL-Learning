@@ -95,7 +95,7 @@ ansible-playbook -i hosts.yml playbook-setup-podman.yml 2>&1 | tee logs/playbook
 
 # Phase 2: Install PostgreSQL 18 primary cluster
 export ANSIBLE_FORCE_COLOR=1
-ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass -e reinit_cluster=true 2>&1 | tee logs/playbook-install-pg-cluster.yml.log
+ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml --vault-password-file=vault-pass -e reinit_cluster=true 2>&1 | tee logs/playbook-install-primary-cluster.yml.log
 
 # Verify primary cluster status
 podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
