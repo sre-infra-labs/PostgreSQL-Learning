@@ -30,13 +30,14 @@
   hosts: localhost
   connection: local
   gather_facts: false
+  vars_files:
+    - vars/dba_vars.yml
 
   vars:
     # --- what to clean (override with -e) ---
-    remove_containers: true    # stop + remove podpg-cls1-pg1, podpg-cls1-pg2, podpg-cls1-pg3, podpg-cls1-pg4
+    remove_containers: true    # stop + remove all containers from hosts.yml
     remove_volumes:    true    # remove per-node named Podman volumes (pg-data-*, pg-logs-*)
                                # NOTE: pgbackrest backups are on the host shared dir
-                               # /stale-storage/share-stalestorage/pgbackrest_backups
                                # and are intentionally NOT deleted by this playbook.
     remove_image:      false   # remove pg-cluster-node:latest (slow to rebuild — off by default)
     skip_confirm:      false   # set true to bypass the confirmation prompt
@@ -45,39 +46,63 @@
     # lab-network is a SHARED network used by other containers
     # and must NEVER be removed. The pg containers are simply detached when removed.
 
-    # --- derived from podman_infrastructure defaults ---
-    _all_containers:
-      - podpg-cls1-podpg-cls1-pg1
-      - podpg-cls1-podpg-cls1-pg2
-      - podpg-cls1-podpg-cls1-pg3
-      - podpg-cls1-podpg-cls1-pg4
-
-    _all_volumes:
-      - pg-data-podpg-cls1-podpg-cls1-pg1
-      - pg-data-podpg-cls1-podpg-cls1-pg2
-      - pg-data-podpg-cls1-podpg-cls1-pg3
-      - pg-data-podpg-cls1-podpg-cls1-pg4
-      - pg-logs-podpg-cls1-podpg-cls1-pg1
-      - pg-logs-podpg-cls1-podpg-cls1-pg2
-      - pg-logs-podpg-cls1-podpg-cls1-pg3
-      - pg-logs-podpg-cls1-podpg-cls1-pg4
-      - pg-backups
-
     _podman_image:   "pg-cluster-node:latest"
     # lab-network intentionally excluded — it is shared with other lab containers
 
   pre_tasks:
+    - name: Load podman_infrastructure defaults
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/roles/podman_infrastructure/defaults/main.yml"
+      tags: always
+
+    - name: Build dynamic container and volume lists from hosts.yml
+      ansible.builtin.set_fact:
+        _pg_cluster_hosts: >-
+          {{
+            (groups['primary_cluster_leader'] | default([]))
+            + (groups['primary_cluster_replica'] | default([]))
+            + (groups['standby_cluster_leader'] | default([]))
+            + (groups['standby_cluster_replica'] | default([]))
+          }}
+        _pg_data_volume_prefix: "{{ pg_data_volume_prefix }}"
+        _pg_log_volume_prefix: "{{ pg_log_volume_prefix }}"
+        _pg_backup_volume: "{{ pg_backup_volume }}"
+      tags: always
+
+    - name: Build container list
+      ansible.builtin.set_fact:
+        _all_containers: "{{ _pg_cluster_hosts }}"
+      tags: always
+
+    - name: Build volume list
+      set_fact:
+        _data_volumes: "{{ _pg_cluster_hosts | map('regex_replace', '^(.*)$', _pg_data_volume_prefix + '-\\1') | list }}"
+        _log_volumes: "{{ _pg_cluster_hosts | map('regex_replace', '^(.*)$', _pg_log_volume_prefix + '-\\1') | list }}"
+      tags: always
+
+    - name: Combine all volumes
+      set_fact:
+        _all_volumes: "{{ _data_volumes + _log_volumes + [_pg_backup_volume] }}"
+      tags: always
+
     - name: Show cleanup plan
       ansible.builtin.debug:
         msg:
           - "======================================================"
           - "  PostgreSQL Podman Cluster — Cleanup Plan"
           - "======================================================"
-          - "  Containers  : {{ _all_containers | join(', ') }}"
-          - "  Volumes     : {{ _all_volumes | join(', ') }}"
-          - "  Image       : {{ _podman_image }}  (remove={{ remove_image }})"
-          - "  Network     : lab-network (never removed — shared with other lab containers)"
+          - "  Hosts from hosts.yml: {{ _pg_cluster_hosts | join(', ') }}"
+          - ""
+          - "  Containers to remove:"
+          - "    {{ _all_containers | join(', ') }}"
+          - ""
+          - "  Volumes to remove:"
+          - "    {{ _all_volumes | join(', ') }}"
+          - ""
+          - "  Image: {{ _podman_image }} (remove={{ remove_image }})"
+          - "  Network: lab-network (never removed — shared with other lab containers)"
           - "======================================================"
+      tags: always
 
     - name: Confirm destructive cleanup
       ansible.builtin.pause:
@@ -169,17 +194,21 @@
           - "======================================================"
           - "  Cleanup done!  Run the setup again with:"
           - ""
-          - "  Step 1 — Podman infra:"
+          - "  Step 1 — Podman infra (creates containers from hosts.yml):"
           - "    ansible-playbook playbook-setup-podman.yml"
           - ""
-          - "  Step 2 — Primary cluster install (podpg-cls1-podpg-cls1-pg1, podpg-cls1-podpg-cls1-pg2, podpg-cls1-podpg-cls1-pg3):"
+          - "  Step 2 — Primary cluster install:"
           - "    ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass"
           - ""
-          - "  Step 3 — Standby cluster install (podpg-cls1-podpg-cls1-pg4 — optional):"
+          - "  Step 3 — Standby cluster install (optional):"
           - "    ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass"
           - ""
-          - "  Or run primary cluster steps in one command:"
-          - "    ansible-playbook playbook-cleanup.yml -e skip_confirm=true &&"
-          - "    ansible-playbook playbook-setup-podman.yml &&"
-          - "    ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass"
+          - "  Or run all three steps in one command:"
+          - "    ansible-playbook playbook-cleanup.yml -e skip_confirm=true && \\"
+          - "    ansible-playbook playbook-setup-podman.yml && \\"
+          - "    ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass && \\"
+          - "    ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass"
+          - ""
+          - "  To add new replicas to the standby cluster:"
+          - "    ansible-playbook -i hosts.yml playbook-add-replicas.yml --vault-password-file=vault-pass"
           - "======================================================"
