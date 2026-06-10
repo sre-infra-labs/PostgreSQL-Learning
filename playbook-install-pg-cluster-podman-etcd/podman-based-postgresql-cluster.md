@@ -85,6 +85,7 @@ cd ~/GitHub/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd
 # podman rm podpg-cls1-pg4 podpg-cls1-pg3 podpg-cls1-pg2 podpg-cls1-pg1
 # podman start podpg-cls1-pg4 podpg-cls1-pg3 podpg-cls1-pg2 podpg-cls1-pg1
 
+# Cleanup containers
 ansible-playbook -i hosts.yml playbook-cleanup.yml -e skip_confirm=true --tags containers 2>&1 | tee logs/playbook-cleanup.yml.log
 
 # ── PRIMARY CLUSTER (Region A: podpg-cls1-pg1, podpg-cls1-pg2, podpg-cls1-pg3) ────────────────────────────────

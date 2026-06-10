@@ -81,37 +81,22 @@
   failed_when: false
   changed_when: "'Error' not in container_create.stdout and container_create.rc == 0"
 
-# Separate newly created containers from pre-existing ones.
-# ONLY newly created containers will be configured below.
-# Pre-existing containers (running OR stopped) are left completely untouched —
-# the playbook has no knowledge of why they are stopped, so it must not
-# start, exec into, or modify them in any way.
-- name: Identify newly created containers (created this run only)
-  ansible.builtin.set_fact:
-    pg_newly_created_hosts: >-
-      {{ container_create.results
-         | selectattr('rc', 'equalto', 0)
-         | map(attribute='item')
-         | list }}
-    pg_preexisting_hosts: >-
-      {{ container_create.results
-         | rejectattr('rc', 'equalto', 0)
-         | map(attribute='item')
-         | list }}
-
-- name: Report pre-existing containers that will be skipped
+- name: Handle containers that already exist
   ansible.builtin.debug:
-    msg: >-
-      Container '{{ item }}' already existed before this run —
-      skipping all configuration tasks for it.
-  loop: "{{ pg_preexisting_hosts }}"
+    msg: "Container {{ item.item }} already exists or network attachment failed: {{ item.stdout }}"
+  when: item.rc != 0
+  loop: "{{ container_create.results }}"
 
-- name: Report newly created containers that will be configured
-  ansible.builtin.debug:
-    msg: "Container '{{ item }}' was just created — will configure it now."
-  loop: "{{ pg_newly_created_hosts }}"
+- name: Wait for SSH to be available on all containers (before SSH key injection)
+  ansible.builtin.wait_for:
+    host: "127.0.0.1"
+    port: "{{ hostvars[item].ansible_port }}"
+    state: started
+    timeout: 120
+    delay: 1
+  loop: "{{ pg_all_hosts }}"
 
-- name: Inject SSH public key into newly created containers
+- name: Inject SSH public key into containers
   ansible.builtin.shell: |
     podman exec {{ item }} bash -c "
       mkdir -p /home/ansible/.ssh
@@ -121,74 +106,61 @@
       chmod 600 /home/ansible/.ssh/authorized_keys
       chown -R ansible:ansible /home/ansible/.ssh
     "
-  loop: "{{ pg_newly_created_hosts }}"
+  loop: "{{ pg_all_hosts }}"
   changed_when: true
   register: ssh_inject
   failed_when: ssh_inject.rc != 0
+  retries: 3
+  delay: 2
+  until: ssh_inject.rc == 0
 
-- name: Configure DNS resolvers in newly created containers (/etc/resolv.conf)
+- name: Configure DNS resolvers in containers (/etc/resolv.conf)
   ansible.builtin.shell: |
     podman exec {{ item }} bash -c '
       echo "nameserver 8.8.8.8" > /etc/resolv.conf
       echo "nameserver 1.1.1.1" >> /etc/resolv.conf
       echo "options ndots:0" >> /etc/resolv.conf
     '
-  loop: "{{ pg_newly_created_hosts }}"
+  loop: "{{ pg_all_hosts }}"
   changed_when: true
 
-- name: Remove apt proxy config in newly created containers (proxy not reachable from Podman bridge)
+- name: Remove apt proxy config (direct downloads — proxy not reachable from Podman bridge)
   ansible.builtin.shell: |
     podman exec {{ item }} bash -c 'rm -f /etc/apt/apt.conf.d/01proxy'
-  loop: "{{ pg_newly_created_hosts }}"
+  loop: "{{ pg_all_hosts }}"
   changed_when: true
 
-- name: Force apt to use IPv4 in newly created containers (prevent IPv6 timeouts)
+- name: Force apt to use IPv4 to prevent 'Waiting for headers' IPv6 timeouts
   ansible.builtin.shell: |
     podman exec {{ item }} bash -c '
       echo "Acquire::ForceIPv4 \"true\";" > /etc/apt/apt.conf.d/99force-ipv4
     '
-  loop: "{{ pg_newly_created_hosts }}"
+  loop: "{{ pg_all_hosts }}"
   changed_when: true
 
-- name: Disable IPv6 in newly created containers via sysctl
+- name: Disable IPv6 in containers via sysctl
   ansible.builtin.shell: |
     podman exec {{ item }} bash -c '
       sysctl -w net.ipv6.conf.all.disable_ipv6=1
       sysctl -w net.ipv6.conf.default.disable_ipv6=1
     '
-  loop: "{{ pg_newly_created_hosts }}"
+  loop: "{{ pg_all_hosts }}"
   changed_when: true
 
-- name: Stop and mask apt-daily timers in newly created containers (prevent apt lock conflicts)
+- name: Stop and mask apt-daily timers to prevent apt lock conflicts
   ansible.builtin.shell: |
     podman exec {{ item }} bash -c '
       systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service 2>/dev/null || true
       systemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
       systemctl mask apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service 2>/dev/null || true
     '
-  loop: "{{ pg_newly_created_hosts }}"
+  loop: "{{ pg_all_hosts }}"
   changed_when: true
 
-- name: Wait for SSH to be available on newly created containers
-  ansible.builtin.wait_for:
-    host: "127.0.0.1"
-    port: "{{ hostvars[item].ansible_port }}"
-    state: started
-    timeout: 90
-    delay: 3
-  loop: "{{ pg_newly_created_hosts }}"
-
-- name: Container connectivity summary (newly created this run)
+- name: Container connectivity summary
   ansible.builtin.debug:
     msg:
-      - "NEW  {{ item }} | IP: {{ hostvars[item].ip }}"
+      - "{{ item }} | IP: {{ hostvars[item].ip }}"
       - "  SSH (host):  127.0.0.1:{{ hostvars[item].ansible_port }}"
       - "  All other services reachable only within the container network (172.18.0.0/16)"
-  loop: "{{ pg_newly_created_hosts }}"
-
-- name: Container connectivity summary (pre-existing — not touched)
-  ansible.builtin.debug:
-    msg:
-      - "SKIP {{ item }} | IP: {{ hostvars[item].ip }}"
-      - "  Container existed before this run — no configuration was applied."
-  loop: "{{ pg_preexisting_hosts }}"
+  loop: "{{ pg_all_hosts }}"

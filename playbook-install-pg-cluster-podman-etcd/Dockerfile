@@ -31,8 +31,17 @@ RUN find /etc/systemd/system /lib/systemd/system \
         -o -name '*systemd-logind*' \
         -o -name '*systemd-vconsole-setup*' \
         -o -name '*systemd-readahead*' \
-        -o -name '*udev*' \) \
+        -o -name '*udev*' \
+        -o -name '*fstrim*' \
+        -o -name '*e2scrub*' \
+        -o -name '*dpkg*' \
+        -o -name '*motd*' \) \
         -exec rm -f {} \; 2>/dev/null || true
+
+# Mask problematic services that cause systemd to fail in containers
+RUN systemctl mask systemd-pstore.service 2>/dev/null || true \
+    && systemctl mask systemd-logind.service 2>/dev/null || true \
+    && systemctl mask e2scrub_reap.service 2>/dev/null || true
 
 # Configure SSH daemon
 RUN ssh-keygen -A \
