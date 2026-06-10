@@ -62,6 +62,7 @@
     podman run -d
     --name {{ item }}
     --hostname {{ item }}
+    --env PATRONICTL_CONFIG_FILE=/etc/patroni/patroni.yml
     --network {{ podman_network }}:ip={{ hostvars[item].ip }}
     --privileged
     --cgroupns=host
@@ -87,15 +88,6 @@
   when: item.rc != 0
   loop: "{{ container_create.results }}"
 
-- name: Wait for SSH to be available on all containers (before SSH key injection)
-  ansible.builtin.wait_for:
-    host: "127.0.0.1"
-    port: "{{ hostvars[item].ansible_port }}"
-    state: started
-    timeout: 120
-    delay: 1
-  loop: "{{ pg_all_hosts }}"
-
 - name: Inject SSH public key into containers
   ansible.builtin.shell: |
     podman exec {{ item }} bash -c "
@@ -110,9 +102,6 @@
   changed_when: true
   register: ssh_inject
   failed_when: ssh_inject.rc != 0
-  retries: 3
-  delay: 2
-  until: ssh_inject.rc == 0
 
 - name: Configure DNS resolvers in containers (/etc/resolv.conf)
   ansible.builtin.shell: |
@@ -156,6 +145,15 @@
     '
   loop: "{{ pg_all_hosts }}"
   changed_when: true
+
+- name: Wait for SSH to be available on all containers
+  ansible.builtin.wait_for:
+    host: "127.0.0.1"
+    port: "{{ hostvars[item].ansible_port }}"
+    state: started
+    timeout: 90
+    delay: 3
+  loop: "{{ pg_all_hosts }}"
 
 - name: Container connectivity summary
   ansible.builtin.debug:
