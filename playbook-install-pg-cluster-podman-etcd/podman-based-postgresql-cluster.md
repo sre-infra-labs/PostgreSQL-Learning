@@ -79,7 +79,7 @@ This setup uses **Podman** on Ubuntu 24.04 with a **multi-datacenter** architect
 - **Region B (Secondary DC)**: podpg-cls1-pg4 — single-node standby cluster streaming from primary DC
 
 ```bash
-cd playbook-install-pg-cluster-podman-etcd/
+cd ~/GitHub/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd
 
 # podman stop podpg-cls1-pg4 podpg-cls1-pg3 podpg-cls1-pg2 podpg-cls1-pg1
 # podman rm podpg-cls1-pg4 podpg-cls1-pg3 podpg-cls1-pg2 podpg-cls1-pg1

@@ -28,10 +28,16 @@
 
 # -------------------------------------------------------------------
 #  REINIT CLEANUP — only runs when reinit_cluster=true
-#  etcd must already be running (from a previous install) for these
+#  Fully wipes all state so the next install starts completely fresh:
+#    Patroni, etcd, PGDATA, configs, pgpass, pgBackRest, logs
 # -------------------------------------------------------------------
 - name: Stop Patroni service (reinit mode)
   ansible.builtin.shell: systemctl stop patroni 2>/dev/null || true
+  changed_when: false
+  when: reinit_cluster is defined and reinit_cluster | bool
+
+- name: Stop etcd service (reinit mode)
+  ansible.builtin.shell: systemctl stop etcd 2>/dev/null || true
   changed_when: false
   when: reinit_cluster is defined and reinit_cluster | bool
 
@@ -41,51 +47,42 @@
     state: absent
   when: reinit_cluster is defined and reinit_cluster | bool
 
+- name: Remove Patroni config directory (reinit mode)
+  ansible.builtin.shell: rm -rf /etc/patroni 2>/dev/null || true
+  changed_when: false
+  when: reinit_cluster is defined and reinit_cluster | bool
+
+- name: Remove pgpass files (reinit mode)
+  ansible.builtin.shell: |
+    rm -f /root/.pgpass /root/.pgpass_patroni 2>/dev/null || true
+    rm -f /var/lib/postgresql/.pgpass /var/lib/postgresql/.pgpass_patroni 2>/dev/null || true
+  changed_when: false
+  when: reinit_cluster is defined and reinit_cluster | bool
+
+- name: Wipe etcd data directory (reinit mode)
+  ansible.builtin.shell: rm -rf /var/lib/etcd/* 2>/dev/null || true
+  changed_when: false
+  when: reinit_cluster is defined and reinit_cluster | bool
+
 - name: Clear log and spool directories (reinit mode)
   ansible.builtin.shell: "rm -rf {{ item }}/* 2>/dev/null || true"
   loop:
     - "{{ postgresql_log_dir }}"
     - "{{ patroni_log_dir }}"
     - "/var/log/pgbackrest"
+    - "/var/log/etcd"
     - "/var/spool/pgbackrest"
   changed_when: false
   when: reinit_cluster is defined and reinit_cluster | bool
 
-- name: Remove pgBackRest archives (reinit + cleanup mode)
+- name: Remove pgBackRest archives and backups (reinit mode)
   ansible.builtin.shell: |
-    pgbackrest --stanza={{ pgbackrest_stanza_name }} expire --repo1-retention-full=0 2>/dev/null || true
-  become_user: postgres
+    rm -rf {{ pgbackrest_repo1_path }}/archive/{{ pgbackrest_stanza_name }} 2>/dev/null || true
+    rm -rf {{ pgbackrest_repo1_path }}/backup/{{ pgbackrest_stanza_name }} 2>/dev/null || true
   changed_when: false
   run_once: true
   delegate_to: "{{ groups['primary_cluster_leader'] | first }}"
-  when:
-    - reinit_cluster is defined and reinit_cluster | bool
-    - cleanup_pgbackrest_backups is defined and cleanup_pgbackrest_backups | bool
-
-- name: Check etcd is reachable before clearing keys (reinit mode)
-  ansible.builtin.uri:
-    url: "http://{{ hostvars[groups['all'][0]]['ip'] }}:2379/health"
-    method: GET
-    status_code: 200
-  register: etcd_check
-  failed_when: false
-  run_once: true
   when: reinit_cluster is defined and reinit_cluster | bool
-
-- name: Remove Patroni cluster keys from etcd (reinit mode)
-  ansible.builtin.uri:
-    url: "http://{{ hostvars[groups['all'][0]]['ip'] }}:2379/v3/kv/deleterange"
-    method: POST
-    body_format: json
-    body:
-      key: "{{ ('/service/' + patroni_cluster_name + '/') | b64encode }}"
-      range_end: "{{ ('/service/' + patroni_cluster_name + '0') | b64encode }}"
-    status_code: [200, 204]
-  failed_when: false
-  run_once: true
-  when:
-    - reinit_cluster is defined and reinit_cluster | bool
-    - etcd_check.status is defined and etcd_check.status == 200
 
 - name: End pg_cluster/custom/prechecks.yml
   ansible.builtin.debug:

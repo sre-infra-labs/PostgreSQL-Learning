@@ -4,8 +4,11 @@
 # Three layers are written so the vars are visible in ALL shell entry points:
 #   /etc/environment          → PAM / systemd services (no variable expansion)
 #   /etc/profile.d/pg_env.sh  → login shells (su -, bash --login, podman exec ... bash -l)
-#   /root/.bashrc             → interactive podman exec sessions as root
-#   postgresql_home_dir/.bashrc → interactive podman exec sessions as postgres
+#   /root/.bashrc             → interactive podman exec sessions as root (includes PATRONICTL_CONFIG_FILE)
+#   postgresql_home_dir/.bashrc → interactive podman exec sessions as postgres (includes PATRONICTL_CONFIG_FILE)
+#
+# PATRONICTL_CONFIG_FILE is also written to /etc/environment and /etc/profile.d/patroni-env.sh
+# by patroni.yml — this file adds it to the .bashrc layers so plain `podman exec bash` picks it up too.
 #
 # /etc/bash.bashrc is intentionally skipped — Ubuntu's default has
 # [ -z "$PS1" ] && return at the top so it exits in non-interactive shells.
@@ -52,16 +55,24 @@
       export PGDATA="{{ postgresql_data_dir }}"
       export PGPORT="{{ postgresql_port }}"
       export PGPASSFILE="{{ postgresql_home_dir }}/.pgpass"
+      export PATRONICTL_CONFIG_FILE=/etc/patroni/patroni.yml
 
 # ---------------------------------------------------------------------------
 # postgres .bashrc  (interactive podman exec as postgres)
 # ---------------------------------------------------------------------------
+- name: Check if postgres OS user exists
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ postgres_user }}"
+  register: pg_os_user_check
+  failed_when: false
+
 - name: Set PostgreSQL env vars in postgres .bashrc
   ansible.builtin.blockinfile:
     path: "{{ postgresql_home_dir }}/.bashrc"
     create: true
-    owner: "{{ postgres_user }}"
-    group: "{{ postgres_user }}"
+    owner: "{{ postgres_user if pg_os_user_check.ansible_facts is defined else 'root' }}"
+    group: "{{ postgres_user if pg_os_user_check.ansible_facts is defined else 'root' }}"
     mode: "0640"
     marker: "# {mark} ANSIBLE MANAGED — PostgreSQL env"
     block: |
@@ -69,3 +80,4 @@
       export PGDATA="{{ postgresql_data_dir }}"
       export PGPORT="{{ postgresql_port }}"
       export PGPASSFILE="{{ postgresql_home_dir }}/.pgpass"
+      export PATRONICTL_CONFIG_FILE=/etc/patroni/patroni.yml

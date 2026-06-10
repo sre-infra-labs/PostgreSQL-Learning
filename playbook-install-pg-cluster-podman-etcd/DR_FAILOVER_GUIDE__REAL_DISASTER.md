@@ -89,7 +89,26 @@ root@podpg-cls1-pg4:/# patronictl list
 root@podpg-cls1-pg4:/# 
 ```
 
-### Step 1 — Put Primary Cluster in Maintenance Mode during DR Drill
+### Step 1 - Create test tables for data less testing
+```bash
+psql -h localhost -U postgres -d dba << 'EOF'
+CREATE EXTENSION IF NOT EXISTS citext;
+
+CREATE TABLE IF NOT EXISTS public.multi_dc_failover_test
+(
+    create_datetime timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    action          citext NOT NULL
+);
+
+INSERT INTO public.multi_dc_failover_test (action)
+VALUES ('Initial state: pg1 is primary');
+
+SELECT * FROM public.multi_dc_failover_test ORDER BY create_datetime DESC;
+
+EOF
+```
+
+### Step 2 — During DR Drill Only - Put Primary Cluster in Maintenance Mode
 
 Pausing Patroni prevents automatic leader elections while you drain connections and confirm
 replication lag. Maintenance mode does **not** stop PostgreSQL or replication.
@@ -109,7 +128,7 @@ podman exec podpg-cls1-pg1 \
 
 ---
 
-### Step 2 — Stop New Connections to the Primary Cluster Leader
+### Step 3 — During DR Drill Only - Stop New Connections to the Primary Cluster Leader
 
 Block new application sessions before beginning the drain. Superuser (`postgres`) and
 replication (`replicator`) logins remain unaffected.
@@ -131,7 +150,7 @@ podman exec podpg-cls1-pg1 psql -h 172.18.0.11 -U postgres -c "
 
 ---
 
-### Step 3 — Terminate Existing Non-Superuser Connections
+### Step 4 — During DR Drill Only - Terminate Existing Non-Superuser Connections on Primary Cluster Leader
 
 Force-close any open application sessions that were established before the connection limit
 took effect.
@@ -161,7 +180,7 @@ ORDER BY query_start;
 
 ---
 
-### Step 4 — Validate Replication Lag
+### Step 5 — During DR Drill Only - Validate Replication Lag
 
 **Do not proceed to Step 5 until both checks confirm lag = 0.**
 
@@ -219,7 +238,7 @@ podman exec podpg-cls1-pg4 psql -h 172.18.0.14 -U postgres postgres -At -c "
 
 ---
 
-### Step 5 — Stop Primary Cluster (Once Lag = 0)
+### Step 6 — Stop Primary Cluster (Once Lag = 0)
 
 Stop Patroni (and PostgreSQL) on all primary cluster members. Stop replicas before the leader
 to avoid unnecessary failover traffic.
@@ -271,7 +290,7 @@ root@podpg-cls1-pg4:/#
 
 ---
 
-### Step 6 — Promote Standby Cluster to Primary
+### Step 7 — Promote Standby Cluster to Primary
 
 Remove the `standby_cluster` block from the DCS configuration. 
 Patroni on `podpg-cls1-pg4` detects this change and promotes PostgreSQL from a streaming standby to a normal read-write primary.
@@ -288,27 +307,27 @@ podman exec podpg-cls1-pg4 \
 > Output -
 ```
 root@podpg-cls1-pg4:/#
-root@podpg-cls1-pg4:/# patronictl -c /etc/patroni/patroni.yml \
+|------------$ podman exec podpg-cls1-pg4 \
+  patronictl -c /etc/patroni/patroni.yml \
   edit-config podpg-cls1 --force \
   --set "standby_cluster=null" \
   --set "slots.standby_cluster_slot.type=physical"
 --- 
 +++ 
-@@ -87,10 +87,9 @@
+@@ -75,10 +75,9 @@
    use_pg_rewind: true
    use_slots: true
  retry_timeout: 10
-+slots:
 -standby_cluster:
-+  standby_cluster_slot:
 -  host: 172.18.0.10
-+    type: physical
 -  port: 5432
 -  primary_slot_name: standby_cluster_slot
++slots:
++  standby_cluster_slot:
++    type: physical
  synchronous_mode: true
  synchronous_mode_strict: false
  synchronous_node_count: 1
-
 Configuration changed
 root@podpg-cls1-pg4:/# 
 ```
@@ -356,7 +375,20 @@ podman exec podpg-cls1-pg4 \
 
 ---
 
-### Step 7 — Bring Old Primary Cluster Back Up
+### Step 8 - Make data entries on new primary cluster during DR situation
+```bash
+psql -h localhost -U postgres -d dba << 'EOF'
+INSERT INTO public.multi_dc_failover_test (action)
+VALUES ('During DR situation: pg4 is primary'),
+      ('During DR situation: This is written from DR site');
+
+SELECT * FROM public.multi_dc_failover_test ORDER BY create_datetime DESC limit 10;
+
+EOF
+```
+
+
+### Step 9 — Bring Old Primary Cluster Back Up
 
 Start the old primary cluster containers and Patroni. Because the old cluster's etcd DCS still
 holds the previous leader state and has **no `standby_cluster` config yet**, Patroni will elect
@@ -384,26 +416,18 @@ Scenario 02: In DR Drill, the old primary members would NOT come online. Would b
 
 ---
 
-### Step 8 - Put the old primary cluster in "maintenance" mode to prevent further issues
+### Step 10 - Put both clusters in "maintenance" mode to prevent further issues
 ```bash
 podman exec podpg-cls1-pg1 \
+  patronictl -c /etc/patroni/patroni.yml pause --wait podpg-cls1
+
+podman exec podpg-cls1-pg4 \
   patronictl -c /etc/patroni/patroni.yml pause --wait podpg-cls1
 ```
 
 ---
 
-### Step 9 - After putting old primary in "maintenance" mode, Increase TL on new primary cluster by 2 by doing switchover/failover among nodes of same cluster
-```bash
-# Check timeline
-pg_controldata $PGDATA | grep Timeline
-ls $PGDATA/pg_wal/*.history
-
-# Failover to next node to increase timeline. Repeat this 4 times
-patronictl -c /etc/patroni/patroni.yml switchover podpg-cls1 --force
-patronictl -c /etc/patroni/patroni.yml failover podpg-cls1 --candidate podpg-cls1-pg1 --force
-```
-
-### Step 10 — Add `standby_cluster` Config to Old Primary Cluster
+### Step 11 — Add `standby_cluster` Config to Old Primary Cluster
 
 Write the `standby_cluster` block into the old cluster's DCS, pointing it at pg4. Patroni
 propagates this to all members automatically.
@@ -413,9 +437,6 @@ The old primary cluster will connect to the new primary (pg4) and stream using t
 ```bash
 # Run from any member of the old primary cluster.
 # The change is stored in etcd and applies cluster-wide.
-podman exec podpg-cls1-pg1 \
-  patronictl -c /etc/patroni/patroni.yml pause --wait podpg-cls1
-
 podman exec podpg-cls1-pg1 \
   patronictl -c /etc/patroni/patroni.yml \
   edit-config podpg-cls1 --force \
@@ -476,6 +497,87 @@ podman exec podpg-cls1-pg1 \
   patronictl -c /etc/patroni/patroni.yml show-config podpg-cls1 | grep -A5 standby_cluster
 # ✅ host: 172.18.0.14, port: 5432, primary_slot_name: standby_cluster_slot
 ```
+
+---
+
+### Step 10 - Timeline Situation - SPLIT BRAIN Here
+
+> Timeline situation on new primary cluster (pg4) - Timeline 3
+
+```bash
+|------------$ podman exec podpg-cls1-pg4 patronictl -c /etc/patroni/patroni.yml list
+
++ Cluster: podpg-cls1 (7649601435033176389) ------+----+-----------+
+| Member         | Host        | Role   | State   | TL | Lag in MB |
++----------------+-------------+--------+---------+----+-----------+
+| podpg-cls1-pg4 | 172.18.0.14 | Leader | running |  3 |           |
++----------------+-------------+--------+---------+----+-----------+
+```
+
+> Timeline situation on old primary cluster (pg1/pg2/pg3) - Timeline 4
+
+```bash
+|------------$ podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
++ Cluster: podpg-cls1 (7649601435033176389) ----+-----------+----+-----------+------------------+
+| Member         | Host        | Role           | State     | TL | Lag in MB | Tags             |
++----------------+-------------+----------------+-----------+----+-----------+------------------+
+| podpg-cls1-pg1 | 172.18.0.11 | Standby Leader | running   |  4 |           |                  |
++----------------+-------------+----------------+-----------+----+-----------+------------------+
+| podpg-cls1-pg2 | 172.18.0.12 | Replica        | streaming |  4 |         0 |                  |
++----------------+-------------+----------------+-----------+----+-----------+------------------+
+| podpg-cls1-pg3 | 172.18.0.13 | Replica        | streaming |  4 |         0 | nofailover: true |
+|                |             |                |           |    |           | nosync: true     |
++----------------+-------------+----------------+-----------+----+-----------+------------------+
+ Maintenance mode: on
+```
+
+> **⚠️ SPLIT BRAIN** - The old primary cluster (pg1) is at a higher timeline (4) than the new primary cluster (pg4) which is at timeline 3. We need to increase the new primary cluster timeline.
+
+
+### Step 11a) - MULTI Member Primary Cluster - After putting old primary in "maintenance" mode, Increase TL on new primary cluster by doing switchover/failover
+```bash
+# Failover to next node to increase timeline. Repeat this 4 times
+patronictl -c /etc/patroni/patroni.yml switchover podpg-cls1 --force
+patronictl -c /etc/patroni/patroni.yml failover podpg-cls1 --candidate podpg-cls1-pg1 --force
+```
+
+### Step 11b) - SINGLE Member Primary Cluster - After putting old primary in "maintenance" mode, Increase TL on new primary cluster by re-adding/removing standby_cluster config
+```bash
+# Shutdown "patroni+postgres" service on old primary cluster members
+podman stop podpg-cls1-pg3 podpg-cls1-pg2 podpg-cls1-pg1
+
+# On new primary cluster member, run following 2 commands in pair twice -
+
+  # Step a) Convert pg4 to standby cluster
+  podman exec podpg-cls1-pg4 \
+    patronictl -c /etc/patroni/patroni.yml \
+    edit-config podpg-cls1 --force \
+    --set "standby_cluster.host=podpg-cls1-pg1" \
+    --set "standby_cluster.port=5432" \
+    --set "standby_cluster.primary_slot_name=standby_cluster_slot" \
+    --set "slots.standby_cluster_slot.type=null"
+
+  # Observation => pg4 cluster goes to "start failed" state after converting to standby_leader again.
+
+  # Step b) Remove standby_cluster config from pg4
+  podman exec podpg-cls1-pg4 \
+    patronictl -c /etc/patroni/patroni.yml \
+    edit-config podpg-cls1 --force \
+    --set "standby_cluster=null" \
+    --set "slots.standby_cluster_slot.type=physical"
+
+  # Observation => pg4 cluster remains in "start failed" state even after promoting to "leader", and keeps showing "Replica" role
+
+  sudo systemctl stop patroni
+  sudo -u postgres /usr/lib/postgresql/18/bin/pg_ctl stop -D /var/lib/postgresql/18/main -m fast
+
+  # Edit patroni.yml, and remove standby_cluster block
+  vim /etc/patroni/patroni.yml
+
+# Start old primary cluster members "patroni/postgres" service
+podman start podpg-cls1-pg3 podpg-cls1-pg2 podpg-cls1-pg1
+```
+
 
 ---
 
