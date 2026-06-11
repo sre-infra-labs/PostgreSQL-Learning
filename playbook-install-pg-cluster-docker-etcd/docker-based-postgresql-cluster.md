@@ -199,10 +199,11 @@ This will create patroni based `primary cluster` with `write copy`.
 cd ~/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd
 
 # docker stop docpg-cls1-pg6 docpg-cls1-pg5 docpg-cls1-pg4
-# docker stop docpg-cls1-pg3 docpg-cls1-pg2 docpg-cls1-pg1
 # docker rm docpg-cls1-pg6 docpg-cls1-pg5 docpg-cls1-pg4
-# docker rm docpg-cls1-pg3 docpg-cls1-pg2 docpg-cls1-pg1
 # docker start docpg-cls1-pg6 docpg-cls1-pg5 docpg-cls1-pg4
+
+# docker stop docpg-cls1-pg3 docpg-cls1-pg2 docpg-cls1-pg1
+# docker rm docpg-cls1-pg3 docpg-cls1-pg2 docpg-cls1-pg1
 # docker start docpg-cls1-pg3 docpg-cls1-pg2 docpg-cls1-pg1
 
 # Remove the old image (this forces a rebuild)
