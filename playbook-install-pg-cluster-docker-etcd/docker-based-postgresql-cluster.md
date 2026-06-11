@@ -190,8 +190,7 @@ ansible-playbook -i hosts.yml playbook-setup-primary-cluster-containers.yml 2>&1
 
 # Phase 2: Setup Primary Patroni/PostgreSQL Cluster with one or more nodes
 ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml --vault-password-file=vault-pass \
-  -e reinit_cluster=true \
-  2>&1 | tee logs/playbook-install-primary-cluster.yml.log
+  -e reinit_cluster=true 2>&1 | tee logs/playbook-install-primary-cluster.yml.log
 
 # Verify cluster status
 docker exec docpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list

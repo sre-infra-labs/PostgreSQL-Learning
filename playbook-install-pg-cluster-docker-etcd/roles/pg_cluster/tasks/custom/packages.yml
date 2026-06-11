@@ -5,9 +5,8 @@
 
 - name: Install system packages
   ansible.builtin.package:
-    name: "{{ item }}"
+    name: "{{ system_packages }}"
     state: present
-  loop: "{{ system_packages }}"
   register: system_pkg_status
   until: system_pkg_status is success
   delay: 5
@@ -16,9 +15,8 @@
 
 - name: Install PostgreSQL {{ postgresql_version }} required packages
   ansible.builtin.package:
-    name: "{{ item }}"
+    name: "{{ postgres_packages_required }}"
     state: present
-  loop: "{{ postgres_packages_required }}"
   register: pg_pkg_status
   until: pg_pkg_status is success
   delay: 5
@@ -57,9 +55,8 @@
 
 - name: Install Patroni apt dependencies (psutil, etcd3 library)
   ansible.builtin.package:
-    name: "{{ item }}"
+    name: "{{ patroni_packages }}"
     state: present
-  loop: "{{ patroni_packages }}"
   register: patroni_dep_status
   until: patroni_dep_status is success
   delay: 5
