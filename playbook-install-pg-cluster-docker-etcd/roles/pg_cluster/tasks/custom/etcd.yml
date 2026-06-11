@@ -77,12 +77,36 @@
   timeout: 30
   changed_when: false
 
-- name: Reload systemd and enable etcd service
+# ─── Existing-cluster replica mode: wipe stale etcd data, then just enable ───
+# A previous failed run may have left /var/lib/etcd with old raft state.
+# Starting etcd with that data while INITIAL_CLUSTER_STATE=existing causes an
+# immediate clean exit (Duration: 1ms). Always wipe before ACTIVATE starts it.
+- name: Stop etcd and wipe stale data directory (existing-cluster replica mode)
+  ansible.builtin.shell: |
+    systemctl stop etcd 2>/dev/null || true
+    rm -rf /var/lib/etcd/*
+  args:
+    executable: /bin/bash
+  when: (etcd_cluster_state | default('new')) == 'existing'
+  changed_when: true
+
+# Reload systemd + enable the unit but do NOT start it; ACTIVATE will start it
+# after registering the node as an etcd learner on the leader.
+- name: Reload systemd daemon and enable etcd unit (existing-cluster mode — ACTIVATE starts it)
+  ansible.builtin.systemd:
+    name: etcd
+    enabled: true
+    daemon_reload: true
+  when: (etcd_cluster_state | default('new')) == 'existing'
+
+# ─── New cluster mode: start etcd now and verify health ──────────────────────
+- name: Reload systemd, enable and start etcd service (new cluster mode)
   ansible.builtin.systemd:
     name: etcd
     state: started
     enabled: true
     daemon_reload: true
+  when: (etcd_cluster_state | default('new')) != 'existing'
 
 - name: Check if etcd process is running
   ansible.builtin.command: systemctl is-active etcd
@@ -90,27 +114,37 @@
   changed_when: false
   failed_when: false
   timeout: 10
+  when: (etcd_cluster_state | default('new')) != 'existing'
 
 - name: Show etcd status if not running
   ansible.builtin.command: systemctl status etcd --no-pager
-  when: etcd_process_check.rc != 0
+  when:
+    - (etcd_cluster_state | default('new')) != 'existing'
+    - etcd_process_check is defined
+    - etcd_process_check.rc != 0
   changed_when: false
   ignore_errors: true
 
 - name: Show recent etcd logs for diagnosis
   ansible.builtin.command: journalctl -u etcd -n 50 --no-pager
-  when: etcd_process_check.rc != 0
+  when:
+    - (etcd_cluster_state | default('new')) != 'existing'
+    - etcd_process_check is defined
+    - etcd_process_check.rc != 0
   changed_when: false
   ignore_errors: true
 
 - name: Fail if etcd process is not running
   ansible.builtin.fail:
     msg: "etcd process is not running on {{ inventory_hostname }}. Check logs above."
-  when: etcd_process_check.rc != 0
+  when:
+    - (etcd_cluster_state | default('new')) != 'existing'
+    - etcd_process_check is defined
+    - etcd_process_check.rc != 0
 
 - name: Wait for etcd client port on this node
   ansible.builtin.shell: |
-    curl -sf http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "ok" || echo "fail"
+    curl -s http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "ok" || echo "fail"
   args:
     executable: /bin/bash
   register: etcd_wait
@@ -119,10 +153,11 @@
   delay: 1
   timeout: 30
   ignore_errors: true
+  when: (etcd_cluster_state | default('new')) != 'existing'
 
 - name: Verify etcd health on {{ inventory_hostname }}
   ansible.builtin.shell: |
-    curl -sf http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "ok" || echo "fail"
+    curl -s http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "ok" || echo "fail"
   args:
     executable: /bin/bash
   register: etcd_health_check
@@ -131,7 +166,9 @@
   delay: 1
   timeout: 30
   ignore_errors: true
+  when: (etcd_cluster_state | default('new')) != 'existing'
 
 - name: etcd is healthy on {{ inventory_hostname }}
   ansible.builtin.debug:
     msg: "etcd running on {{ inventory_hostname }} ({{ ip }}:2379)"
+  when: (etcd_cluster_state | default('new')) != 'existing'

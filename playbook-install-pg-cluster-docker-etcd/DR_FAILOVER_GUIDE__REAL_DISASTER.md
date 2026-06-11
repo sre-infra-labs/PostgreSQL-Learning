@@ -293,7 +293,7 @@ docker ps --filter name=docpg-cls1-pg --format "table {{.Names}}\t{{.Status}}"
 
 # Add standby cluster replicas (default):
 ansible-playbook -i hosts.yml playbook-add-replicas.yml --vault-password-file=vault-pass 2>&1 \
-    | tee logs/playbook-add-replicas.log
+    | tee logs/playbook-add-replicas.yml.log
 
 # DO NOT RUN THIS: Add primary cluster replicas:
 ansible-playbook -i hosts.yml playbook-add-replicas.yml --vault-password-file=vault-pass \

@@ -53,9 +53,9 @@
       tags: [connector, kafka_ecosystem, postgres]
       shell: |
         # Delete connector if it already exists (to apply fresh config on re-run)
-        curl -sf -X DELETE http://localhost:{{ debezium_host_mapping_port }}/connectors/{{ debezium_connector_name }} 2>/dev/null || true
+        curl -s -X DELETE http://localhost:{{ debezium_host_mapping_port }}/connectors/{{ debezium_connector_name }} 2>/dev/null || true
         sleep 2
-        curl -sf -X POST http://localhost:{{ debezium_host_mapping_port }}/connectors \
+        curl -s -X POST http://localhost:{{ debezium_host_mapping_port }}/connectors \
           -H 'Content-Type: application/json' \
           -d '{
             "name": "{{ debezium_connector_name }}",

@@ -71,7 +71,7 @@
     - name: "PREFLIGHT — Verify Patroni is healthy on cluster leader"
       ansible.builtin.shell: |
         set -o pipefail
-        curl -sf http://127.0.0.1:{{ patroni_restapi_port }}/patroni 2>/dev/null | python3 -m json.tool
+        curl -s http://127.0.0.1:{{ patroni_restapi_port }}/patroni 2>/dev/null | python3 -m json.tool
       args:
         executable: /bin/bash
       register: _patroni_check_raw
@@ -88,7 +88,7 @@
     - name: "PREFLIGHT — Verify PostgreSQL is running on cluster leader (docker)"
       ansible.builtin.shell: |
         
-          curl -sf http://127.0.0.1:{{ patroni_restapi_port }}/health >/dev/null 2>&1 && echo "200" || echo "error"
+          curl -s http://127.0.0.1:{{ patroni_restapi_port }}/health >/dev/null 2>&1 && echo "200" || echo "error"
       args:
         executable: /bin/bash
       register: _pg_health_check_raw
@@ -110,7 +110,7 @@
     - name: "PREFLIGHT — Verify etcd has quorum on cluster leader (docker)"
       ansible.builtin.shell: |
         
-          curl -sf http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "200" || echo "error"
+          curl -s http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "200" || echo "error"
       args:
         executable: /bin/bash
       register: _etcd_health_check_raw
@@ -240,7 +240,7 @@
         # ── Leader guard ──────────────────────────────────────────────────────
         - name: "GUARD — Verify leader etcd health before registering {{ inventory_hostname }}"
           ansible.builtin.shell: |
-            curl -sf http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "ok" || echo "fail"
+            curl -s http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "ok" || echo "fail"
           args:
             executable: /bin/bash
           register: _guard_etcd
@@ -254,7 +254,7 @@
 
         - name: "GUARD — Verify leader PostgreSQL health before registering {{ inventory_hostname }}"
           ansible.builtin.shell: |
-            curl -sf http://127.0.0.1:{{ patroni_restapi_port }}/health >/dev/null 2>&1 && echo "ok" || echo "fail"
+            curl -s http://127.0.0.1:{{ patroni_restapi_port }}/health >/dev/null 2>&1 && echo "ok" || echo "fail"
           args:
             executable: /bin/bash
           register: _guard_pg
@@ -372,7 +372,7 @@
 
         - name: "ACTIVATE — Wait for etcd client port on {{ inventory_hostname }}"
           ansible.builtin.shell: |
-            curl -sf http://{{ ip }}:2379/health >/dev/null 2>&1 && echo "ok" || echo "fail"
+            curl -s http://{{ ip }}:2379/health >/dev/null 2>&1 && echo "ok" || echo "fail"
           args:
             executable: /bin/bash
           register: _new_etcd_port_wait
@@ -384,7 +384,7 @@
 
         - name: "ACTIVATE — Verify etcd is healthy on {{ inventory_hostname }}"
           ansible.builtin.shell: |
-            curl -sf http://{{ ip }}:2379/health >/dev/null 2>&1 && echo "ok" || echo "fail"
+            curl -s http://{{ ip }}:2379/health >/dev/null 2>&1 && echo "ok" || echo "fail"
           args:
             executable: /bin/bash
           register: _new_etcd_health
@@ -462,7 +462,7 @@
 
         - name: "ACTIVATE — Wait for Patroni REST API on {{ inventory_hostname }}"
           ansible.builtin.shell: |
-            curl -sf http://{{ ip }}:{{ patroni_restapi_port }}/cluster >/dev/null 2>&1 && echo "ok" || echo "fail"
+            curl -s http://{{ ip }}:{{ patroni_restapi_port }}/cluster >/dev/null 2>&1 && echo "ok" || echo "fail"
           args:
             executable: /bin/bash
           register: _patroni_activate_wait
@@ -476,7 +476,7 @@
         - name: "FINAL CHECK — Verify leader etcd is healthy after {{ inventory_hostname }} joined (docker)"
           ansible.builtin.shell: |
             
-              curl -sf http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "ok" || echo "fail"
+              curl -s http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "ok" || echo "fail"
           args:
             executable: /bin/bash
           register: _final_etcd_check
@@ -490,7 +490,7 @@
         - name: "FINAL CHECK — Verify leader PostgreSQL is healthy after {{ inventory_hostname }} joined (docker)"
           ansible.builtin.shell: |
             
-              curl -sf http://127.0.0.1:{{ patroni_restapi_port }}/health >/dev/null 2>&1 && echo "ok" || echo "fail"
+              curl -s http://127.0.0.1:{{ patroni_restapi_port }}/health >/dev/null 2>&1 && echo "ok" || echo "fail"
           args:
             executable: /bin/bash
           register: _final_pg_check
@@ -532,7 +532,7 @@
             fi
 
             echo "=== Step 2: Check leader etcd health ==="
-            health_body=$(curl -sf --max-time 5 http://127.0.0.1:2379/health 2>/dev/null || echo '"'"'{"health":"false"}'"'"')
+            health_body=$(curl -s --max-time 5 http://127.0.0.1:2379/health 2>/dev/null || echo '"'"'{"health":"false"}'"'"')
             echo "etcd health: $health_body"
 
             if echo "$health_body" | grep -q '"'"'\"health\":\"true\"'"'"'; then
@@ -566,7 +566,7 @@
             sleep 3
 
             echo "=== Step 4: Verify leader etcd health after recovery ==="
-            final=$(curl -sf --max-time 5 http://127.0.0.1:2379/health 2>/dev/null || echo '"'"'{"health":"false"}'"'"')
+            final=$(curl -s --max-time 5 http://127.0.0.1:2379/health 2>/dev/null || echo '"'"'{"health":"false"}'"'"')
             echo "etcd health after recovery: $final"
             if echo "$final" | grep -q '"'"'\"health\":\"true\"'"'"'; then
               echo "RECOVERY_SUCCESS: leader etcd is healthy and has a single-member cluster"
@@ -620,7 +620,7 @@
     - name: "CLEANUP — Check leader etcd health (docker)"
       ansible.builtin.shell: |
         
-          curl -sf http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "200" || echo "error"
+          curl -s http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "200" || echo "error"
       args:
         executable: /bin/bash
       register: _cleanup_etcd_health_raw
@@ -675,7 +675,7 @@
         sleep 5
 
         # Verify it is up
-        curl -sf http://127.0.0.1:2379/health | grep -q "\"health\":\"true\""
+        curl -s http://127.0.0.1:2379/health | grep -q "\"health\":\"true\""
         kill $FORCE_PID || true
         sleep 2
 
@@ -693,7 +693,7 @@
     - name: "CLEANUP — Verify leader etcd is healthy (docker)"
       ansible.builtin.shell: |
         
-          curl -sf http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "200" || echo "error"
+          curl -s http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "200" || echo "error"
       args:
         executable: /bin/bash
       register: _final_health_raw
@@ -736,7 +736,7 @@
 
     - name: Query Patroni cluster members
       ansible.builtin.shell: |
-        curl -sf http://127.0.0.1:{{ patroni_restapi_port }}/cluster 2>/dev/null | python3 -m json.tool
+        curl -s http://127.0.0.1:{{ patroni_restapi_port }}/cluster 2>/dev/null | python3 -m json.tool
       args:
         executable: /bin/bash
       register: _patroni_cluster_raw

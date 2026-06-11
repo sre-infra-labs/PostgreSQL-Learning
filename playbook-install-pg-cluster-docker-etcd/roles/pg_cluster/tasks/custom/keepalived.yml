@@ -81,12 +81,24 @@
     mode: "0644"
   notify: restart keepalived
 
+# Only start keepalived during full activation (pg_cluster_activate_services=true).
+# When adding a new replica (pg_cluster_activate_services=false / Phase A), keepalived
+# must NOT start because it would claim the cluster VIP immediately, creating an ARP
+# conflict with the existing leader and breaking peer-port connectivity for etcd.
 - name: Enable and start Keepalived service
   ansible.builtin.systemd:
     name: keepalived
     state: started
     enabled: true
     daemon_reload: true
+  when: pg_cluster_activate_services | default(true) | bool
+
+- name: Enable (but do not start) Keepalived service — install-only mode
+  ansible.builtin.systemd:
+    name: keepalived
+    enabled: true
+    daemon_reload: true
+  when: not (pg_cluster_activate_services | default(true) | bool)
 
 - name: End pg_cluster/custom/keepalived.yml
   ansible.builtin.debug:

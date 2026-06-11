@@ -165,6 +165,32 @@ After failover (e.g. docpg-cls1-pg2 promoted to leader after docpg-cls1-pg1 fail
 
 This setup uses **Docker** on macOS with a shared `lab-network` for all containers.
 
+## Build docker image to use in the cluster
+
+```bash
+cd PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/
+
+# Stop and Remove Existing Containers
+docker stop docpg-cls1-pg4 docpg-cls1-pg5 docpg-cls1-pg6 docpg-cls1-pg1 docpg-cls1-pg2 docpg-cls1-pg3 2>/dev/null || true
+
+# Remove Old Containers
+docker rm docpg-cls1-pg4 docpg-cls1-pg5 docpg-cls1-pg6 docpg-cls1-pg1 docpg-cls1-pg2 docpg-cls1-pg3 2>/dev/null || true
+
+# Remove old image
+docker rmi pg-cluster-node:latest
+
+# Rebuild the Image
+cd PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/
+docker build --no-cache -t pg-cluster-node:latest -f Dockerfile .
+
+# Verify the Image Was Built
+docker images | grep pg-cluster-node
+
+# Check what image name is referenced in your container setup playbook:
+grep -n "image:" playbook-setup-primary-cluster-containers.yml playbook-setup-standby-cluster-containers.yml
+
+```
+
 ## Primary Cluster Setup
 
 This will create patroni based `primary cluster` with `write copy`.
@@ -172,9 +198,15 @@ This will create patroni based `primary cluster` with `write copy`.
 ```bash
 cd ~/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd
 
-# docker stop docpg-cls1-pg6 docpg-cls1-pg5 docpg-cls1-pg4 docpg-cls1-pg3 docpg-cls1-pg2 docpg-cls1-pg1
-# docker rm docpg-cls1-pg6 docpg-cls1-pg5 docpg-cls1-pg4 docpg-cls1-pg3 docpg-cls1-pg2 docpg-cls1-pg1
-# docker start docpg-cls1-pg6 docpg-cls1-pg5 docpg-cls1-pg4 docpg-cls1-pg3 docpg-cls1-pg2 docpg-cls1-pg1
+# docker stop docpg-cls1-pg6 docpg-cls1-pg5 docpg-cls1-pg4
+# docker stop docpg-cls1-pg3 docpg-cls1-pg2 docpg-cls1-pg1
+# docker rm docpg-cls1-pg6 docpg-cls1-pg5 docpg-cls1-pg4
+# docker rm docpg-cls1-pg3 docpg-cls1-pg2 docpg-cls1-pg1
+# docker start docpg-cls1-pg6 docpg-cls1-pg5 docpg-cls1-pg4
+# docker start docpg-cls1-pg3 docpg-cls1-pg2 docpg-cls1-pg1
+
+# Remove the old image (this forces a rebuild)
+docker rmi pg-cluster-node:latest
 
 # Cleanup containers
 ansible-playbook -i hosts.yml playbook-cleanup.yml --tags containers 2>&1 | tee logs/playbook-cleanup.yml.log
@@ -214,8 +246,7 @@ ansible-playbook -i hosts.yml playbook-setup-standby-cluster-containers.yml 2>&1
 
 # Phase 2: Setup Standby Patroni/PostgreSQL Cluster with one or more nodes
 ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass \
-  -e reinit_cluster=true \
-  2>&1 | tee logs/playbook-install-standby-cluster.yml.log
+  -e reinit_cluster=true 2>&1 | tee logs/playbook-install-standby-cluster.yml.log
 
 # Phase 3: Verify Standby Cluster is Streaming
 docker exec docpg-cls1-pg4 patronictl -c /etc/patroni/patroni.yml list

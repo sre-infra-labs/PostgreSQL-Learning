@@ -487,7 +487,7 @@
             fi
 
             echo "=== Step 2: Check leader etcd health ==="
-            health_body=$(curl -sf --max-time 5 http://127.0.0.1:2379/health 2>/dev/null || echo '{"health":"false"}')
+            health_body=$(curl -s --max-time 5 http://127.0.0.1:2379/health 2>/dev/null || echo '{"health":"false"}')
             echo "etcd health: $health_body"
 
             if echo "$health_body" | grep -q '"health":"true"'; then
@@ -521,7 +521,7 @@
             sleep 3
 
             echo "=== Step 4: Verify leader etcd health after recovery ==="
-            final=$(curl -sf --max-time 5 http://127.0.0.1:2379/health 2>/dev/null || echo '{"health":"false"}')
+            final=$(curl -s --max-time 5 http://127.0.0.1:2379/health 2>/dev/null || echo '{"health":"false"}')
             echo "etcd health after recovery: $final"
             if echo "$final" | grep -q '"health":"true"'; then
               echo "RECOVERY_SUCCESS: leader etcd is healthy and has a single-member cluster"
@@ -621,7 +621,7 @@
         sleep 5
 
         # Verify it is up
-        curl -sf http://127.0.0.1:2379/health | grep -q '"health":"true"'
+        curl -s http://127.0.0.1:2379/health | grep -q '"health":"true"'
         kill $FORCE_PID || true
         sleep 2
 

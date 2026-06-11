@@ -26,7 +26,9 @@ system_packages:
   - curl
   - gnupg2
   - wget
+  - tldr
   - lsb-release
+  - inetutils-ping
   - ca-certificates
 
 patroni_packages:

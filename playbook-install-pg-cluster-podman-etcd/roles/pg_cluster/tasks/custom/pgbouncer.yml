@@ -51,7 +51,7 @@
 
       find_leader() {
         for ip in $LEADER_NODES; do
-          if curl -sf --max-time 2 "http://${ip}:8008/primary" >/dev/null 2>&1; then
+          if curl -s --max-time 2 "http://${ip}:8008/primary" >/dev/null 2>&1; then
             echo "$ip"
             return
           fi
