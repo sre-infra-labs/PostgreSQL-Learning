@@ -19,7 +19,6 @@
 #     -e host_group_for_new_replica=primary_cluster
 # ─────────────────────────────────────────────────────────────────────────────
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Play 1 — Detect cluster state and pre-register new replicas in etcd
 #
@@ -69,14 +68,15 @@
     # If the leader's Patroni or etcd is already unhealthy we abort immediately
     # rather than risk making things worse.
     # ─────────────────────────────────────────────────────────────────────────
-    - name: "PREFLIGHT — Verify Patroni is healthy on cluster leader (docker)"
+    - name: "PREFLIGHT — Verify Patroni is healthy on cluster leader"
       ansible.builtin.shell: |
-        docker exec {{ inventory_hostname }} \
-          curl -sf http://127.0.0.1:{{ patroni_restapi_port }}/patroni 2>/dev/null | python3 -m json.tool
+        set -o pipefail
+        curl -sf http://127.0.0.1:{{ patroni_restapi_port }}/patroni 2>/dev/null | python3 -m json.tool
       args:
         executable: /bin/bash
       register: _patroni_check_raw
       changed_when: false
+      timeout: 10
 
     - name: "Parse Patroni health response"
       ansible.builtin.set_fact:
@@ -87,7 +87,7 @@
 
     - name: "PREFLIGHT — Verify PostgreSQL is running on cluster leader (docker)"
       ansible.builtin.shell: |
-        docker exec {{ inventory_hostname }} \
+        
           curl -sf http://127.0.0.1:{{ patroni_restapi_port }}/health >/dev/null 2>&1 && echo "200" || echo "error"
       args:
         executable: /bin/bash
@@ -109,7 +109,7 @@
 
     - name: "PREFLIGHT — Verify etcd has quorum on cluster leader (docker)"
       ansible.builtin.shell: |
-        docker exec {{ inventory_hostname }} \
+        
           curl -sf http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "200" || echo "error"
       args:
         executable: /bin/bash
@@ -124,7 +124,7 @@
 
     - name: "PREFLIGHT — Check for stale unstarted etcd members from previous failed runs (docker)"
       ansible.builtin.shell: |
-        docker exec {{ inventory_hostname }} \
+        
           etcdctl --endpoints=http://127.0.0.1:2379 member list --write-out=simple 2>/dev/null \
           | awk -F', ' '$2 != "started" {print "STALE:", $1, $3, $4}'
       args:
@@ -159,7 +159,6 @@
     - name: "Store leader hostname for use in Play 2 delegate_to"
       ansible.builtin.set_fact:
         _cluster_leader_host: "{{ inventory_hostname }}"
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Play 2 — Install and configure new replica nodes  (serial: 1)
@@ -239,10 +238,9 @@
     # ─────────────────────────────────────────────────────────────────────────
     - block:
         # ── Leader guard ──────────────────────────────────────────────────────
-        - name: "GUARD — Verify leader etcd health before registering {{ inventory_hostname }} (docker)"
+        - name: "GUARD — Verify leader etcd health before registering {{ inventory_hostname }}"
           ansible.builtin.shell: |
-            docker exec {{ _leader }} \
-              curl -sf http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "ok" || echo "fail"
+            curl -sf http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "ok" || echo "fail"
           args:
             executable: /bin/bash
           register: _guard_etcd
@@ -251,12 +249,12 @@
             _leader_group: "{{ (host_group_for_new_replica | default('standby_cluster')) + '_leader' }}"
             _leader: "{{ hostvars[groups[_leader_group][0]]['_cluster_leader_host']
                          | default(groups[_leader_group][0]) }}"
+          delegate_to: "{{ _leader }}"
           failed_when: _guard_etcd.stdout.strip() != "ok"
 
-        - name: "GUARD — Verify leader PostgreSQL health before registering {{ inventory_hostname }} (docker)"
+        - name: "GUARD — Verify leader PostgreSQL health before registering {{ inventory_hostname }}"
           ansible.builtin.shell: |
-            docker exec {{ _leader }} \
-              curl -sf http://127.0.0.1:{{ patroni_restapi_port }}/health >/dev/null 2>&1 && echo "ok" || echo "fail"
+            curl -sf http://127.0.0.1:{{ patroni_restapi_port }}/health >/dev/null 2>&1 && echo "ok" || echo "fail"
           args:
             executable: /bin/bash
           register: _guard_pg
@@ -265,6 +263,7 @@
             _leader_group: "{{ (host_group_for_new_replica | default('standby_cluster')) + '_leader' }}"
             _leader: "{{ hostvars[groups[_leader_group][0]]['_cluster_leader_host']
                          | default(groups[_leader_group][0]) }}"
+          delegate_to: "{{ _leader }}"
           failed_when: _guard_pg.stdout.strip() != "ok"
 
         # ── Phase A · step 1: compute etcd cluster string (read-only) ─────────
@@ -275,7 +274,7 @@
         # ─────────────────────────────────────────────────────────────────────
         - name: "Compute ETCD_INITIAL_CLUSTER for {{ inventory_hostname }} (no cluster change, docker)"
           ansible.builtin.shell: |
-            docker exec {{ _leader }} bash -c '
+            bash -c '
             ENDPOINT="http://127.0.0.1:2379"
             OWN_PEER="http://{{ ip }}:2380"
             OWN_NAME="{{ inventory_hostname }}"
@@ -334,7 +333,7 @@
         # ─────────────────────────────────────────────────────────────────────
         - name: "ACTIVATE — Register {{ inventory_hostname }} as non-voting etcd learner (docker)"
           ansible.builtin.shell: |
-            docker exec {{ _leader }} bash -c '
+            bash -c '
             ENDPOINT="http://127.0.0.1:2379"
             OWN_PEER="http://{{ ip }}:2380"
             OWN_NAME="{{ inventory_hostname }}"
@@ -372,31 +371,39 @@
             daemon_reload: true
 
         - name: "ACTIVATE — Wait for etcd client port on {{ inventory_hostname }}"
-          ansible.builtin.wait_for:
-            host: "{{ ip }}"
-            port: 2379
-            state: started
-            timeout: 60
-            delay: 3
+          ansible.builtin.shell: |
+            curl -sf http://{{ ip }}:2379/health >/dev/null 2>&1 && echo "ok" || echo "fail"
+          args:
+            executable: /bin/bash
+          register: _new_etcd_port_wait
+          until: _new_etcd_port_wait.stdout.strip() == "ok"
+          retries: 5
+          delay: 1
+          timeout: 30
+          ignore_errors: true
 
         - name: "ACTIVATE — Verify etcd is healthy on {{ inventory_hostname }}"
-          ansible.builtin.uri:
-            url: "http://{{ ip }}:2379/health"
-            method: GET
-            status_code: 200
+          ansible.builtin.shell: |
+            curl -sf http://{{ ip }}:2379/health >/dev/null 2>&1 && echo "ok" || echo "fail"
+          args:
+            executable: /bin/bash
           register: _new_etcd_health
-          until: _new_etcd_health.status is defined and _new_etcd_health.status == 200
-          retries: 15
-          delay: 3
+          until: _new_etcd_health.stdout.strip() == "ok"
+          retries: 5
+          delay: 1
+          timeout: 30
 
         # ── Wait for this node's etcd to join before promoting ────────────────
         - name: "Wait for {{ inventory_hostname }}'s etcd peer port (confirms cluster join)"
-          ansible.builtin.wait_for:
-            host: "{{ ip }}"
-            port: 2380
-            state: started
-            timeout: 120
-            delay: 5
+          ansible.builtin.shell: |
+            nc -z {{ ip }} 2380 >/dev/null 2>&1 && echo "ok" || echo "fail"
+          args:
+            executable: /bin/bash
+          register: _etcd_peer_port_wait
+          until: _etcd_peer_port_wait.stdout.strip() == "ok"
+          retries: 5
+          delay: 1
+          timeout: 30
           when: "'ADDED:' in _etcd_add_result.stdout"
 
         # ── Promote learner to voting member ──────────────────────────────────
@@ -407,7 +414,7 @@
         # ─────────────────────────────────────────────────────────────────────
         - name: "Promote {{ inventory_hostname }} etcd learner to voting member (docker)"
           ansible.builtin.shell: |
-            docker exec {{ _leader }} bash -c '
+            bash -c '
             ENDPOINT="http://127.0.0.1:2379"
             OWN_PEER="http://{{ ip }}:2380"
 
@@ -436,8 +443,9 @@
                          | default(groups[_leader_group][0]) }}"
           register: _etcd_promote_result
           until: "'PROMOTED:' in _etcd_promote_result.stdout or 'PROMOTE_SKIP:' in _etcd_promote_result.stdout"
-          retries: 12
-          delay: 5
+          retries: 5
+          delay: 1
+          timeout: 30
           changed_when: "'PROMOTED:' in _etcd_promote_result.stdout"
           when: "'ADDED:' in _etcd_add_result.stdout"
 
@@ -453,17 +461,21 @@
             daemon_reload: true
 
         - name: "ACTIVATE — Wait for Patroni REST API on {{ inventory_hostname }}"
-          ansible.builtin.wait_for:
-            host: "{{ ip }}"
-            port: "{{ patroni_restapi_port }}"
-            state: started
-            timeout: 300
-            delay: 10
+          ansible.builtin.shell: |
+            curl -sf http://{{ ip }}:{{ patroni_restapi_port }}/cluster >/dev/null 2>&1 && echo "ok" || echo "fail"
+          args:
+            executable: /bin/bash
+          register: _patroni_activate_wait
+          until: _patroni_activate_wait.stdout.strip() == "ok"
+          retries: 5
+          delay: 1
+          timeout: 30
+          ignore_errors: true
 
         # ── Final leader health check ─────────────────────────────────────────
         - name: "FINAL CHECK — Verify leader etcd is healthy after {{ inventory_hostname }} joined (docker)"
           ansible.builtin.shell: |
-            docker exec {{ _leader }} \
+            
               curl -sf http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "ok" || echo "fail"
           args:
             executable: /bin/bash
@@ -477,7 +489,7 @@
 
         - name: "FINAL CHECK — Verify leader PostgreSQL is healthy after {{ inventory_hostname }} joined (docker)"
           ansible.builtin.shell: |
-            docker exec {{ _leader }} \
+            
               curl -sf http://127.0.0.1:{{ patroni_restapi_port }}/health >/dev/null 2>&1 && echo "ok" || echo "fail"
           args:
             executable: /bin/bash
@@ -501,7 +513,7 @@
       rescue:
         - name: "RESCUE — Remove stale etcd member and recover leader quorum (docker)"
           ansible.builtin.shell: |
-            docker exec {{ _leader }} bash -c '
+            bash -c '
             OWN_PEER="http://{{ ip }}:2380"
             ENDPOINT="http://127.0.0.1:2379"
 
@@ -578,7 +590,6 @@
               Re-run the playbook once the root cause is resolved.
               Original error: {{ ansible_failed_result.msg | default('see task output above') }}
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Play 3 — Cleanup: restore leader etcd health if Play 2 failed
 #
@@ -608,7 +619,7 @@
 
     - name: "CLEANUP — Check leader etcd health (docker)"
       ansible.builtin.shell: |
-        docker exec {{ inventory_hostname }} \
+        
           curl -sf http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "200" || echo "error"
       args:
         executable: /bin/bash
@@ -623,7 +634,7 @@
 
     - name: "CLEANUP — Remove registered-but-not-started etcd members (docker, when quorum exists)"
       ansible.builtin.shell: |
-        docker exec {{ inventory_hostname }} bash -c '
+        bash -c '
         stale=$(etcdctl --endpoints=http://127.0.0.1:2379 --command-timeout=5s \
                   member list --write-out=simple 2>/dev/null \
                   | awk -F", " "$2 != \"started\" {print \$1}")
@@ -646,7 +657,7 @@
 
     - name: "CLEANUP — Recover etcd via --force-new-cluster (docker, when quorum is lost)"
       ansible.builtin.shell: |
-        docker exec {{ inventory_hostname }} bash -c '
+        bash -c '
         set -e
         systemctl stop etcd || true
         sleep 2
@@ -681,7 +692,7 @@
 
     - name: "CLEANUP — Verify leader etcd is healthy (docker)"
       ansible.builtin.shell: |
-        docker exec {{ inventory_hostname }} \
+        
           curl -sf http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "200" || echo "error"
       args:
         executable: /bin/bash
@@ -700,3 +711,59 @@
           Leader etcd health: HTTP {{ _final_health.status | default('unreachable') }}
           {{ '✓ HEALTHY — safe to re-run playbook-add-replicas.yml' if _final_health.status | default('error') == '200'
              else '✗ STILL UNHEALTHY — manual recovery needed before re-running' }}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Play 4 — Validate all replicas joined successfully
+#
+# Confirms that all target replicas are now active members of the Patroni cluster
+# before declaring the playbook run successful.
+# ─────────────────────────────────────────────────────────────────────────────
+- name: "Validate all new replicas joined Patroni cluster"
+  hosts: "{{ (host_group_for_new_replica | default('standby_cluster')) + '_leader' }}"
+  become: true
+  become_user: root
+  gather_facts: false
+  vars_files:
+    - sensitive-values
+    - vars/dba_vars.yml
+
+  tasks:
+    - name: Load role defaults (patroni_restapi_port, etc.)
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/roles/pg_cluster/defaults/main.yml"
+      tags: always
+
+    - name: Query Patroni cluster members
+      ansible.builtin.shell: |
+        curl -sf http://127.0.0.1:{{ patroni_restapi_port }}/cluster 2>/dev/null | python3 -m json.tool
+      args:
+        executable: /bin/bash
+      register: _patroni_cluster_raw
+      changed_when: false
+      failed_when: _patroni_cluster_raw.rc != 0
+
+    - name: Parse Patroni cluster members
+      ansible.builtin.set_fact:
+        _patroni_members: "{{ _patroni_cluster_raw.stdout | from_json | json_query('members[*].name') }}"
+
+    - name: Get list of target replica hostnames
+      ansible.builtin.set_fact:
+        _target_replicas: "{{ groups[(host_group_for_new_replica | default('standby_cluster')) + '_replica'] | default([]) }}"
+
+    - name: Validate all target replicas are in Patroni cluster
+      ansible.builtin.fail:
+        msg: |
+          VALIDATION FAILED: Not all target replicas are present in Patroni cluster.
+          Expected replicas: {{ _target_replicas | join(', ') }}
+          Actual cluster members: {{ _patroni_members | join(', ') }}
+          Missing: {{ (_target_replicas | difference(_patroni_members)) | join(', ') }}
+      when: _target_replicas | difference(_patroni_members) | length > 0
+
+    - name: Report successful replica join
+      ansible.builtin.debug:
+        msg: |
+          ✓ SUCCESS: All target replicas have successfully joined the Patroni cluster
+
+          Target replicas: {{ _target_replicas | join(', ') }}
+          Cluster members: {{ _patroni_members | join(', ') }}

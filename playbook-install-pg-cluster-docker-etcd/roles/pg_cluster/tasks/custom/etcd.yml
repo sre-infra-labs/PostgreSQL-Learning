@@ -69,6 +69,14 @@
     mode: '0644'
   notify: reload systemd daemon
 
+- name: Wait for apt lock to be released before starting etcd
+  ansible.builtin.shell: |
+    while fuser /var/lib/apt/lists/lock /var/cache/apt/archives/lock /var/lib/dpkg/lock* 2>/dev/null; do
+      sleep 1
+    done
+  timeout: 30
+  changed_when: false
+
 - name: Reload systemd and enable etcd service
   ansible.builtin.systemd:
     name: etcd
@@ -76,30 +84,52 @@
     enabled: true
     daemon_reload: true
 
-- name: Wait for etcd client port on this node
-  ansible.builtin.wait_for:
-    host: localhost
-    port: 2379
-    state: started
-    timeout: 60
-    delay: 5
-  register: etcd_wait
+- name: Check if etcd process is running
+  ansible.builtin.command: systemctl is-active etcd
+  register: etcd_process_check
+  changed_when: false
+  failed_when: false
+  timeout: 10
+
+- name: Show etcd status if not running
+  ansible.builtin.command: systemctl status etcd --no-pager
+  when: etcd_process_check.rc != 0
+  changed_when: false
   ignore_errors: true
 
-- name: Check etcd service logs if port wait failed
-  ansible.builtin.shell: journalctl -xeu etcd.service 2>&1 | tail -30
-  when: etcd_wait is failed
+- name: Show recent etcd logs for diagnosis
+  ansible.builtin.command: journalctl -u etcd -n 50 --no-pager
+  when: etcd_process_check.rc != 0
+  changed_when: false
+  ignore_errors: true
+
+- name: Fail if etcd process is not running
+  ansible.builtin.fail:
+    msg: "etcd process is not running on {{ inventory_hostname }}. Check logs above."
+  when: etcd_process_check.rc != 0
+
+- name: Wait for etcd client port on this node
+  ansible.builtin.shell: |
+    curl -sf http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "ok" || echo "fail"
+  args:
+    executable: /bin/bash
+  register: etcd_wait
+  until: etcd_wait.stdout.strip() == "ok"
+  retries: 5
+  delay: 1
+  timeout: 30
   ignore_errors: true
 
 - name: Verify etcd health on {{ inventory_hostname }}
-  ansible.builtin.uri:
-    url: "http://{{ ip }}:2379/health"
-    method: GET
-    status_code: 200
-  register: etcd_health
-  until: etcd_health.status == 200
-  retries: 15
-  delay: 3
+  ansible.builtin.shell: |
+    curl -sf http://127.0.0.1:2379/health >/dev/null 2>&1 && echo "ok" || echo "fail"
+  args:
+    executable: /bin/bash
+  register: etcd_health_check
+  until: etcd_health_check.stdout.strip() == "ok"
+  retries: 5
+  delay: 1
+  timeout: 30
   ignore_errors: true
 
 - name: etcd is healthy on {{ inventory_hostname }}

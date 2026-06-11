@@ -35,8 +35,9 @@
     cmd: pgbackrest --stanza={{ pgbackrest_stanza_name }} --log-level-console=info stanza-create
   become_user: postgres
   register: stanza_result
-  retries: 3
-  delay: 10
+  retries: 2
+  delay: 5
+  timeout: 30
   failed_when: false
   when: inventory_hostname in groups['primary_cluster_leader']
 
@@ -62,5 +63,6 @@
     - stanza_result.rc != 0
     - "'did an error occur during stanza-upgrade' in (stanza_result.stdout | default(''))"
   register: stanza_upgrade_result
-  retries: 3
-  delay: 10
+  retries: 2
+  delay: 5
+  timeout: 30

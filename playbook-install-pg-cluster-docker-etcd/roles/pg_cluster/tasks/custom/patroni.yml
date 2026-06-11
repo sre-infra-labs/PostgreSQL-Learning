@@ -153,17 +153,39 @@
       ansible.builtin.command: systemctl is-active patroni
       register: _patroni_active_leader
       changed_when: false
-      retries: 6
-      delay: 5
+      retries: 5
+      delay: 1
       until: _patroni_active_leader.rc == 0
+      timeout: 30
 
     - name: Wait for Patroni REST API to become available on leader
-      ansible.builtin.wait_for:
-        port: "{{ patroni_restapi_port }}"
-        host: "127.0.0.1"
-        state: started
-        timeout: 120
-        delay: 5
+      ansible.builtin.shell: |
+        curl -sf http://127.0.0.1:{{ patroni_restapi_port }}/cluster >/dev/null 2>&1 && echo "ok" || echo "fail"
+      args:
+        executable: /bin/bash
+      register: _patroni_api_leader_check
+      until: _patroni_api_leader_check.stdout.strip() == "ok"
+      retries: 5
+      delay: 1
+      timeout: 30
+      ignore_errors: true
+
+    - name: Diagnose Patroni API failure on leader if needed
+      block:
+        - name: Check Patroni process status on leader
+          ansible.builtin.command: systemctl status patroni --no-pager
+          changed_when: false
+          ignore_errors: true
+
+        - name: Show recent Patroni logs on leader
+          ansible.builtin.command: journalctl -u patroni -n 50 --no-pager
+          changed_when: false
+          ignore_errors: true
+
+        - name: Fail with diagnostic message
+          ansible.builtin.fail:
+            msg: "Patroni REST API not responding on leader {{ inventory_hostname }}. Check logs above."
+      when: _patroni_api_leader_check.stdout.strip() != "ok"
 
     - name: Wait for leader to be elected
       ansible.builtin.uri:
@@ -173,8 +195,9 @@
         status_code: 200
       register: leader_check
       until: leader_check.status == 200
-      retries: 30
-      delay: 5
+      retries: 5
+      delay: 1
+      timeout: 30
   rescue:
     - name: Collect Patroni journal logs for diagnosis (leader)
       ansible.builtin.command: journalctl -u patroni -n 80 --no-pager
@@ -205,17 +228,26 @@
       ansible.builtin.command: systemctl is-active patroni
       register: _patroni_active_replica
       changed_when: false
-      retries: 6
-      delay: 5
+      retries: 5
+      delay: 1
       until: _patroni_active_replica.rc == 0
+      timeout: 30
 
     - name: Wait for Patroni REST API to become available on replica
-      ansible.builtin.wait_for:
-        port: "{{ patroni_restapi_port }}"
-        host: "127.0.0.1"
-        state: started
-        timeout: 300
-        delay: 5
+      ansible.builtin.shell: |
+        curl -sf http://127.0.0.1:{{ patroni_restapi_port }}/cluster >/dev/null 2>&1 && echo "ok" || echo "fail"
+      args:
+        executable: /bin/bash
+      register: _patroni_api_check
+      until: _patroni_api_check.stdout.strip() == "ok"
+      retries: 5
+      delay: 1
+      timeout: 30
+
+    - name: Fail if Patroni API not responding on replica
+      ansible.builtin.fail:
+        msg: "Patroni REST API not responding on replica {{ inventory_hostname }}. Check rescue block logs."
+      when: _patroni_api_check.stdout.strip() != "ok"
   rescue:
     - name: Collect Patroni journal logs for diagnosis (replica)
       ansible.builtin.command: journalctl -u patroni -n 80 --no-pager

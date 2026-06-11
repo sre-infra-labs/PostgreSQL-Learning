@@ -286,7 +286,7 @@ INSERT 0 2
 
 ```
 # Build new containers for new replicas
-ansible-playbook playbook-setup-docker.yml 2>&1 | tee logs/playbook-setup-docker.yml.log
+ansible-playbook -i hosts.yml playbook-setup-standby-cluster-containers.yml 2>&1 | tee logs/playbook-setup-standby-cluster-containers.yml.log
 
 # Check containers that are online
 docker ps --filter name=docpg-cls1-pg --format "table {{.Names}}\t{{.Status}}"

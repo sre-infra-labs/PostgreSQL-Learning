@@ -647,11 +647,11 @@ ttl: 30
 
 ---
 
-> [! CAUTION]
+> [!CAUTION]
 > Since old primary was put in maintenance mode before the DR promotion, both new standby cluster (pg1/pg2/pg3) and new primary cluster (pg4) are at same timeline (TL3).
 > Since both clusters are on same timeline, there is no need to increase the timeline on new primary cluster by doing switchover/failover.
 
-> [! IMPORTANT]
+> [!IMPORTANT]
 > If new primary cluster has more than 1 member, the switchover/failover will help in increasing Timeline. This would make multiple DC setup more robust.
 
 ```bash
