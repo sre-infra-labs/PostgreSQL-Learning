@@ -282,7 +282,7 @@ INSERT 0 2
 
 ---
 
-### Step 5 - If new primary cluster has only 1 member, Add new replicas on DR site as we don't know how long the Disaster will last
+### Step 5 - For single member primary cluster, `Add new replicas` in cluster as we don't know how long the Disaster will last
 
 ```
 # Build new containers for new replicas
@@ -300,43 +300,9 @@ ansible-playbook -i hosts.yml playbook-add-replicas.yml --vault-password-file=va
   -e host_group_for_new_replica=primary_cluster 2>&1 | tee logs/playbook-add-replicas.log
 ```
 
---
-
-### Step 6 - Increment new primary cluster timeline using switchover/failover method by at least 2
-
-```
-# One set of failover from <<docpg-cls1-pg4 -> docpg-cls1-pg5 -> docpg-cls1-pg4>> increments timeline by 1. Repeat this 2 times at least.
-
-# **** Run 01 -
-patronictl -c /etc/patroni/patroni.yml failover docpg-cls1 --candidate docpg-cls1-pg5 --force
-sleep 15
-patronictl -c /etc/patroni/patroni.yml failover docpg-cls1 --candidate docpg-cls1-pg4 --force
-
-# **** Run 02 -
-patronictl -c /etc/patroni/patroni.yml failover docpg-cls1 --candidate docpg-cls1-pg5 --force
-sleep 15
-patronictl -c /etc/patroni/patroni.yml failover docpg-cls1 --candidate docpg-cls1-pg4 --force
-```
-
-> Output
-
-```
-root@docpg-cls1-pg4:/# patronictl list
-+ Cluster: docpg-cls1 (7649716325149331488) --+-----------+----+-----------+------------------+
-| Member         | Host        | Role         | State     | TL | Lag in MB | Tags             |
-+----------------+-------------+--------------+-----------+----+-----------+------------------+
-| docpg-cls1-pg4 | 172.18.0.14 | Leader       | running   |  7 |           |                  |
-+----------------+-------------+--------------+-----------+----+-----------+------------------+
-| docpg-cls1-pg5 | 172.18.0.15 | Sync Standby | streaming |  7 |         0 |                  |
-+----------------+-------------+--------------+-----------+----+-----------+------------------+
-| docpg-cls1-pg6 | 172.18.0.16 | Replica      | streaming |  7 |         0 | nofailover: true |
-|                |             |              |           |    |           | nosync: true     |
-+----------------+-------------+--------------+-----------+----+-----------+------------------+
-```
-
 ---
 
-### Step 7 — Bring Old Primary Cluster Back Up
+### Step 6 — Bring Old Primary Cluster Back Up
 
 Start the old primary cluster containers and Patroni. Because the old cluster's etcd DCS still
 holds the previous leader state and has **no `standby_cluster` config yet**, Patroni will elect
@@ -355,7 +321,7 @@ docker start docpg-cls1-pg1 docpg-cls1-pg2 docpg-cls1-pg3
 
 ---
 
-### Step 8 — Set old primary cluster into maintenance mode
+### Step 7 — Set old primary cluster into maintenance mode
 
 ```bash
 # Set to maintenance mode
@@ -384,11 +350,11 @@ root@docpg-cls1-pg1:/# patronictl list
  Maintenance mode: on
 ```
 
-> [!NOTE] We can notice that old primary cluster is in `maintenance mode`. Has a `Leader` and different timeline (TL3) than the new primary cluster (TL7).
+> [!NOTE] We can notice that old primary cluster is in `maintenance mode`. Has a `Leader` and one Timeline higher than new primary cluster.
 
 ---
 
-### Step 9 — Add `standby_cluster` Config to Old Primary Cluster
+### Step 8 — Add `standby_cluster` Config to Old Primary Cluster
 
 Write the `standby_cluster` block into the old cluster's DCS, pointing it at pg4. 
 Patroni propagates this to all members automatically.
@@ -438,29 +404,33 @@ docker exec docpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
 Configuration changed
 
 
-root@docpg-cls1-pg1:/# 
-root@docpg-cls1-pg1:/# patronictl list
-+ Cluster: docpg-cls1 (7649716325149331488) ----+-----------+----+-----------+------------------+
+root@docpg-cls1-pg1:/# patronictl -c /etc/patroni/patroni.yml list
++ Cluster: docpg-cls1 (7650002457948901374) ----+-----------+----+-----------+------------------+
 | Member         | Host        | Role           | State     | TL | Lag in MB | Tags             |
 +----------------+-------------+----------------+-----------+----+-----------+------------------+
-| docpg-cls1-pg1 | 172.18.0.11 | Standby Leader | running   |  3 |           |                  |
+| docpg-cls1-pg1 | 172.18.0.11 | Standby Leader | running   | 11 |           |                  |
 +----------------+-------------+----------------+-----------+----+-----------+------------------+
-| docpg-cls1-pg2 | 172.18.0.12 | Replica        | streaming |  3 |         0 |                  |
+| docpg-cls1-pg2 | 172.18.0.12 | Replica        | streaming | 11 |         0 |                  |
 +----------------+-------------+----------------+-----------+----+-----------+------------------+
-| docpg-cls1-pg3 | 172.18.0.13 | Replica        | streaming |  3 |         0 | nofailover: true |
+| docpg-cls1-pg3 | 172.18.0.13 | Replica        | streaming | 11 |         0 | nofailover: true |
 |                |             |                |           |    |           | nosync: true     |
 +----------------+-------------+----------------+-----------+----+-----------+------------------+
- Maintenance mode: on
+
+root@docpg-cls1-pg4:/# patronictl -c /etc/patroni/patroni.yml list
++ Cluster: docpg-cls1 (7650002457948901374) ------+----+-----------+
+| Member         | Host        | Role   | State   | TL | Lag in MB |
++----------------+-------------+--------+---------+----+-----------+
+| docpg-cls1-pg4 | 172.18.0.14 | Leader | running | 10 |           |
++----------------+-------------+--------+---------+----+-----------+
 ```
+
+> [!CRITICAL] We can see from above output that old primary cluster timeline is greater than new primary cluster timeline.
 
 ---
 
-> [!CRITICAL] Only if Timeline issue is present
-### Step 10 - If `Timeline` issue is present (old primary TL > new primary TL), then Increment new primary cluster timeline using switchover/failover method
+### Step 9 - If `Timeline` issue is present (old primary TL > new primary TL), then Increment new primary cluster timeline
 
 ```
-# One set of failover from <<docpg-cls1-pg4 -> docpg-cls1-pg5 -> docpg-cls1-pg4>> increments timeline by 1. Repeat this 2 times at least.
-
 # **** Run 01
 patronictl -c /etc/patroni/patroni.yml failover docpg-cls1 --candidate docpg-cls1-pg5 --force
 sleep 15
@@ -471,15 +441,11 @@ patronictl -c /etc/patroni/patroni.yml failover docpg-cls1 --candidate docpg-cls
 sleep 15
 patronictl -c /etc/patroni/patroni.yml failover docpg-cls1 --candidate docpg-cls1-pg4 --force
 
-# **** Run 03
-patronictl -c /etc/patroni/patroni.yml failover docpg-cls1 --candidate docpg-cls1-pg5 --force
-sleep 15
-patronictl -c /etc/patroni/patroni.yml failover docpg-cls1 --candidate docpg-cls1-pg4 --force
 ```
 
 ---
 
-### Step 11 - If old primary (pg1/pg2/pg3) got demoted to standby, then take it out of `maintenance` mode
+### Step 10 - If old primary (pg1/pg2/pg3) got demoted to standby, and new primary got higher timeline, then take it out of `maintenance` mode
 
 ```bash
 echo "=== Resume old primary cluster (pg1/pg2/pg3) ==="
