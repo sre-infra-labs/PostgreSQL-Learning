@@ -108,12 +108,15 @@
     daemon_reload: true
   when: (etcd_cluster_state | default('new')) != 'existing'
 
-- name: Check if etcd process is running
+- name: Check if etcd process is running (with retries for startup)
   ansible.builtin.command: systemctl is-active etcd
   register: etcd_process_check
   changed_when: false
   failed_when: false
-  timeout: 10
+  retries: 10
+  delay: 1
+  until: etcd_process_check.rc == 0
+  timeout: 30
   when: (etcd_cluster_state | default('new')) != 'existing'
 
 - name: Show etcd status if not running

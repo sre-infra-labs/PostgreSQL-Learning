@@ -7,6 +7,10 @@
   vars_files:
     - sensitive-values
     - vars/dba_vars.yml
+  vars:
+    # Signal to Patroni template that this is a primary cluster (not standby)
+    # (required for patroni.yml.j2 to skip standby_cluster config block)
+    _cluster_is_standby: false
   collections:
     - community.postgresql
 
