@@ -1,0 +1,35 @@
+# Standby Cluster Group Variables
+# Applies to: all nodes in standby_cluster group (pg4 and any standby replicas)
+
+---
+# Cluster identity — already set in hosts.yml but can be overridden per group if needed
+# pgbackrest_stanza_name: "docpg-cls1"
+# patroni_cluster_name: "docpg-cls1"
+
+# Standby cluster specific: operates as a cascading standby of primary cluster
+# (follows the primary cluster leader via standby_cluster config in Patroni)
+patroni_standby_cluster_enabled: true
+
+# Standby cluster streams from the primary cluster leader
+# (exact config is in hosts.yml standby_cluster.vars)
+# patroni_standby_cluster:
+#   host: "172.18.0.10"
+#   port: 5432
+# patroni_standby_cluster_slot_name: "standby_cluster_slot"
+
+# Standby cluster members do NOT participate in primary cluster's quorum
+# They run their own 1-member (or N-member standby) cluster that streams from primary
+patroni_synchronous_mode: false  # Standby cluster members do not participate in primary's sync replication
+
+# Replication settings for standby cluster
+max_wal_senders: 10
+max_replication_slots: 10
+
+# Use pg_rewind for recovery
+use_pg_rewind: true
+use_slots: true
+
+# Replica creation method for standby cluster members
+# (cascade from standby leader to standby replicas)
+patroni_create_replica_methods:
+  - basebackup

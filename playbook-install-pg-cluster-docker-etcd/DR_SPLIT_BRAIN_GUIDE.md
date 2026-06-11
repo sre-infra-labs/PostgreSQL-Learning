@@ -466,7 +466,7 @@ Identify which archive the current stanza uses and remove the rogue TL4.history:
 ```bash
 # Identify the active archive directory (highest 18-N)
 docker exec docpg-cls1-pg4 bash -c \
-  "find /var/lib/pgbackrest/archive/docpg-cls1 -name '00000004.history' | sort"
+  "find /var/lib/pgbackrest/archive/docpg-cls1 -name '*.history' | sort"
 ```
 
 > Output:
@@ -579,6 +579,115 @@ docker exec docpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
 ```
 
 ✅ All nodes are streaming on TL3 (matching pg4).
+
+---
+
+### Step 7d — Fix New Primary (pg4) if it enters `start failed` After Restart
+
+> ⚠ **This step is only needed if pg4 enters `start failed` state after a container or service
+> restart following the DR promotion.** Check `patronictl list` on pg4 first — if it shows
+> `Leader | running`, skip this step entirely.
+
+After a service or container restart of pg4, Patroni may re-read its local `patroni.yml` and
+find a `standby_cluster:` block in `bootstrap.dcs` that was generated when pg4 was originally
+installed as the standby cluster. This causes Patroni to call `is_standby_cluster() = True`,
+so it starts PostgreSQL in replica mode (creating `standby.signal`), which then fails because
+pg4's checkpoint is ahead of the fork point where the rogue `00000004.history` branched.
+
+The three root causes stack on each other:
+
+| Cause | Effect |
+|---|---|
+| `standby_cluster:` in `bootstrap.dcs` of `/etc/patroni/patroni.yml` | Patroni starts as secondary → never acquires leader lock |
+| `standby.signal` in data dir (created by Patroni in replica mode) | PostgreSQL starts in standby mode instead of primary mode |
+| Local `pg_wal/00000004.history` still present | PostgreSQL resolves `latest` timeline as TL4, which is past pg4's checkpoint on TL3 → FATAL |
+
+**Diagnose:**
+
+```bash
+# Confirm the issue: Patroni log shows "starting as a secondary" despite no lock owner
+docker exec docpg-cls1-pg4 tail -5 /var/log/patroni/patroni.log
+
+# Confirm standby_cluster is in local patroni.yml (NOT just the DCS config)
+docker exec docpg-cls1-pg4 grep -n 'standby_cluster:' /etc/patroni/patroni.yml
+
+# Confirm standby.signal exists
+docker exec docpg-cls1-pg4 ls /var/lib/postgresql/18/main/standby.signal
+
+# Confirm local rogue history exists
+docker exec docpg-cls1-pg4 ls /var/lib/postgresql/18/main/pg_wal/00000004.history
+```
+
+**Fix:**
+
+```bash
+# 1 — Stop Patroni so it stops recreating standby.signal
+docker exec docpg-cls1-pg4 systemctl stop patroni
+
+# 2 — Remove standby_cluster block from bootstrap.dcs in patroni.yml
+docker exec docpg-cls1-pg4 python3 - << 'EOF'
+lines = open('/etc/patroni/patroni.yml').readlines()
+out, skipping = [], False
+for line in lines:
+    if line.startswith('    standby_cluster:'):
+        skipping = True
+    elif skipping and not line.startswith('      ') and line.strip():
+        skipping = False
+    if not skipping:
+        out.append(line)
+open('/etc/patroni/patroni.yml', 'w').writelines(out)
+print(f"Done — {len(out)} lines written")
+EOF
+
+# Verify standby_cluster is gone from patroni.yml
+docker exec docpg-cls1-pg4 grep -n 'standby_cluster:' /etc/patroni/patroni.yml \
+  && echo "WARNING: still present" || echo "OK: removed"
+
+# 3 — Remove standby.signal so PostgreSQL starts as primary
+docker exec docpg-cls1-pg4 rm -v /var/lib/postgresql/18/main/standby.signal
+
+# 4 — Remove local rogue TL4 history file
+docker exec docpg-cls1-pg4 rm -v /var/lib/postgresql/18/main/pg_wal/00000004.history
+
+# 5 — Start Patroni
+docker exec docpg-cls1-pg4 systemctl start patroni
+sleep 15
+docker exec docpg-cls1-pg4 patronictl list
+```
+
+> Expected output: pg4 shows `Leader | running` (pg4 may promote to the next timeline number
+> as part of its first clean start — this is normal and does **not** indicate a new split brain).
+
+**Also update `hosts.yml`** to reflect the post-DR topology so any future playbook run generates
+the correct `patroni.yml` without `standby_cluster` for pg4:
+
+```yaml
+# After DR failover — pg4 is primary cluster, pg1/pg2/pg3 are standby cluster
+primary_cluster:
+  primary_cluster_leader:
+    docpg-cls1-pg4:          # ← was standby_cluster_leader
+      ip: "172.18.0.14"
+      ansible_port: 2214
+
+standby_cluster:
+  standby_cluster_leader:
+    docpg-cls1-pg1:          # ← was primary_cluster_leader
+      ip: "172.18.0.11"
+      ansible_port: 2211
+      patroni_standby_cluster:
+        host: "172.18.0.14"  # pg4's IP (new primary)
+        port: 5432
+  standby_cluster_replica:
+    docpg-cls1-pg2: ...      # ← was primary_cluster_replica
+    docpg-cls1-pg3: ...      # ← was primary_cluster_replica
+```
+
+**Why pg4 promotes to the next timeline on first start:**
+
+After the failed replica-mode start attempts, if a `backup_label` was written to the data
+directory, PostgreSQL enters a brief recovery pass on startup and then promotes — advancing
+the timeline by one (e.g. TL3 → TL4). This is normal and harmless: the standby cluster
+(pg1/pg2/pg3) will follow the new timeline automatically once they reconnect.
 
 ---
 

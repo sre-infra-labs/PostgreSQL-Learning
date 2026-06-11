@@ -1,0 +1,34 @@
+# Primary Cluster Group Variables
+# Applies to: all nodes in primary_cluster group (pg1, pg2, pg3)
+
+---
+# Cluster identity — already set in hosts.yml but can be overridden per group if needed
+# pgbackrest_stanza_name: "docpg-cls1"
+# patroni_cluster_name: "docpg-cls1"
+
+# Primary cluster specific: not part of a standby_cluster hierarchy
+# (no patroni_standby_cluster config needed here)
+
+# Primary cluster members configuration
+patroni_primary_cluster_enabled: true
+patroni_synchronous_mode: true
+patroni_synchronous_mode_strict: false
+patroni_synchronous_node_count: 1
+
+# Patroni bootstrap settings for this cluster
+patroni_initdb:
+  - encoding: UTF8
+    locale: en_US.UTF-8
+  - username: "{{ postgres_user }}"
+
+# Replication settings
+max_wal_senders: 10
+max_replication_slots: 10
+
+# Use pg_rewind for quick recovery after crashes
+use_pg_rewind: true
+use_slots: true
+
+# Standby cluster slot management (for DR)
+# This cluster maintains the standby_cluster_slot for the standby cluster
+patroni_standby_cluster_slot_name: "standby_cluster_slot"

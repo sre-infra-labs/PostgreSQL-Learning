@@ -11,9 +11,6 @@
 # Standard cleanup (containers + volumes, keeps image + network):
 #   ansible-playbook -i hosts.yml playbook-cleanup.yml
 #
-# Skip the confirmation prompt (for scripting / full cycle):
-#   ansible-playbook -i hosts.yml playbook-cleanup.yml -e skip_confirm=true
-#
 # Also remove the Docker image (forces a full image rebuild on next run):
 #   ansible-playbook -i hosts.yml playbook-cleanup.yml -e remove_image=true
 #
@@ -23,7 +20,7 @@
 #   ansible-playbook -i hosts.yml playbook-cleanup.yml --tags image       # only image
 #
 # Full cycle (cleanup → infra → install) in one command:
-#   ansible-playbook -i hosts.yml playbook-cleanup.yml -e skip_confirm=true && \
+#   ansible-playbook -i hosts.yml playbook-cleanup.yml && \
 #   ansible-playbook -i hosts.yml playbook-setup-primary-cluster-containers.yml && \
 #   ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
 
@@ -37,7 +34,6 @@
     remove_containers: true    # stop + remove all pg cluster containers + pg-bouncer
     remove_volumes:    true    # remove all named Docker volumes (pg-data-*, pg-logs-*, pg-backups)
     remove_image:      false   # remove pg-cluster-node:latest (slow to rebuild — off by default)
-    skip_confirm:      false   # set true to bypass the confirmation prompt
 
     # NOTE: remove_network is intentionally absent.
     # docker_network (from hosts.yml) is a SHARED network used by other containers
@@ -46,8 +42,13 @@
 
     # --- derived from inventory groups in hosts.yml ---
     # Must be invoked with `-i hosts.yml` so primary_cluster / standby_cluster are resolved.
+    # pgbouncer_container_name is defined in hosts.yml all.vars and accessed via hostvars of
+    # the first pg node so the cleanup playbook has no hardcoded container names.
     _pg_nodes: "{{ (groups['primary_cluster'] | default([])) + (groups['standby_cluster'] | default([])) }}"
-    _all_containers: "{{ _pg_nodes + ['pg-bouncer'] }}"
+    _pgbouncer_container: >-
+      {{ hostvars[_pg_nodes[0]]['pgbouncer_container_name'] | default('pg-bouncer')
+         if _pg_nodes | length > 0 else 'pg-bouncer' }}
+    _all_containers: "{{ _pg_nodes + [_pgbouncer_container] }}"
     _all_volumes: "{{ (_pg_nodes | map('regex_replace', '^', 'pg-data-') | list)
                        + (_pg_nodes | map('regex_replace', '^', 'pg-logs-') | list)
                        + ['pg-backups'] }}"
@@ -68,31 +69,31 @@
           - "  Network     : {{ hostvars[groups['primary_cluster'][0]]['docker_network'] | default('lab-network') }} (never removed — shared with other lab containers)"
           - "======================================================"
 
-    - name: Confirm destructive cleanup
-      ansible.builtin.pause:
-        prompt: |
-          WARNING: This will permanently delete all containers and data volumes.
-          Type 'yes' to continue, anything else to abort
-      register: _confirm
-      when: not (skip_confirm | bool)
-
-    - name: Abort if not confirmed
-      ansible.builtin.fail:
-        msg: "Cleanup aborted."
-      when:
-        - not (skip_confirm | bool)
-        - _confirm.user_input | lower != 'yes'
-
   tasks:
 
     # ------------------------------------------------------------------ #
     #  CONTAINERS                                                          #
     # ------------------------------------------------------------------ #
-    - name: Stop containers
-      ansible.builtin.command: docker stop {{ item }}
-      loop: "{{ _all_containers }}"
-      ignore_errors: true
+    - name: Gather existing containers
+      ansible.builtin.command: docker ps -a --format {{ '{{' }}.Names{{ '}}' }}
+      register: _existing_containers_raw
       changed_when: false
+      tags: containers
+      when: remove_containers | bool
+
+    - name: Identify containers to stop and remove
+      ansible.builtin.set_fact:
+        _containers_to_cleanup: >-
+          {{ _all_containers | select('in', _existing_containers_raw.stdout_lines) | list }}
+      tags: containers
+      when: remove_containers | bool
+
+    - name: Stop containers
+      community.docker.docker_container:
+        name: "{{ item }}"
+        state: stopped
+        force_kill: true
+      loop: "{{ _containers_to_cleanup }}"
       tags: containers
       when: remove_containers | bool
 
@@ -100,15 +101,13 @@
       community.docker.docker_container:
         name: "{{ item }}"
         state: absent
-        force_kill: true
-      loop: "{{ _all_containers }}"
-      ignore_errors: true
+      loop: "{{ _containers_to_cleanup }}"
       tags: containers
       when: remove_containers | bool
 
     - name: Containers removed
       ansible.builtin.debug:
-        msg: "Containers removed: {{ _all_containers | join(', ') }}"
+        msg: "Containers removed: {{ _containers_to_cleanup | join(', ') if _containers_to_cleanup else 'none (all already absent)' }}"
       tags: containers
       when: remove_containers | bool
 
@@ -162,7 +161,7 @@
           - "    ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass"
           - ""
           - "  Or run all three steps in one command:"
-          - "    ansible-playbook playbook-cleanup.yml -e skip_confirm=true &&"
+          - "    ansible-playbook playbook-cleanup.yml &&"
           - "    ansible-playbook playbook-setup-docker.yml &&"
           - "    ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass"
           - "======================================================"

@@ -1,0 +1,18 @@
+# Standby Cluster Replica-Specific Variables
+# Applies to: standby cluster replica members (pg5, pg6, etc. when uncommented in hosts.yml)
+
+---
+# Replica role indicator
+is_replica: true
+is_standby_cluster: true
+is_standby_replica: true
+
+# Standby replica bootstrap method
+# Cascade from standby cluster leader (pg4) via pg_basebackup
+patroni_bootstrap_method: "basebackup"
+
+# Standby replicas inherit standby_cluster config from the parent group
+# and stream from the standby cluster leader
+
+# Lower priority than standby leader (keepalived)
+keepalived_priority: 80

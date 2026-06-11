@@ -1,0 +1,15 @@
+# Primary Cluster Replica-Specific Variables
+# Applies only to: docpg-cls1-pg2, docpg-cls1-pg3 (replica members of primary cluster)
+
+---
+# Replica role indicator
+is_replica: true
+is_standby_cluster: false
+
+# Replica bootstrap method (cascade from primary leader)
+# Use basebackup from the leader (via Patroni pg_basebackup integration)
+patroni_bootstrap_method: "basebackup"
+
+# HAProxy and Keepalived may have different roles on replicas
+# (e.g., sync standby gets the replica VIP)
+keepalived_priority: 90  # Replica priority (primary leader = 100)

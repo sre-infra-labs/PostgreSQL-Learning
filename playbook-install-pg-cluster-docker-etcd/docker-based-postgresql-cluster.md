@@ -170,7 +170,14 @@ This setup uses **Docker** on macOS with a shared `lab-network` for all containe
 This will create patroni based `primary cluster` with `write copy`.
 
 ```bash
-cd PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/
+cd ~/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd
+
+# docker stop docpg-cls1-pg6 docpg-cls1-pg5 docpg-cls1-pg4 docpg-cls1-pg3 docpg-cls1-pg2 docpg-cls1-pg1
+# docker rm docpg-cls1-pg6 docpg-cls1-pg5 docpg-cls1-pg4 docpg-cls1-pg3 docpg-cls1-pg2 docpg-cls1-pg1
+# docker start docpg-cls1-pg6 docpg-cls1-pg5 docpg-cls1-pg4 docpg-cls1-pg3 docpg-cls1-pg2 docpg-cls1-pg1
+
+# Cleanup containers
+ansible-playbook -i hosts.yml playbook-cleanup.yml --tags containers 2>&1 | tee logs/playbook-cleanup.yml.log
 
 # Phase 0: Validate ansible hosts
 ansible-inventory -i hosts.yml --graph
@@ -183,7 +190,7 @@ ansible-playbook -i hosts.yml playbook-setup-primary-cluster-containers.yml 2>&1
 
 # Phase 2: Setup Primary Patroni/PostgreSQL Cluster with one or more nodes
 ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml --vault-password-file=vault-pass \
-  -e reinit_cluster=true -e skip_confirm=true \
+  -e reinit_cluster=true \
   2>&1 | tee logs/playbook-install-primary-cluster.yml.log
 
 # Verify cluster status
@@ -208,7 +215,7 @@ ansible-playbook -i hosts.yml playbook-setup-standby-cluster-containers.yml 2>&1
 
 # Phase 2: Setup Standby Patroni/PostgreSQL Cluster with one or more nodes
 ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-password-file=vault-pass \
-  -e reinit_cluster=true -e skip_confirm=true \
+  -e reinit_cluster=true \
   2>&1 | tee logs/playbook-install-standby-cluster.yml.log
 
 # Phase 3: Verify Standby Cluster is Streaming
@@ -1175,14 +1182,10 @@ ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml \
 ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml \
   --vault-password-file=vault-pass -e reinit_cluster=true
 
-# Reinitialize without confirmation prompt (CI/automation)
-ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml \
-  --vault-password-file=vault-pass -e reinit_cluster=true -e skip_confirm=true
-
 # Reinitialize + wipe all pgBackRest backups
 ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml \
   --vault-password-file=vault-pass \
-  -e reinit_cluster=true -e skip_confirm=true -e cleanup_pgbackrest_backups=true
+  -e reinit_cluster=true -e cleanup_pgbackrest_backups=true
 
 # Edit vault credentials
 ansible-vault edit sensitive-values --vault-password-file=vault-pass
