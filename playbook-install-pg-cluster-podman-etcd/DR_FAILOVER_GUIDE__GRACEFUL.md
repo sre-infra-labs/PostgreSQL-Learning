@@ -354,6 +354,10 @@ podman exec podpg-cls1-pg4 \
   edit-config podpg-cls1 --force \
   --set "standby_cluster=null" \
   --set "slots.standby_cluster_slot.type=physical"
+
+echo "=== Check new primary cluster health (podpg-cls1-pg4) ==="
+podman exec podpg-cls1-pg4 \
+  patronictl -c /etc/patroni/patroni.yml list
 ```
 
 > Output -
@@ -398,29 +402,8 @@ Now, we should see a member with "Leader" role.
 root@podpg-cls1-pg4:/# 
 ```
 
-Wait for pg4 to become the primary leader:
-
-```bash
-until podman exec podpg-cls1-pg4 \
-        curl -sf http://172.18.0.14:8008/primary > /dev/null 2>&1; do
-  echo "Waiting for pg4 to become primary..."; sleep 3
-done
-echo "✅ pg4 is now primary"
-```
-
-Confirm promotion and capture the current timeline:
-
-```bash
-podman exec podpg-cls1-pg4 psql -h 172.18.0.14 -U postgres -c \
-  "SELECT pg_is_in_recovery(), timeline_id FROM pg_control_checkpoint();"
-# ✅ pg_is_in_recovery = f, timeline_id = (previous_timeline + 1)
-```
-
-```bash
-podman exec podpg-cls1-pg4 \
-  patronictl -c /etc/patroni/patroni.yml list podpg-cls1
-# ✅ podpg-cls1-pg4 role = Leader
-```
+> [! IMPORTANT]
+> If old primary cluster went down without `maintenance` mode, then once it comes up, it would take one timeline above the new primary cluster causing `SPLIT BRAIN`.
 
 ---
 
@@ -479,11 +462,32 @@ podman start podpg-cls1-pg1 podpg-cls1-pg2 podpg-cls1-pg3
 podman exec podpg-cls1-pg1 systemctl start patroni
 podman exec podpg-cls1-pg2 systemctl start patroni
 podman exec podpg-cls1-pg3 systemctl start patroni
+
+# Check old primary cluster health
+podman exec podpg-cls1-pg1 \
+  patronictl -c /etc/patroni/patroni.yml list
+```
+
+> Output -
+```
+|------------$ podman exec podpg-cls1-pg1 \
+  patronictl -c /etc/patroni/patroni.yml list
++ Cluster: podpg-cls1 (7650002457948901374) --+---------+----+-----------+------------------+
+| Member         | Host        | Role         | State   | TL | Lag in MB | Tags             |
++----------------+-------------+--------------+---------+----+-----------+------------------+
+| podpg-cls1-pg1 | 172.18.0.11 | Sync Standby | stopped |    |   unknown |                  |
++----------------+-------------+--------------+---------+----+-----------+------------------+
+| podpg-cls1-pg2 | 172.18.0.12 | Replica      | stopped |    |   unknown |                  |
++----------------+-------------+--------------+---------+----+-----------+------------------+
+| podpg-cls1-pg3 | 172.18.0.13 | Replica      | stopped |    |   unknown | nofailover: true |
+|                |             |              |         |    |           | nosync: true     |
++----------------+-------------+--------------+---------+----+-----------+------------------+
+ Maintenance mode: on
 ```
 
 Wait for patroni service to start, and patronictl command to return member list
 
-> In DR Drill, the old primary members would NOT come online. Would be in STOPPED state due to "maintenance" mode config before DR promotion.
+> In DR Drill, the old primary members would NOT come online. Would be in `STOPPED` state due to `maintenance` mode config before DR promotion.
 
 > **⚠️ Do not allow application traffic to this cluster.**
 > It holds a stale copy of data and will be demoted to standby in the next steps.
@@ -497,6 +501,33 @@ Patroni propagates this to all members automatically.
 
 The old primary cluster will connect to the new primary (pg4) and stream using the **`standby_cluster_slot`** (which we permanently provisioned in pg4's DCS back in Step 6).
 
+> [! CRITICAL] If old primary cluster is NOT in `maintenance` mode, then put it in `maintenance` mode before adding `standby_cluster` config.
+
+```bash
+patronictl -c /etc/patroni/patroni.yml pause --wait podpg-cls1
+
+patronictl -c /etc/patroni/patroni.yml list
+```
+
+> Output -
+```
+root@podpg-cls1-pg4:/# patronictl -c /etc/patroni/patroni.yml pause --wait podpg-cls1
+
+'pause' request sent, waiting until it is recognized by all nodes
+Success: cluster management is paused
+
+root@podpg-cls1-pg4:/# patronictl -c /etc/patroni/patroni.yml list
+
++ Cluster: podpg-cls1 (7650002457948901374) --------+----+-----------+
+| Member         | Host        | Role    | State    | TL | Lag in MB |
++----------------+-------------+---------+----------+----+-----------+
+| podpg-cls1-pg4 | 172.18.0.14 | Leader  | running  | 7   |   unknown |
++----------------+-------------+---------+----------+----+-----------+
+ Maintenance mode: on
+```
+
+Now, put it in `standby_cluster` config state.
+
 ```bash
 # Run from any member of the old primary cluster.
 # The change is stored in etcd and applies cluster-wide.
@@ -507,7 +538,13 @@ podman exec podpg-cls1-pg1 \
   --set "standby_cluster.port=5432" \
   --set "standby_cluster.primary_slot_name=standby_cluster_slot" \
   --set "slots.standby_cluster_slot.type=null"
+
+# Check old primary cluster health
+podman exec podpg-cls1-pg1 \
+  patronictl -c /etc/patroni/patroni.yml list
 ```
+
+
 
 > Output -
 ```
@@ -618,7 +655,7 @@ ttl: 30
 > If new primary cluster has more than 1 member, the switchover/failover will help in increasing Timeline. This would make multiple DC setup more robust.
 
 ```bash
-# Failover to next node to increase timeline. Repeat this 4 times
+# Failover to next node to increase timeline. Repeat this 2 times (TL new = TL old + 4)
 patronictl -c /etc/patroni/patroni.yml switchover podpg-cls1 --force
 patronictl -c /etc/patroni/patroni.yml failover podpg-cls1 --candidate podpg-cls1-pg1 --force
 ```
@@ -655,16 +692,16 @@ podman exec podpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
 +----------------+-------------+--------+---------+----+-----------+
 
 === Check new standby cluster (pg1/pg2/pg3) ===
-+ Cluster: podpg-cls1 (7649631878658509655) ----+-----------+----+-----------+------------------+
-| Member         | Host        | Role           | State     | TL | Lag in MB | Tags             |
-+----------------+-------------+----------------+-----------+----+-----------+------------------+
-| podpg-cls1-pg1 | 172.18.0.11 | Standby Leader | streaming |  3 |           |                  |
-+----------------+-------------+----------------+-----------+----+-----------+------------------+
-| podpg-cls1-pg2 | 172.18.0.12 | Replica        | streaming |  3 |         0 |                  |
-+----------------+-------------+----------------+-----------+----+-----------+------------------+
-| podpg-cls1-pg3 | 172.18.0.13 | Replica        | streaming |  3 |         0 | nofailover: true |
-|                |             |                |           |    |           | nosync: true     |
-+----------------+-------------+----------------+-----------+----+-----------+------------------+
++ Cluster: podpg-cls1 (7650002457948901374) -------------------+----+-----------+------------------+
+| Member         | Host        | Role    | State               | TL | Lag in MB | Tags             |
++----------------+-------------+---------+---------------------+----+-----------+------------------+
+| podpg-cls1-pg1 | 172.18.0.11 | Replica | in archive recovery |  2 |         0 |                  |
++----------------+-------------+---------+---------------------+----+-----------+------------------+
+| podpg-cls1-pg2 | 172.18.0.12 | Replica | streaming           |  3 |         0 |                  |
++----------------+-------------+---------+---------------------+----+-----------+------------------+
+| podpg-cls1-pg3 | 172.18.0.13 | Replica | in archive recovery |  3 |         0 | nofailover: true |
+|                |             |         |                     |    |           | nosync: true     |
++----------------+-------------+---------+---------------------+----+-----------+------------------+
 ```
 
 ---
