@@ -657,7 +657,7 @@ ttl: 30
 ```bash
 # Failover to next node to increase timeline. Repeat this 2 times (TL new = TL old + 4)
 patronictl -c /etc/patroni/patroni.yml switchover docpg-cls1 --force
-patronictl -c /etc/patroni/patroni.yml failover docpg-cls1 --candidate docpg-cls1-pg1 --force
+patronictl -c /etc/patroni/patroni.yml failover --candidate docpg-cls1-pg1 --force
 ```
 
 ---

@@ -427,14 +427,14 @@ root@docpg-cls1-pg4:/# patronictl -c /etc/patroni/patroni.yml list
 
 ```
 # **** Run 01
-patronictl -c /etc/patroni/patroni.yml failover docpg-cls1 --candidate docpg-cls1-pg5 --force
+patronictl -c /etc/patroni/patroni.yml failover --candidate docpg-cls1-pg5 --force
 sleep 15
-patronictl -c /etc/patroni/patroni.yml failover docpg-cls1 --candidate docpg-cls1-pg4 --force
+patronictl -c /etc/patroni/patroni.yml failover --candidate docpg-cls1-pg4 --force
 
 # **** Run 02
-patronictl -c /etc/patroni/patroni.yml failover docpg-cls1 --candidate docpg-cls1-pg5 --force
+patronictl -c /etc/patroni/patroni.yml failover --candidate docpg-cls1-pg5 --force
 sleep 15
-patronictl -c /etc/patroni/patroni.yml failover docpg-cls1 --candidate docpg-cls1-pg4 --force
+patronictl -c /etc/patroni/patroni.yml failover --candidate docpg-cls1-pg4 --force
 
 ```
 
