@@ -30,7 +30,9 @@
 
 - name: "Show cluster topology from hosts.yml (filtered to running containers)"
   ansible.builtin.debug:
-    msg: |
+    msg: "{{ _topology_msg | string_to_array }}"
+  vars:
+    _topology_msg: |
       ✓ Cluster topology from hosts.yml:
 
       Primary cluster nodes ({{ _primary_nodes | length }}):
@@ -67,7 +69,9 @@
 
 - name: "Show connectivity status for {{ inventory_hostname }}"
   ansible.builtin.debug:
-    msg: |
+    msg: "{{ _connectivity_msg | string_to_array }}"
+  vars:
+    _connectivity_msg: |
       Node: {{ inventory_hostname }}
 
       ✓ Reachable nodes ({{ _reachable_nodes | length }}):

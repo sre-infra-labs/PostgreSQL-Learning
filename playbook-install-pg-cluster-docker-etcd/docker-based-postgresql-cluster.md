@@ -252,6 +252,17 @@ ansible-playbook -i hosts.yml playbook-install-standby-cluster.yml --vault-passw
 # Phase 3: Verify Standby Cluster is Streaming
 docker exec docpg-cls1-pg4 patronictl -c /etc/patroni/patroni.yml list
 
+# Check containers that are online
+docker ps --filter name=docpg-cls1-pg --format "table {{.Names}}\t{{.Status}}"
+
+# Add cluster replicas:
+ansible-playbook -i hosts.yml playbook-add-replicas.yml --vault-password-file=vault-pass 2>&1 \
+    | tee logs/playbook-add-replicas.yml.log
+
+# Phase 3: Verify Standby Cluster is Streaming
+docker exec docpg-cls1-pg4 patronictl -c /etc/patroni/patroni.yml list
+
+
 # Expected output:
 # | docpg-cls1-pg4 | 172.18.0.14 | Standby | streaming | TL | 0 MB | (secondary cluster) |
 

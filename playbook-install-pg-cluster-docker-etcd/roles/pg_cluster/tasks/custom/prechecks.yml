@@ -95,9 +95,12 @@
 
 - name: "DEBUG: Log directory cleanup results"
   ansible.builtin.debug:
-    msg: |
-      {{ item.item }}: {{ item.stdout.strip() | upper }}
-  loop: "{{ _logs_cleared.results }}"
+    msg: "{{ _cleanup_msg | string_to_array }}"
+  vars:
+    _cleanup_msg: |
+      {% for result in _logs_cleared.results %}
+      {{ result.item }}: {{ result.stdout.strip() | upper }}
+      {% endfor %}
   when: reinit_cluster is defined and reinit_cluster | bool
 
 - name: "CLEANUP: Remove pgBackRest archives (if configured)"

@@ -367,7 +367,7 @@
 
         - name: "DEBUG — Show etcdctl member add output"
           ansible.builtin.debug:
-            msg: "{{ _etcd_add_result.stdout }}"
+            msg: "{{ _etcd_add_result.stdout | string_to_array }}"
 
         - name: "ACTIVATE — Wait for leader to commit membership change (2 seconds)"
           ansible.builtin.pause:
@@ -816,5 +816,5 @@
 
     - name: "Display Patroni cluster status"
       ansible.builtin.debug:
-        msg: "{{ _patronictl_output.stdout }}"
+        msg: "{{ _patronictl_output.stdout | string_to_array }}"
       run_once: true
