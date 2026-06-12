@@ -297,6 +297,7 @@
             _leader_group: "{{ (host_group_for_new_replica | default('standby_cluster')) + '_leader' }}"
             _leader: "{{ hostvars[groups[_leader_group][0]]['_cluster_leader_host']
                          | default(groups[_leader_group][0]) }}"
+          delegate_to: "{{ _leader }}"
           register: _etcd_cluster_calc
           changed_when: false
 
@@ -335,7 +336,7 @@
           ansible.builtin.shell: |
             bash -c '
             ENDPOINT="http://127.0.0.1:2379"
-            OWN_PEER="http://{{ ip }}:2380"
+            OWN_PEER="http://{{ hostvars[inventory_hostname]["ip"] }}:2380"
             OWN_NAME="{{ inventory_hostname }}"
 
             # Phase A wiped this node etcd data dir, so any pre-existing entry for
@@ -351,7 +352,7 @@
 
             # Learner = non-voting, so the leader keeps its quorum the whole time.
             # Promoted to a voter below once it has caught up with the leader.
-            etcdctl --endpoints=$ENDPOINT member add $OWN_NAME --learner --peer-urls=$OWN_PEER
+            etcdctl --endpoints=$ENDPOINT member add $OWN_NAME --learner --peer-urls=$OWN_PEER 2>&1
             echo "ADDED: $OWN_NAME registered as a non-voting etcd learner"
             '
           args:
@@ -360,8 +361,18 @@
             _leader_group: "{{ (host_group_for_new_replica | default('standby_cluster')) + '_leader' }}"
             _leader: "{{ hostvars[groups[_leader_group][0]]['_cluster_leader_host']
                          | default(groups[_leader_group][0]) }}"
+          delegate_to: "{{ _leader }}"
           register: _etcd_add_result
           changed_when: "'ADDED:' in _etcd_add_result.stdout"
+
+        - name: "DEBUG — Show etcdctl member add output"
+          ansible.builtin.debug:
+            msg: "{{ _etcd_add_result.stdout }}"
+
+        - name: "ACTIVATE — Wait for leader to commit membership change (2 seconds)"
+          ansible.builtin.pause:
+            seconds: 2
+          when: "'ADDED:' in _etcd_add_result.stdout"
 
         - name: "ACTIVATE — Start etcd on {{ inventory_hostname }}"
           ansible.builtin.systemd:
@@ -377,8 +388,8 @@
             executable: /bin/bash
           register: _new_etcd_port_wait
           until: _new_etcd_port_wait.stdout.strip() == "ok"
-          retries: 5
-          delay: 1
+          retries: 10
+          delay: 2
           timeout: 30
           ignore_errors: true
 
@@ -396,13 +407,13 @@
         # ── Wait for this node's etcd to join before promoting ────────────────
         - name: "Wait for {{ inventory_hostname }}'s etcd peer port (confirms cluster join)"
           ansible.builtin.shell: |
-            nc -z {{ ip }} 2380 >/dev/null 2>&1 && echo "ok" || echo "fail"
+            curl -s http://{{ ip }}:2379/health >/dev/null 2>&1 && echo "ok" || echo "fail"
           args:
             executable: /bin/bash
           register: _etcd_peer_port_wait
           until: _etcd_peer_port_wait.stdout.strip() == "ok"
-          retries: 5
-          delay: 1
+          retries: 10
+          delay: 2
           timeout: 30
           when: "'ADDED:' in _etcd_add_result.stdout"
 
@@ -416,7 +427,7 @@
           ansible.builtin.shell: |
             bash -c '
             ENDPOINT="http://127.0.0.1:2379"
-            OWN_PEER="http://{{ ip }}:2380"
+            OWN_PEER="http://{{ hostvars[inventory_hostname]["ip"] }}:2380"
 
             member_line=$(etcdctl --endpoints=$ENDPOINT --command-timeout=5s \
                           member list --write-out=simple 2>/dev/null | grep "$OWN_PEER" || true)
@@ -441,10 +452,11 @@
             _leader_group: "{{ (host_group_for_new_replica | default('standby_cluster')) + '_leader' }}"
             _leader: "{{ hostvars[groups[_leader_group][0]]['_cluster_leader_host']
                          | default(groups[_leader_group][0]) }}"
+          delegate_to: "{{ _leader }}"
           register: _etcd_promote_result
           until: "'PROMOTED:' in _etcd_promote_result.stdout or 'PROMOTE_SKIP:' in _etcd_promote_result.stdout"
           retries: 5
-          delay: 1
+          delay: 2
           timeout: 30
           changed_when: "'PROMOTED:' in _etcd_promote_result.stdout"
           when: "'ADDED:' in _etcd_add_result.stdout"
@@ -767,3 +779,18 @@
 
           Target replicas: {{ _target_replicas | join(', ') }}
           Cluster members: {{ _patroni_members | join(', ') }}
+
+    - name: "Print Patroni cluster status (patronictl list)"
+      ansible.builtin.shell: |
+        bash -c 'PATRONICTL_CONFIG_FILE=/etc/patroni/patroni.yml patronictl list'
+      args:
+        executable: /bin/bash
+      register: _patronictl_output
+      changed_when: false
+      run_once: true
+      delegate_to: "{{ groups[(host_group_for_new_replica | default('standby_cluster')) + '_leader'][0] }}"
+
+    - name: "Display Patroni cluster status"
+      ansible.builtin.debug:
+        msg: "{{ _patronictl_output.stdout }}"
+      run_once: true

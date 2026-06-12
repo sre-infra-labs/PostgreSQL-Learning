@@ -28,6 +28,7 @@ Untitled*.ipynb
 .DS_Store
 consul_secret.yml
 course-udemy-amazon-aurora-postgres/*
+*/poc/*
 
 vault-pass
 .venv
