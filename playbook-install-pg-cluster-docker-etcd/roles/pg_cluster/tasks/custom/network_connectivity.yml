@@ -9,26 +9,37 @@
   tags: network_connectivity
 
 # Step 1: Build cluster node list from hosts.yml (via Ansible groups)
+# Then filter to only nodes that are in play scope (docker containers that exist)
 - name: "Build list of all cluster nodes from hosts.yml"
   ansible.builtin.set_fact:
-    _all_cluster_nodes: "{{ (groups['primary_cluster'] | default([])) + (groups['standby_cluster'] | default([])) }}"
-    _primary_nodes: "{{ groups['primary_cluster'] | default([]) }}"
-    _standby_nodes: "{{ groups['standby_cluster'] | default([]) }}"
+    _primary_nodes_from_inventory: "{{ groups['primary_cluster'] | default([]) }}"
+    _standby_nodes_from_inventory: "{{ groups['standby_cluster'] | default([]) }}"
+    _all_nodes_from_inventory: "{{ (groups['primary_cluster'] | default([])) + (groups['standby_cluster'] | default([])) }}"
   run_once: true
   tags: network_connectivity
 
-- name: "Show cluster topology from hosts.yml"
+# Filter to only include nodes that are actually running in this playbook
+# (containers might not exist yet if installing primary-only before standby)
+- name: "Filter to only nodes that exist in current playbook"
+  ansible.builtin.set_fact:
+    _primary_nodes: "{{ _primary_nodes_from_inventory | intersect(play_hosts) }}"
+    _standby_nodes: "{{ _standby_nodes_from_inventory | intersect(play_hosts) }}"
+    _all_cluster_nodes: "{{ _all_nodes_from_inventory | intersect(play_hosts) }}"
+  run_once: true
+  tags: network_connectivity
+
+- name: "Show cluster topology from hosts.yml (filtered to running containers)"
   ansible.builtin.debug:
     msg: |
       ✓ Cluster topology from hosts.yml:
 
       Primary cluster nodes ({{ _primary_nodes | length }}):
-        {{ _primary_nodes | join(', ') }}
+        {{ _primary_nodes | join(', ') if _primary_nodes else '(none running in this playbook)' }}
 
       Standby cluster nodes ({{ _standby_nodes | length }}):
-        {{ _standby_nodes | join(', ') }}
+        {{ _standby_nodes | join(', ') if _standby_nodes else '(none running in this playbook)' }}
 
-      Total nodes: {{ _all_cluster_nodes | length }}
+      Total nodes in play: {{ _all_cluster_nodes | length }}
       Each node should reach: {{ _all_cluster_nodes | length - 1 }} others
   run_once: true
   tags: network_connectivity

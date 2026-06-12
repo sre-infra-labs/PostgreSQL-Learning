@@ -19,14 +19,105 @@
   post_tasks:
     - name: Docker Infrastructure Setup Completed
       ansible.builtin.debug:
-        msg:
-          - "Docker infrastructure is ready!"
-          - "Containers (no host port mappings — reach them via `docker exec <name>`):"
-          - "{% for h in groups['primary_cluster'] | default([]) %}  {{ h }} => IP {{ hostvars[h].ip }} | PG:5432 | Patroni:8008 | pgBouncer:6432 | HAProxy write:5000 read:5001 stats:7000{% if not loop.last %}\n{% endif %}{% endfor %}"
-          - "  etcd (inside each container) => client :2379, peer :2380"
-          - "  Keepalived VIP => {{ keepalived_vip }} (follows Patroni primary)"
-          - ""
-          - "Next: ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass"
+        msg: "{{ _setup_completion_msg }}"
+      vars:
+        _container_lines: |
+          {% for h in groups['primary_cluster'] | default([]) %}
+          {{ h }} => IP {{ hostvars[h].ip }}
+            Services: PG:5432 | Patroni:8008 | pgBouncer:6432
+            HAProxy: write:5000 read:5001 stats:7000
+          {% endfor %}
+        _setup_completion_msg: |
+          ✓ Docker infrastructure is ready!
+
+          Containers (no host port mappings — reach them via `docker exec <name>`):
+          {{ _container_lines }}
+          etcd (inside each container):
+            Client: :2379
+            Peer:   :2380
+
+          Keepalived VIP: {{ keepalived_vip }} (follows Patroni primary)
+
+          All containers are running and network ready!
+
+          Next: ansible-playbook -i hosts.yml playbook-install-pg-cluster.yml --vault-password-file=vault-pass
+
+    - name: Build list of primary cluster containers
+      ansible.builtin.set_fact:
+        _primary_nodes: "{{ groups['primary_cluster'] | default([]) }}"
+      tags: network_connectivity
+
+    - name: Ensure ping utility is installed in all containers (primary cluster)
+      ansible.builtin.shell: |
+        for node in {{ _primary_nodes | join(' ') }}; do
+          echo "Installing ping utility in $node..."
+          docker exec "$node" sh -c "apt-get update && apt-get install -y inetutils-ping" >/dev/null 2>&1 || \
+          docker exec "$node" sh -c "yum install -y iputils" >/dev/null 2>&1 || \
+          echo "Warning: Could not install ping in $node (may already exist)"
+        done
+        echo "✓ Ping utility check completed"
+      args:
+        executable: /bin/bash
+      changed_when: false
+      tags: network_connectivity
+
+    - name: Validate inter-container network connectivity (primary cluster)
+      ansible.builtin.shell: |
+        set -e
+        echo "Validating docker network connectivity between containers..."
+
+        if [ {{ _primary_nodes | length }} -eq 0 ]; then
+          echo "No containers to validate"
+          exit 0
+        fi
+
+        failed=0
+
+        # Each node pings all others
+        {% for source_node in _primary_nodes %}
+        {% for target_node in _primary_nodes %}
+        {% if source_node != target_node %}
+        source_node="{{ source_node }}"
+        target_node="{{ target_node }}"
+
+        # Get target node IP from docker network
+        {% raw %}
+        target_ip=$(docker inspect "$target_node" --format='{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 2>/dev/null || echo "")
+        {% endraw %}
+
+        if [ -z "$target_ip" ]; then
+          echo "✗ Cannot determine IP for $target_node"
+          failed=$((failed + 1))
+        elif docker exec "$source_node" ping -c 1 "$target_ip" >/dev/null 2>&1; then
+          echo "✓ $source_node → $target_node ($target_ip)"
+        else
+          echo "✗ $source_node → $target_node ($target_ip) FAILED"
+          failed=$((failed + 1))
+        fi
+
+        {% endif %}
+        {% endfor %}
+        {% endfor %}
+
+        if [ $failed -eq 0 ]; then
+          echo ""
+          echo "✓ All containers have full mesh network connectivity"
+          exit 0
+        else
+          echo ""
+          echo "✗ Network connectivity issues detected ($failed failures)"
+          exit 1
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+      register: _container_network_check
+      tags: network_connectivity
+
+    - name: Show container network connectivity results
+      ansible.builtin.debug:
+        msg: "{{ _container_network_check.stdout_lines }}"
+      tags: network_connectivity
 
 # ansible-playbook -i hosts.yml playbook-setup-primary-cluster-containers.yml
 # ansible-playbook -i hosts.yml playbook-setup-primary-cluster-containers.yml --tags network     # only network
