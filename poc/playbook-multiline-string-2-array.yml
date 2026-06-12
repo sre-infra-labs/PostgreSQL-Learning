@@ -1,0 +1,19 @@
+---
+- name: Convert multiline string to list
+  hosts: localhost
+  gather_facts: false
+  
+  vars:
+    my_multiline_string: |
+      apple
+      banana
+      cherry
+
+  tasks:
+    - name: Transform string to array
+      ansible.builtin.set_fact:
+        my_array: "{{ my_multiline_string | split('\n') }}"
+
+    - name: Show the result
+      ansible.builtin.debug:
+        msg: "{{ my_array }}"

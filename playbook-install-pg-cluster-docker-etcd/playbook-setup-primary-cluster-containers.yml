@@ -19,7 +19,7 @@
   post_tasks:
     - name: Docker Infrastructure Setup Completed
       ansible.builtin.debug:
-        msg: "{{ _setup_completion_msg }}"
+        msg: "{{ _setup_completion_msg | string_to_array }}"
       vars:
         _container_lines: |
           {% for h in groups['primary_cluster'] | default([]) %}

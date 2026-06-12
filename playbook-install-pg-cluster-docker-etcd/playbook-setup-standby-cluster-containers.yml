@@ -21,7 +21,7 @@
   post_tasks:
     - name: Docker Infrastructure Setup Completed (Standby Cluster)
       ansible.builtin.debug:
-        msg: "{{ _setup_completion_msg }}"
+        msg: "{{ _setup_completion_msg | string_to_array }}"
       vars:
         _container_lines: |
           {% for h in groups['standby_cluster'] | default([]) %}
