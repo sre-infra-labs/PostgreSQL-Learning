@@ -374,6 +374,22 @@
             seconds: 2
           when: "'ADDED:' in _etcd_add_result.stdout"
 
+        - name: "ACTIVATE — Wait for network connectivity to leader etcd peer port (2380)"
+          ansible.builtin.shell: |
+            timeout 3 bash -c '</dev/tcp/{{ _leader_ip }}/2380' 2>&1 && echo "ok" || echo "fail"
+          args:
+            executable: /bin/bash
+          register: _leader_etcd_peer_check
+          until: _leader_etcd_peer_check.stdout.strip() == "ok"
+          retries: 15
+          delay: 2
+          timeout: 35
+          vars:
+            _leader_group: "{{ (host_group_for_new_replica | default('standby_cluster')) + '_leader' }}"
+            _leader_ip: "{{ hostvars[groups[_leader_group][0]]['ip'] | default('172.18.0.14') }}"
+          changed_when: false
+          failed_when: _leader_etcd_peer_check.stdout.strip() != "ok"
+
         - name: "ACTIVATE — Start etcd on {{ inventory_hostname }}"
           ansible.builtin.systemd:
             name: etcd
@@ -746,6 +762,11 @@
         file: "{{ playbook_dir }}/roles/pg_cluster/defaults/main.yml"
       tags: always
 
+    - name: "VALIDATION PREP — Wait for cluster to stabilize after all replicas joined"
+      ansible.builtin.pause:
+        seconds: 30
+      register: _stability_wait
+
     - name: Query Patroni cluster members
       ansible.builtin.shell: |
         curl -s http://127.0.0.1:{{ patroni_restapi_port }}/cluster 2>/dev/null | python3 -m json.tool
@@ -754,6 +775,9 @@
       register: _patroni_cluster_raw
       changed_when: false
       failed_when: _patroni_cluster_raw.rc != 0
+      retries: 3
+      delay: 5
+      until: _patroni_cluster_raw.rc == 0
 
     - name: Parse Patroni cluster members
       ansible.builtin.set_fact:

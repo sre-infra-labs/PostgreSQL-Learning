@@ -33,7 +33,7 @@ course-udemy-amazon-aurora-postgres/*
 vault-pass
 .venv
 venv
-
+*/.augment/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

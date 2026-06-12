@@ -17,9 +17,14 @@ patroni_standby_cluster_enabled: true
 #   port: 5432
 # patroni_standby_cluster_slot_name: "standby_cluster_slot"
 
-# Standby cluster members do NOT participate in primary cluster's quorum
-# They run their own 1-member (or N-member standby) cluster that streams from primary
-patroni_synchronous_mode: false  # Standby cluster members do not participate in primary's sync replication
+# Standby cluster members do NOT participate in primary cluster's quorum,
+# BUT they should use synchronous replication WITHIN the standby cluster.
+# This allows replicas (pg5, pg6) to be valid failover candidates when pg4 fails.
+# Even though standby cluster doesn't participate in primary's sync replication,
+# the standby cluster itself should maintain sync within its own member set.
+patroni_synchronous_mode: true        # Enable sync replication WITHIN standby cluster
+patroni_synchronous_mode_strict: false
+patroni_synchronous_node_count: 1
 
 # Replication settings for standby cluster
 max_wal_senders: 10

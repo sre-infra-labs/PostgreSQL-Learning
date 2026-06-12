@@ -170,12 +170,7 @@ At the same time, provision a permanent physical slot (`standby_cluster_slot`) s
 docker exec docpg-cls1-pg4 \
   patronictl -c /etc/patroni/patroni.yml \
   edit-config docpg-cls1 --force \
-  --set "standby_cluster=null"
-
-# Create a permanent physical slot for the old primary cluster when old primary comes online
-docker exec docpg-cls1-pg4 \
-  patronictl -c /etc/patroni/patroni.yml \
-  edit-config docpg-cls1 --force \
+  --set "standby_cluster=null" \
   --set "slots.standby_cluster_slot.type=physical"
 
 # Check cluster state again

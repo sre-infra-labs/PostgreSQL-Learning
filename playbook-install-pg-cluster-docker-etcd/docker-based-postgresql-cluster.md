@@ -1370,3 +1370,23 @@ EOF
 # List cluster state (no SSH needed — docker exec is sufficient)
 docker exec docpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
 ```
+
+# Augment Instructions
+```
+playbook failed again. 
+
+ansible-playbook -i hosts.yml playbook-add-replicas.yml --vault-password-file=vault-pass 2>&1 \
+    | tee logs/playbook-add-replicas.yml.log
+
+check playbook log file. 
+Scan patroni, postgresql, etcd logs, journalctl logs on all replicas between start & end of playbook run.
+Then perform following action -
+- Provide RCA for failure
+- Fix playbook tasks
+
+After you are done with file changes, re-validate file changes again as if you are trying to find issues in changes made by other person. And if you find any issue, fix it.
+
+It is very important that leader or standby leader node should NOT go down during this process. If it goes down, then client loses trust in us DBAs.
+
+Then again perform the cycle of re-validating files changes like a senior engineer will do on a junior engineer's changes.
+```

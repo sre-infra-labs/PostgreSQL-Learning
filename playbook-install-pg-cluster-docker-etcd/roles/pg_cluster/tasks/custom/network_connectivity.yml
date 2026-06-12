@@ -1,0 +1,125 @@
+---
+# Network Connectivity Validation After Package Installation
+# Ensures all nodes in both primary and standby clusters can reach each other
+# Reads node list from hosts.yml via Ansible groups dictionary
+
+- name: "Begin network connectivity validation (custom/network_connectivity.yml)"
+  ansible.builtin.debug:
+    msg: "Validating network connectivity between all cluster nodes"
+  tags: network_connectivity
+
+# Step 1: Build cluster node list from hosts.yml (via Ansible groups)
+- name: "Build list of all cluster nodes from hosts.yml"
+  ansible.builtin.set_fact:
+    _all_cluster_nodes: "{{ (groups['primary_cluster'] | default([])) + (groups['standby_cluster'] | default([])) }}"
+    _primary_nodes: "{{ groups['primary_cluster'] | default([]) }}"
+    _standby_nodes: "{{ groups['standby_cluster'] | default([]) }}"
+  run_once: true
+  tags: network_connectivity
+
+- name: "Show cluster topology from hosts.yml"
+  ansible.builtin.debug:
+    msg: |
+      ✓ Cluster topology from hosts.yml:
+
+      Primary cluster nodes ({{ _primary_nodes | length }}):
+        {{ _primary_nodes | join(', ') }}
+
+      Standby cluster nodes ({{ _standby_nodes | length }}):
+        {{ _standby_nodes | join(', ') }}
+
+      Total nodes: {{ _all_cluster_nodes | length }}
+      Each node should reach: {{ _all_cluster_nodes | length - 1 }} others
+  run_once: true
+  tags: network_connectivity
+
+# Step 2: Ping each other node from current node
+- name: "Ping all other cluster nodes from {{ inventory_hostname }}"
+  ansible.builtin.shell: |
+    ping -c 2 "{{ item }}" >/dev/null 2>&1 && echo "OK" || echo "FAILED"
+  args:
+    executable: /bin/bash
+  register: _ping_results
+  changed_when: false
+  failed_when: false
+  loop: "{{ _all_cluster_nodes | difference([inventory_hostname]) }}"
+  loop_control:
+    label: "{{ inventory_hostname }} → {{ item }}"
+  tags: network_connectivity
+
+# Step 3: Collect and analyze ping results
+- name: "Analyze connectivity results for {{ inventory_hostname }}"
+  ansible.builtin.set_fact:
+    _reachable_nodes: "{{ _ping_results.results | selectattr('stdout', 'equalto', 'OK') | map(attribute='item') | list }}"
+    _unreachable_nodes: "{{ _ping_results.results | selectattr('stdout', 'equalto', 'FAILED') | map(attribute='item') | list }}"
+  tags: network_connectivity
+
+- name: "Show connectivity status for {{ inventory_hostname }}"
+  ansible.builtin.debug:
+    msg: |
+      Node: {{ inventory_hostname }}
+
+      ✓ Reachable nodes ({{ _reachable_nodes | length }}):
+        {{ _reachable_nodes | join(', ') if _reachable_nodes else '(none)' }}
+
+      ✗ Unreachable nodes ({{ _unreachable_nodes | length }}):
+        {{ _unreachable_nodes | join(', ') if _unreachable_nodes else '(none)' }}
+
+      Expected: {{ _all_cluster_nodes | length - 1 }} reachable nodes
+      Actual:   {{ _reachable_nodes | length }} reachable nodes
+  tags: network_connectivity
+
+# Step 4: Fail with clear error message if any nodes unreachable
+- name: "FAIL: Network connectivity error on {{ inventory_hostname }}"
+  ansible.builtin.fail:
+    msg: |
+
+      ═══════════════════════════════════════════════════════════════════════════════
+      NETWORK CONNECTIVITY ERROR
+      ═══════════════════════════════════════════════════════════════════════════════
+
+      Node:                {{ inventory_hostname }}
+      Cannot reach nodes:  {{ _unreachable_nodes | join(', ') }}
+
+      Expected connectivity:
+        - This node should ping {{ _all_cluster_nodes | length - 1 }} other nodes
+        - Reachable:   {{ _reachable_nodes | length }}/{{ _all_cluster_nodes | length - 1 }}
+        - Unreachable: {{ _unreachable_nodes | length }}/{{ _all_cluster_nodes | length - 1 }}
+
+      All expected cluster nodes from hosts.yml:
+        {{ _all_cluster_nodes | join(', ') }}
+
+      TROUBLESHOOTING:
+        1. Check Docker network bridge status:
+           docker network inspect lab-network
+
+        2. Verify node is connected to the network:
+           docker inspect {{ inventory_hostname }} | grep -A 5 lab-network
+
+        3. Test DNS resolution:
+           nslookup {{ _unreachable_nodes[0] if _unreachable_nodes else 'nodename' }}
+
+        4. Check network interface:
+           docker exec {{ inventory_hostname }} ip addr show
+
+        5. Test direct connection:
+           docker exec {{ inventory_hostname }} ping -c 1 {{ _unreachable_nodes[0] if _unreachable_nodes else '172.18.0.11' }}
+
+      Fix the network issue and re-run the playbook.
+      ═══════════════════════════════════════════════════════════════════════════════
+  when: _unreachable_nodes | length > 0
+  tags: network_connectivity
+
+- name: "SUCCESS: Network connectivity validation PASSED for {{ inventory_hostname }}"
+  ansible.builtin.debug:
+    msg: |
+      ✓ {{ inventory_hostname }}: Can reach all {{ _reachable_nodes | length }} other cluster nodes
+  when: _unreachable_nodes | length == 0
+  tags: network_connectivity
+
+- name: "End network connectivity validation (custom/network_connectivity.yml)"
+  ansible.builtin.debug:
+    msg: "✓ All nodes have full cluster connectivity"
+  run_once: true
+  when: _unreachable_nodes is not defined or _unreachable_nodes | length == 0
+  tags: network_connectivity

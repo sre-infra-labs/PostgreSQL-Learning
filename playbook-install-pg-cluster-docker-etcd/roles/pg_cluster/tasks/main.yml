@@ -29,6 +29,13 @@
       tags: packages
   tags: packages
 
+- name: Validate network connectivity between all cluster nodes
+  include_tasks:
+    file: custom/network_connectivity.yml
+    apply:
+      tags: network_connectivity
+  tags: network_connectivity
+
 - name: Configure .pgpass
   include_tasks:
     file: custom/pgpass.yml
