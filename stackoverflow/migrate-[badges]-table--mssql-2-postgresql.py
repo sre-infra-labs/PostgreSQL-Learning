@@ -12,6 +12,7 @@ MSSQLHOST = os.getenv("SOURCE_MSSQLHOST", "localhost")
 MSSQLDATABASE = os.getenv("SOURCE_MSSQLDATABASE", "StackOverflow2013")
 MSSQLUSER = os.getenv("SOURCE_MSSQLUSER", "sa")
 MSSQLPASSWORD = os.getenv("SOURCE_MSSQLPASSWORD")
+PGDATABASE = os.getenv("TARGET_PGDATABASE", "stackoverflowmini")
 sql_server_conn_str = (
     "DRIVER={ODBC Driver 18 for SQL Server};"
     f"SERVER={MSSQLHOST};"
@@ -28,7 +29,7 @@ sql_cursor = sql_conn.cursor()
 print(f'making postgres connection..')
 pg_conn = psycopg2.connect(
     host=os.getenv("TARGET_PGHOST", "localhost"),
-    dbname=os.getenv("TARGET_PGDATABASE", "stackoverflow2013"),
+    dbname=os.getenv("TARGET_PGDATABASE", "stackoverflowmini"),
     user=os.getenv("TARGET_PGUSER", "postgres"),
     password=os.getenv("TARGET_PGPASSWORD"),
     sslmode="require"

@@ -107,8 +107,8 @@ else:
     total = len(rows)
     inserted_count = 0
 
-    for i in range(0, total, BATCH_SIZE:int):
-        batch = rows[i:i+BATCH_SIZE:int]
+    for i in range(0, total, BATCH_SIZE):
+        batch = rows[i:i+BATCH_SIZE]
         values = [
             (
                 row.Id,
