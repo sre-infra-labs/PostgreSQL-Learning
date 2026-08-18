@@ -6,7 +6,7 @@
 cd playbook-install-pg-standalone-docker/
 
 # 1. Create Docker network (one-time)
-docker network create --driver bridge --subnet=172.19.0.0/16 lab-network
+docker network create --driver bridge --subnet=172.18.0.0/16 lab-network
 
 # 2. Setup secrets
 cp sensitive-values-sample sensitive-values
@@ -42,7 +42,7 @@ docker exec docpg-standalone psql -U postgres -c "SELECT version();"
 This is a **one-time setup** for your lab environment.
 
 ```bash
-docker network create --driver bridge --subnet=172.19.0.0/16 lab-network
+docker network create --driver bridge --subnet=172.18.0.0/16 lab-network
 ```
 
 Verify:
@@ -83,10 +83,10 @@ Edit these files to customize your setup:
 #### `hosts.yml` — Container IP and Network
 ```yaml
 docpg-standalone:
-  ip: "172.19.0.11"        # Container IP (must be in the network subnet)
+  ip: "172.18.0.11"        # Container IP (must be in the network subnet)
 
 docker_network: lab-network
-docker_network_subnet: "172.19.0.0/16"
+docker_network_subnet: "172.18.0.0/16"
 ```
 
 #### `vars/dba_vars.yml` — PostgreSQL Settings
