@@ -1,0 +1,86 @@
+---
+- name: Begin pg_standalone/custom/packages.yml
+  ansible.builtin.debug:
+    msg: "Installing system and PostgreSQL {{ postgresql_version }} packages"
+
+- name: Install system packages
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+    dpkg_options: "force-confdef,force-confold"
+  loop: "{{ system_packages }}"
+  register: _sys_pkg_result
+  until: _sys_pkg_result is success
+  retries: 1
+  delay: 2
+  environment: "{{ proxy_env | default({}) }}"
+  loop_control:
+    index_var: _pkg_idx
+    label: "Package {{ _pkg_idx + 1 }} of {{ system_packages | length }}: {{ item }}"
+
+- name: Install PostgreSQL {{ postgresql_version }} required packages
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+    dpkg_options: "force-confdef,force-confold"
+  loop: "{{ postgres_packages_required }}"
+  register: _pg_pkg_result
+  until: _pg_pkg_result is success
+  retries: 1
+  delay: 2
+  environment: "{{ proxy_env | default({}) }}"
+  loop_control:
+    index_var: _pkg_idx
+    label: "Package {{ _pkg_idx + 1 }} of {{ postgres_packages_required | length }}: {{ item }}"
+
+- name: Install optional PostgreSQL extensions (skip if not yet in PGDG for PG{{ postgresql_version }})
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+    dpkg_options: "force-confdef,force-confold"
+  loop: "{{ postgres_packages_optional }}"
+  register: pg_ext_status
+  ignore_errors: true
+  environment: "{{ proxy_env | default({}) }}"
+
+- name: Report skipped optional extensions
+  ansible.builtin.debug:
+    msg: "Optional extension not available (skipped): {{ item.item }}"
+  loop: "{{ pg_ext_status.results }}"
+  when: item.failed | default(false)
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Check if default PostgreSQL cluster exists
+  ansible.builtin.stat:
+    path: "/etc/postgresql/{{ postgresql_version }}/main"
+  register: pg_cluster_config
+  changed_when: false
+
+- name: Drop default PostgreSQL cluster ({{ postgresql_version }}/main) if present
+  ansible.builtin.command: >
+    timeout 30 pg_dropcluster --stop {{ postgresql_version }} main
+  register: pg_drop_result
+  failed_when:
+    - pg_drop_result.rc not in [0, 1]
+  changed_when:
+    - pg_drop_result.rc == 0
+  timeout: 40
+  when: pg_cluster_config.stat.exists
+
+- name: Disable and stop the default PostgreSQL systemd service
+  ansible.builtin.systemd:
+    name: "postgresql@{{ postgresql_version }}-main"
+    state: stopped
+    enabled: no
+  ignore_errors: true
+
+- name: Ensure postgres user exists
+  ansible.builtin.user:
+    name: "{{ postgres_user }}"
+    shell: /bin/bash
+    state: present
+
+- name: End pg_standalone/custom/packages.yml
+  ansible.builtin.debug:
+    msg: "Package installation complete"

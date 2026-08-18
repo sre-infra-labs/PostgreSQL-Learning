@@ -1,0 +1,36 @@
+---
+- name: Setup Docker Infrastructure for PostgreSQL Standalone
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars_files:
+    - vars/dba_vars.yml
+  collections:
+    - community.docker
+
+  pre_tasks:
+    - name: Starting Docker Infrastructure Setup (Standalone)
+      ansible.builtin.debug:
+        msg: "Setting up Docker infrastructure for standalone PostgreSQL: {{ groups['standalone'] | default([]) | join(', ') }}"
+
+  roles:
+    - role: roles/docker_infrastructure
+
+  post_tasks:
+    - name: Docker Infrastructure Setup Completed (Standalone)
+      ansible.builtin.debug:
+        msg: "{{ _setup_completion_msg | string_to_array }}"
+      vars:
+        _container_lines: |
+          {% for h in groups['standalone'] | default([]) %}
+          {{ h }} => IP {{ hostvars[h].ip }}
+            Services: PG:5432
+          {% endfor %}
+        _setup_completion_msg: |
+          ✓ Docker infrastructure is ready!
+
+          Containers (no host port mappings — reach them via `docker exec <name>`):
+          {{ _container_lines }}
+          All containers are running and network ready!
+
+          Next: ansible-playbook -i hosts.yml playbook-install-pg-standalone.yml --vault-password-file=vault-pass

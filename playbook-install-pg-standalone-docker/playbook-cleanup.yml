@@ -1,0 +1,25 @@
+---
+- name: Cleanup PostgreSQL Standalone Docker containers and network
+  hosts: localhost
+  gather_facts: true
+
+  tasks:
+    - name: Remove PostgreSQL standalone container
+      community.docker.docker_container:
+        name: docpg-standalone
+        state: absent
+        force_kill: true
+      ignore_errors: true
+
+    - name: Remove lab-network
+      community.docker.docker_network:
+        name: lab-network
+        state: absent
+      ignore_errors: true
+
+    - name: Cleanup completed
+      ansible.builtin.debug:
+        msg: "PostgreSQL standalone Docker environment cleaned up!"
+
+# Usage:
+#   ansible-playbook playbook-cleanup.yml

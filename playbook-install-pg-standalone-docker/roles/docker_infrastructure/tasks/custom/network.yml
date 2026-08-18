@@ -1,0 +1,19 @@
+---
+- name: Check if Docker network '{{ docker_network }}' exists
+  ansible.builtin.command: docker network inspect {{ docker_network }}
+  register: network_inspect
+  failed_when: false
+  changed_when: false
+
+- name: Fail if required network does not exist
+  ansible.builtin.fail:
+    msg: >
+      Docker network '{{ docker_network }}' does not exist.
+      Create it first:
+        docker network create --driver bridge --subnet={{ docker_network_subnet }} {{ docker_network }}
+  when: network_inspect.rc != 0
+
+- name: Network exists — attaching pg containers to it
+  ansible.builtin.debug:
+    msg: "Network '{{ docker_network }}' exists — pg containers will be attached to it"
+  when: network_inspect.rc == 0

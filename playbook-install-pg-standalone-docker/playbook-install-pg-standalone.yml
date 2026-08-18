@@ -1,0 +1,33 @@
+---
+- name: Install PostgreSQL 18 Standalone in Docker container
+  hosts: standalone
+  become: true
+  become_user: root
+  gather_facts: true
+  vars_files:
+    - sensitive-values
+    - vars/dba_vars.yml
+  collections:
+    - community.postgresql
+
+  pre_tasks:
+    - name: Starting PostgreSQL Standalone Installation
+      ansible.builtin.debug:
+        msg: "Installing PostgreSQL 18 Standalone"
+
+  roles:
+    - role: roles/pg_standalone
+
+  post_tasks:
+    - name: PostgreSQL Standalone Installation Completed
+      ansible.builtin.debug:
+        msg: "PostgreSQL 18 standalone installation completed successfully!"
+
+# Full install:
+#   ansible-playbook -i hosts.yml playbook-install-pg-standalone.yml --vault-password-file=vault-pass
+#
+# Reinitialize cluster (after failure):
+#   ansible-playbook -i hosts.yml playbook-install-pg-standalone.yml --vault-password-file=vault-pass -e reinit_cluster=true
+#
+# Reinitialize and clean backups:
+#   ansible-playbook -i hosts.yml playbook-install-pg-standalone.yml --vault-password-file=vault-pass -e reinit_cluster=true -e cleanup_pgbackrest_backups=true

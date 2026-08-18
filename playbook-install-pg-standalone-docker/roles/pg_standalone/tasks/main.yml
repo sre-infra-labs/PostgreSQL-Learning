@@ -1,0 +1,70 @@
+---
+- name: Inside pg_standalone/tasks/main.yml
+  ansible.builtin.debug:
+    msg: "Installing PostgreSQL {{ postgresql_version }} standalone"
+
+- name: Include defaults/creds.yml
+  include_vars:
+    file: "{{ role_path }}/defaults/creds.yml"
+  tags: always
+
+- name: Run prechecks
+  include_tasks:
+    file: custom/prechecks.yml
+    apply:
+      tags: prechecks
+  tags: prechecks
+
+- name: Setup PGDG repository
+  include_tasks:
+    file: custom/repository.yml
+    apply:
+      tags: repository
+  tags: repository
+
+- name: Install packages
+  include_tasks:
+    file: custom/packages.yml
+    apply:
+      tags: packages
+  tags: packages
+
+- name: Set container environment variables (PATH, PGDATA, PGPORT, PGPASSFILE)
+  include_tasks:
+    file: custom/container_env.yml
+    apply:
+      tags: container_env
+  tags: container_env
+
+- name: Configure .pgpass
+  include_tasks:
+    file: custom/pgpass.yml
+    apply:
+      tags: pgpass
+  tags: pgpass
+
+- name: Install and configure PostgreSQL
+  include_tasks:
+    file: custom/postgresql.yml
+    apply:
+      tags: postgresql
+  tags: postgresql
+
+- name: Configure pgBackRest
+  include_tasks:
+    file: custom/pgbackrest.yml
+    apply:
+      tags: pgbackrest
+  tags: pgbackrest
+
+- name: Create application database and users
+  include_tasks:
+    file: custom/user.yml
+    apply:
+      tags: users
+  tags: users
+
+- name: PostgreSQL Standalone Installation Completed
+  ansible.builtin.debug:
+    msg: "PostgreSQL {{ postgresql_version }} standalone installation completed!"
+  tags: always

@@ -1,0 +1,19 @@
+---
+- name: Check if pg-standalone-node image already exists
+  ansible.builtin.command: docker image inspect {{ pg_node_image }}
+  register: image_inspect
+  failed_when: false
+  changed_when: false
+
+- name: Build pg-standalone-node Docker image from project Dockerfile
+  ansible.builtin.command: >
+    docker build -t {{ pg_node_image }}
+    -f {{ pg_node_dockerfile_path }}/Dockerfile
+    {{ pg_node_dockerfile_path }}
+  register: build_result
+  changed_when: true
+  when: image_inspect.rc != 0
+
+- name: Image status
+  ansible.builtin.debug:
+    msg: "{{ 'Image built successfully' if (build_result.changed | default(false)) else 'Image already exists — skipping build' }}"

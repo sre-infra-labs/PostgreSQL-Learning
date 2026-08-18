@@ -1,0 +1,31 @@
+# DBA Input Variables for Docker-based PostgreSQL 18 Standalone
+# Modify these values before running the playbook
+
+debug: true
+
+# PostgreSQL version (PGDG repo)
+postgresql_version: "16"
+postgresql_port: "5432"
+
+# Hardware info (Docker container resources — adjust based on your Mac's allocation)
+server_hardware:
+  cpu_count: 2
+  ram_gb: 4
+  disk_gb: 20
+
+# postgresql.conf tuning params
+pg_params:
+  work_mem: "4MB"
+  maintenance_work_mem: "256MB"
+
+# Application database and users
+db_name: "dba"
+db_user_rw: dba_rw
+db_user_ro: dba_ro
+
+# Docker network (docker_network, docker_network_subnet) are defined in hosts.yml
+# under all.vars and are the single source of truth — no override needed here.
+
+# ReInit PostgreSQL — set to true ONLY when rebuilding after a failure (skips package install)
+# reinit_cluster: true
+# cleanup_pgbackrest_backups: true

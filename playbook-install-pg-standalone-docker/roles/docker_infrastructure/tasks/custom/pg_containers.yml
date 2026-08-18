@@ -1,0 +1,73 @@
+---
+# Container name = inventory_hostname (e.g., docpg-standalone)
+# IP            = hostvars[<name>].ip  (defined in hosts.yml)
+# No host port mappings — Ansible uses community.docker.docker connection plugin.
+
+- name: Fail if no standalone hosts are enabled in hosts.yml
+  ansible.builtin.fail:
+    msg: >
+      No hosts found in the 'standalone' inventory group.
+      Run with: ansible-playbook -i hosts.yml playbook-setup-docker.yml
+  when: groups['standalone'] | default([]) | length == 0
+
+- name: Create PostgreSQL data volume
+  community.docker.docker_volume:
+    name: "{{ pg_data_volume_prefix }}-{{ item }}"
+    state: present
+  loop: "{{ groups['standalone'] }}"
+
+- name: Create PostgreSQL log volume
+  community.docker.docker_volume:
+    name: "{{ pg_log_volume_prefix }}-{{ item }}"
+    state: present
+  loop: "{{ groups['standalone'] }}"
+
+- name: Create shared pgbackrest backup volume
+  community.docker.docker_volume:
+    name: "{{ pg_backup_volume }}"
+    state: present
+
+- name: Create PostgreSQL standalone containers
+  community.docker.docker_container:
+    name: "{{ item }}"
+    image: "{{ pg_node_image }}"
+    state: started
+    restart_policy: unless-stopped
+    privileged: true
+    cgroupns_mode: host
+    # Docker bridge networks on macOS do not inherit the host DNS — set explicit resolvers
+    dns_servers:
+      - 8.8.8.8
+      - 1.1.1.1
+    tmpfs:
+      - /run
+      - /run/lock
+    networks:
+      - name: "{{ docker_network }}"
+        ipv4_address: "{{ hostvars[item].ip }}"
+    volumes:
+      - "{{ pg_data_volume_prefix }}-{{ item }}:/var/lib/postgresql"
+      - "{{ pg_log_volume_prefix }}-{{ item }}:/var/log"
+      - "{{ pg_backup_volume }}:/var/lib/pgbackrest"
+      - "/sys/fs/cgroup:/sys/fs/cgroup:rw"
+    hostname: "{{ item }}"
+  loop: "{{ groups['standalone'] }}"
+
+- name: Wait for standalone containers to be reachable via docker exec
+  ansible.builtin.command: docker exec {{ item }} true
+  loop: "{{ groups['standalone'] }}"
+  register: docker_exec_check
+  retries: 30
+  delay: 2
+  until: docker_exec_check.rc == 0
+  changed_when: false
+
+- name: Standalone container connectivity summary
+  ansible.builtin.debug:
+    msg:
+      - "{{ item }} | IP: {{ hostvars[item].ip }}"
+      - "  PostgreSQL    (in-container): {{ hostvars[item].ip }}:5432"
+      - "  pgBouncer     (in-container): {{ hostvars[item].ip }}:6432"
+      - "  pg_exporter   (in-container): {{ hostvars[item].ip }}:9187"
+      - "  Access from Mac host: docker exec {{ item }} <command>"
+  loop: "{{ groups['standalone'] }}"

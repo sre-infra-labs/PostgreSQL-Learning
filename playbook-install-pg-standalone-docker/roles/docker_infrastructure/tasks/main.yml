@@ -1,0 +1,22 @@
+---
+- name: Inside docker_infrastructure/tasks/main.yml
+  ansible.builtin.debug:
+    msg: "Setting up Docker infrastructure for standalone PostgreSQL"
+
+- name: Verify Docker daemon is running
+  ansible.builtin.command: docker info
+  changed_when: false
+  register: docker_info
+  failed_when: docker_info.rc != 0
+
+- name: Create or verify Docker network
+  include_tasks: custom/network.yml
+  tags: network
+
+- name: Build pg-standalone-node Docker image
+  include_tasks: custom/build_image.yml
+  tags: image
+
+- name: Create PostgreSQL standalone node containers
+  include_tasks: custom/pg_containers.yml
+  tags: containers

@@ -1,0 +1,150 @@
+---
+- name: Begin pg_standalone/custom/postgresql.yml
+  ansible.builtin.debug:
+    msg: "Installing and configuring standalone PostgreSQL {{ postgresql_version }}"
+
+# -------------------------------------------------------------------
+# Generate required locale
+# -------------------------------------------------------------------
+- name: Generate en_US.UTF-8 locale
+  ansible.builtin.shell: |
+    locale-gen en_US.UTF-8 2>/dev/null || true
+  changed_when: false
+
+- name: Update locale database
+  ansible.builtin.shell: |
+    update-locale 2>/dev/null || true
+  changed_when: false
+
+# -------------------------------------------------------------------
+# Initialize PostgreSQL data directory and cluster
+# -------------------------------------------------------------------
+- name: Initialize PostgreSQL cluster with initdb
+  become_user: postgres
+  ansible.builtin.shell: |
+    {{ postgresql_bin_dir }}/initdb \
+      --pgdata={{ postgresql_data_dir }} \
+      --encoding={{ postgresql_encoding }} \
+      --locale=C.UTF-8 \
+      --data-checksums
+  register: initdb_result
+  changed_when: initdb_result.rc == 0
+  failed_when: initdb_result.rc != 0
+
+- name: Create log directory
+  ansible.builtin.file:
+    path: "{{ postgresql_log_dir }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0700'
+
+- name: Create archive directory
+  ansible.builtin.file:
+    path: "{{ postgresql_data_archive }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0700'
+
+- name: Create scripts directory
+  ansible.builtin.file:
+    path: "{{ postgresql_scripts_dir }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0750'
+
+# -------------------------------------------------------------------
+# Configure postgresql.conf
+# -------------------------------------------------------------------
+- name: Configure postgresql.conf parameters
+  community.postgresql.postgresql_set:
+    name: "{{ item.option }}"
+    value: "{{ item.value }}"
+    login_user: postgres
+  environment:
+    PGDATA: "{{ postgresql_data_dir }}"
+  become_user: postgres
+  loop: "{{ postgresql_parameters }}"
+  loop_control:
+    label: "{{ item.option }}"
+  register: postgres_params_result
+  failed_when: false
+
+# -------------------------------------------------------------------
+# Configure pg_hba.conf
+# -------------------------------------------------------------------
+- name: Configure pg_hba.conf
+  community.postgresql.postgresql_pg_hba:
+    dest: "{{ postgresql_conf_dir }}/pg_hba.conf"
+    contype: "{{ item.split()[0] }}"
+    databases: "{{ item.split()[1] }}"
+    users: "{{ item.split()[2] }}"
+    source: "{{ item.split()[3] if item.split() | length > 3 else 'all' }}"
+    method: "{{ item.split()[-1] }}"
+    state: present
+  become_user: postgres
+  loop: "{{ postgresql_pg_hba }}"
+  register: pg_hba_result
+  failed_when: false
+
+# -------------------------------------------------------------------
+# Start PostgreSQL
+# -------------------------------------------------------------------
+- name: Create PostgreSQL systemd service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/postgresql.service
+    mode: '0644'
+    content: |
+      [Unit]
+      Description=PostgreSQL Standalone Database Server
+      After=network.target
+
+      [Service]
+      Type=notify
+      User=postgres
+      Environment="PGDATA={{ postgresql_data_dir }}"
+      Environment="PGPORT={{ postgresql_port }}"
+      ExecStart={{ postgresql_bin_dir }}/postgres -D {{ postgresql_data_dir }}
+      ExecReload=/bin/kill -HUP $MAINPID
+      KillMode=mixed
+      KillSignal=SIGINT
+      Restart=on-failure
+      RestartSec=10
+      TimeoutSec=300
+
+      [Install]
+      WantedBy=multi-user.target
+  register: pg_service_created
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: pg_service_created.changed
+
+- name: Start PostgreSQL service
+  ansible.builtin.systemd:
+    name: postgresql
+    state: started
+    enabled: true
+  register: pg_start_result
+
+- name: Wait for PostgreSQL to accept connections
+  ansible.builtin.wait_for:
+    host: localhost
+    port: "{{ postgresql_port }}"
+    state: started
+    timeout: 120
+    delay: 5
+
+- name: Set PostgreSQL superuser password
+  community.postgresql.postgresql_user:
+    name: "{{ postgres_superuser_username }}"
+    password: "{{ postgres_superuser_password }}"
+    login_user: postgres
+  become_user: postgres
+
+- name: End pg_standalone/custom/postgresql.yml
+  ansible.builtin.debug:
+    msg: "PostgreSQL {{ postgresql_version }} initialization and startup completed"

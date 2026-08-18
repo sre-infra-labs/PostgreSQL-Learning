@@ -1,0 +1,15 @@
+# Docker network — sourced from hosts.yml (all.vars: docker_network, docker_network_subnet).
+# The playbook will NOT recreate this network; it attaches pg containers to it.
+# Values below are fallback defaults only; hosts.yml takes precedence.
+docker_network: "lab-network"
+docker_network_subnet: "172.19.0.0/16"
+docker_network_driver: "bridge"
+
+# Container image — built from Dockerfile in the project root
+pg_node_image: "pg-standalone-node:latest"
+pg_node_dockerfile_path: "{{ playbook_dir }}"
+
+# Docker volumes for data and logs
+pg_data_volume_prefix: "pg-standalone-data"
+pg_log_volume_prefix: "pg-standalone-logs"
+pg_backup_volume: "pg-standalone-backup"
