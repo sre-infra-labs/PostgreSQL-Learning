@@ -21,15 +21,15 @@
 # -------------------------------------------------------------------
 - name: Initialize PostgreSQL cluster with initdb
   become_user: postgres
-  ansible.builtin.shell: |
-    {{ postgresql_bin_dir }}/initdb \
-      --pgdata={{ postgresql_data_dir }} \
-      --encoding={{ postgresql_encoding }} \
-      --locale=C.UTF-8 \
-      --data-checksums
+  ansible.builtin.command:
+    argv:
+      - "{{ postgresql_bin_dir }}/initdb"
+      - "--pgdata={{ postgresql_data_dir }}"
+      - "--encoding={{ postgresql_encoding }}"
+      - "--locale={{ postgresql_locale }}"
+      - "--data-checksums"
+    creates: "{{ postgresql_data_dir }}/PG_VERSION"
   register: initdb_result
-  changed_when: initdb_result.rc == 0
-  failed_when: initdb_result.rc != 0
 
 - name: Create log directory
   ansible.builtin.file:
@@ -54,23 +54,6 @@
     owner: postgres
     group: postgres
     mode: '0750'
-
-# -------------------------------------------------------------------
-# Configure postgresql.conf
-# -------------------------------------------------------------------
-- name: Configure postgresql.conf parameters
-  community.postgresql.postgresql_set:
-    name: "{{ item.option }}"
-    value: "{{ item.value }}"
-    login_user: postgres
-  environment:
-    PGDATA: "{{ postgresql_data_dir }}"
-  become_user: postgres
-  loop: "{{ postgresql_parameters }}"
-  loop_control:
-    label: "{{ item.option }}"
-  register: postgres_params_result
-  failed_when: false
 
 # -------------------------------------------------------------------
 # Configure pg_hba.conf
@@ -137,6 +120,55 @@
     state: started
     timeout: 120
     delay: 5
+
+- name: Configure shared preload libraries
+  community.postgresql.postgresql_alter_system:
+    param: shared_preload_libraries
+    value: "{{ postgresql_shared_preload_libraries }}"
+    login_user: postgres
+  become_user: postgres
+  register: postgres_preload_result
+
+- name: Restart PostgreSQL to load extension libraries
+  ansible.builtin.systemd:
+    name: postgresql
+    state: restarted
+  when: postgres_preload_result.changed
+
+- name: Wait for PostgreSQL after extension preload restart
+  ansible.builtin.wait_for:
+    host: localhost
+    port: "{{ postgresql_port }}"
+    state: started
+    timeout: 120
+    delay: 5
+  when: postgres_preload_result.changed
+
+- name: Configure postgresql.conf parameters
+  community.postgresql.postgresql_alter_system:
+    param: "{{ item.option }}"
+    value: "{{ item.value }}"
+    login_user: postgres
+  become_user: postgres
+  loop: "{{ postgresql_parameters + postgresql_extension_parameters }}"
+  loop_control:
+    label: "{{ item.option }}"
+  register: postgres_params_result
+
+- name: Restart PostgreSQL to apply configuration parameters
+  ansible.builtin.systemd:
+    name: postgresql
+    state: restarted
+  when: postgres_params_result.changed
+
+- name: Wait for PostgreSQL after configuration restart
+  ansible.builtin.wait_for:
+    host: localhost
+    port: "{{ postgresql_port }}"
+    state: started
+    timeout: 120
+    delay: 5
+  when: postgres_params_result.changed
 
 - name: Set PostgreSQL superuser password
   community.postgresql.postgresql_user:

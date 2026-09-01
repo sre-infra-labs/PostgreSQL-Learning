@@ -96,8 +96,6 @@ postgresql_port: "5432"
 db_name: "dba"
 db_user_rw: dba_rw
 db_user_ro: dba_ro
-pgbouncer_listen_port: 6432
-pgbouncer_pool_mode: "transaction"
 ```
 
 ### 4. Run the Installation
@@ -127,8 +125,6 @@ docker exec docpg-standalone psql -U postgres -c "SELECT version();"
 # Interactive shell
 docker exec -it docpg-standalone psql -U postgres
 
-# Via pgBouncer (connection pooler)
-docker exec docpg-standalone psql -h 127.0.0.1 -p 6432 -U dba_rw -d dba
 ```
 
 ### Inside Container
@@ -153,13 +149,6 @@ docker exec docpg-standalone systemctl status postgresql
 docker exec docpg-standalone journalctl -u postgresql -n 20
 ```
 
-### Check pgBouncer Status
-
-```bash
-docker exec docpg-standalone systemctl status pgbouncer
-docker exec docpg-standalone tail -f /var/log/pgbouncer/pgbouncer.log
-```
-
 ### View PostgreSQL Logs
 
 ```bash
@@ -176,8 +165,8 @@ docker exec docpg-standalone psql -U postgres -l
 ### Backup Database
 
 ```bash
-docker exec docpg-standalone pgbackrest backup
-docker exec docpg-standalone pgbackrest info
+docker exec -u postgres docpg-standalone pgbackrest --stanza=default backup
+docker exec -u postgres docpg-standalone pgbackrest --stanza=default info
 ```
 
 ### Full Cleanup (Fresh Install)
@@ -299,9 +288,8 @@ After successful installation:
 
 1. **Create application databases** — Use PostgreSQL roles and databases
 2. **Setup backups** — Configure pgBackRest backup schedule
-3. **Monitor** — Expose pg_exporter metrics to Prometheus/Grafana
-4. **Performance tune** — Adjust `vars/dba_vars.yml` parameters
-5. **Learn** — Study PostgreSQL, pgBouncer, and pgBackRest documentation
+3. **Performance tune** — Adjust `vars/dba_vars.yml` parameters
+4. **Learn** — Study PostgreSQL and pgBackRest documentation
 
 ---
 

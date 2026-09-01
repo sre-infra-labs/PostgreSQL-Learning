@@ -67,7 +67,6 @@
     msg:
       - "{{ item }} | IP: {{ hostvars[item].ip }}"
       - "  PostgreSQL    (in-container): {{ hostvars[item].ip }}:5432"
-      - "  pgBouncer     (in-container): {{ hostvars[item].ip }}:6432"
-      - "  pg_exporter   (in-container): {{ hostvars[item].ip }}:9187"
+      - "  pgBackRest    (in-container): local repository at /var/lib/pgbackrest"
       - "  Access from Mac host: docker exec {{ item }} <command>"
   loop: "{{ groups['standalone'] }}"

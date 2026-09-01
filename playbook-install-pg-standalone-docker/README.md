@@ -50,7 +50,6 @@ postgresql_port: "5432"
 db_name: "dba"
 db_user_rw: dba_rw
 db_user_ro: dba_ro
-pgbouncer_listen_port: 6432
 ```
 
 ### 3. Setup Secrets (sensitive-values)
@@ -135,7 +134,7 @@ docker exec docpg-standalone psql -h 127.0.0.1 -U dba_rw dba
 ### PostgreSQL
 - `postgresql_version` — PG version from PGDG (default: 18)
 - `postgresql_port` — PG listen port (default: 5432)
-- `postgresql_locale` — Locale for initdb (default: en_US.UTF-8)
+- `postgresql_locale` — Locale for initdb (default: C.UTF-8)
 - `postgresql_data_checksums` — Enable checksums (default: true)
 
 ### Application
@@ -146,6 +145,17 @@ docker exec docpg-standalone psql -h 127.0.0.1 -U dba_rw dba
 ### pgBackRest
 - `pgbackrest_repo1_path` — Backup repo path (default: /var/lib/pgbackrest)
 - `pgbackrest_repo1_retention_full` — Full backup retention (default: 7)
+- `pgbackrest_stanza_name` — Stanza name (default: default)
+- The role enables `archive_mode`, configures `archive_command`, runs
+  `pgbackrest check`, and creates an initial full backup when the repository
+  has no valid backup.
+
+To run the operational checks manually:
+
+```bash
+docker exec -u postgres docpg-standalone pgbackrest --stanza=default check
+docker exec -u postgres docpg-standalone pgbackrest --stanza=default info
+```
 
 ## Cleanup
 
@@ -165,7 +175,6 @@ docker network rm lab-network
 2. **Check container logs** — Review setup progress:
    ```bash
    docker exec docpg-standalone journalctl -u postgresql -f
-   docker exec docpg-standalone tail -f /var/log/pgbouncer/pgbouncer.log
    docker exec docpg-standalone tail -f /var/log/postgresql/postgresql-*.log
    ```
 
@@ -181,9 +190,9 @@ docker network rm lab-network
    ansible-playbook -i hosts.yml playbook-install-pg-standalone.yml \
      --vault-password-file=vault-pass --tags postgresql
 
-   # pgBouncer configuration only
+   # PostgreSQL and pgBackRest configuration only
    ansible-playbook -i hosts.yml playbook-install-pg-standalone.yml \
-     --vault-password-file=vault-pass --tags pgbouncer
+     --vault-password-file=vault-pass --tags postgresql,pgbackrest
    ```
 
 ## Troubleshooting
@@ -204,7 +213,6 @@ docker exec docpg-standalone ls -la /var/lib/postgresql/18/main/
 ```bash
 # Test network access inside container
 docker exec docpg-standalone ping 172.19.0.1
-docker exec docpg-standalone curl -s http://127.0.0.1:9187/metrics | head
 ```
 
 ## Differences from Cluster Playbook
@@ -225,4 +233,6 @@ Unlike the **playbook-install-pg-cluster-docker-etcd**, the standalone version:
 - Same variable structure for consistency
 - Same Docker setup pattern for familiarity
 
-Both playbooks follow the same Ansible role structure and use the same tools (pgBackRest, pgBouncer, pg_exporter) for learning and comparison.
+Both playbooks follow the same Ansible role structure and use pgBackRest for
+backup and WAL archiving. The standalone playbook does not install Patroni,
+etcd, pgBouncer, or pg_exporter.

@@ -19,7 +19,7 @@ playbook-install-pg-standalone-docker/
 ├── ansible.cfg                        # Ansible settings (inventory, plugins, etc.)
 ├── vault-pass                         # Ansible Vault password (for sensitive-values)
 ├── vars/
-│   └── dba_vars.yml                   # DBA variables (PostgreSQL, pgBouncer, etc.)
+│   └── dba_vars.yml                   # DBA variables (PostgreSQL, pgBackRest, etc.)
 │
 ├── Secrets
 ├── sensitive-values-sample            # Template for vault secrets
@@ -45,7 +45,7 @@ playbook-install-pg-standalone-docker/
 │       │   ├── main.yml               # PostgreSQL defaults (version, paths, parameters)
 │       │   └── creds.yml              # Maps vault secrets to 'creds' namespace
 │       ├── handlers/
-│       │   └── main.yml               # Event handlers (reload pgbouncer, restart services)
+│       │   └── main.yml               # PostgreSQL service handlers
 │       ├── tasks/
 │       │   ├── main.yml               # Orchestrates custom tasks in order
 │       │   └── custom/
@@ -56,12 +56,9 @@ playbook-install-pg-standalone-docker/
 │       │       ├── pgpass.yml         # Create .pgpass for passwordless auth
 │       │       ├── postgresql.yml     # Initialize and start PostgreSQL
 │       │       ├── pgbackrest.yml     # Configure pgBackRest, create stanza
-│       │       ├── pgbouncer.yml      # Configure pgBouncer connection pooler
-│       │       ├── pg_exporter.yml    # Install postgres_exporter for Prometheus
 │       │       └── user.yml           # Create application database and users
 │       └── templates/
-│           ├── pgbackrest.conf.j2     # pgBackRest configuration template
-│           └── pgbouncer.ini.j2       # pgBouncer configuration template
+│           └── pgbackrest.conf.j2     # pgBackRest configuration template
 ```
 
 ## File Purpose Reference
@@ -83,7 +80,7 @@ playbook-install-pg-standalone-docker/
 | Playbook | Purpose |
 |----------|---------|
 | `playbook-setup-docker.yml` | Phase 1: Create Docker network, build image, launch container |
-| `playbook-install-pg-standalone.yml` | Phase 2: Install PostgreSQL, extensions, pgBouncer, pgBackRest |
+| `playbook-install-pg-standalone.yml` | Phase 2: Install PostgreSQL, extensions, and pgBackRest |
 | `playbook-cleanup.yml` | Teardown: Stop and remove containers and volumes |
 
 ### Configuration
@@ -138,8 +135,6 @@ postgresql_port: "5432"                  # PG listen port
 db_name: "dba"                           # Application database
 db_user_rw: dba_rw                       # Read-write user
 db_user_ro: dba_ro                       # Read-only user
-pgbouncer_listen_port: 6432              # Connection pooler port
-pgbouncer_pool_mode: transaction         # Pool mode (transaction or session)
 ```
 
 ### sensitive-values (Vault)
@@ -165,7 +160,8 @@ PGBACKREST_REPO1_PATH: "/var/lib/pgbackrest"  # Backup repository path
 | Containers | Multiple (pg1, pg2, pg3, ...) | Single (docpg-standalone) |
 | Complexity | High (12+ custom tasks) | Medium (10 custom tasks) |
 
-**Both** use the same tools (pgBackRest, pgBouncer, pg_exporter) and follow the same Ansible patterns.
+**Both** use pgBackRest and follow the same Ansible patterns. The standalone
+playbook does not install Patroni, etcd, pgBouncer, or pg_exporter.
 
 ## Usage Examples
 

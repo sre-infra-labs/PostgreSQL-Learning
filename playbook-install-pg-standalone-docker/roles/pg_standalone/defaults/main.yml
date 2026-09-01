@@ -1,5 +1,4 @@
 minimal_ansible_version: "2.18.0"
-postgres_exporter_version: "0.17.1"
 
 # -------------------------------------------------------------------
 # Package lists
@@ -33,7 +32,6 @@ postgres_packages_required:
   - postgresql-{{ postgresql_version }}
   - postgresql-contrib-{{ postgresql_version }}
   - pgbackrest
-  - pgbouncer
 
 # Optional: PGDG extension packages — installed best-effort (skip if not yet in repo for this PG version)
 postgres_packages_optional:
@@ -57,11 +55,6 @@ postgresql_port:     "5432"
 db_name:             "dba"
 db_user_rw:          "dba_rw"
 db_user_ro:          "dba_ro"
-
-pgbouncer_listen_port:      6432
-pgbouncer_pool_mode:        "transaction"
-pgbouncer_max_client_conn:  200
-pgbouncer_default_pool_size: 25
 
 # -------------------------------------------------------------------
 # Credentials (set via creds.yml / sensitive-values vault)
@@ -94,7 +87,7 @@ postgresql_stats_temp_directory_path: "{{ postgresql_home_dir }}_stats_tmp"
 # PostgreSQL initdb settings
 # -------------------------------------------------------------------
 postgresql_encoding: "UTF8"
-postgresql_locale: "en_US.UTF-8"
+postgresql_locale: "C.UTF-8"
 postgresql_data_checksums: true
 postgresql_password_encryption_algorithm: "scram-sha-256"
 
@@ -142,14 +135,12 @@ postgresql_parameters:
   - { option: "log_truncate_on_rotation",      value: "on" }
   - { option: "log_rotation_age",              value: "1d" }
   - { option: "log_rotation_size",             value: "0" }
-  - { option: "log_line_prefix",               value: "'%t [%p-%l] %r %q%u@%d '" }
+  - { option: "log_line_prefix",               value: "%t [%p-%l] %r %q%u@%d " }
   - { option: "log_filename",                  value: "postgresql-%a.log" }
   - { option: "log_directory",                 value: "{{ postgresql_log_dir }}" }
   - { option: "log_statement",                 value: "all" }
   - { option: "log_duration",                  value: "off" }
   - { option: "log_min_duration_statement",    value: "-1" }
-  - { option: "pg_stat_statements.max",        value: "10000" }
-  - { option: "pg_stat_statements.track",      value: "all" }
   - { option: "track_io_timing",               value: "on" }
   - { option: "log_lock_waits",                value: "on" }
   - { option: "log_temp_files",                value: "0" }
@@ -158,7 +149,12 @@ postgresql_parameters:
   - { option: "track_counts",                  value: "on" }
   - { option: "track_functions",               value: "all" }
   - { option: "log_checkpoints",               value: "on" }
-  - { option: "shared_preload_libraries",      value: "pg_stat_statements,pg_cron" }
+
+postgresql_shared_preload_libraries: "pg_stat_statements,pg_cron"
+
+postgresql_extension_parameters:
+  - { option: "pg_stat_statements.max",   value: "10000" }
+  - { option: "pg_stat_statements.track", value: "all" }
   - { option: "cron.database_name",            value: "postgres" }
   - { option: "cron.timezone",                 value: "Asia/Kolkata" }
 
@@ -170,5 +166,16 @@ pgbackrest_repo_path: "/var/lib/pgbackrest"
 pgbackrest_repo1_type: "posix"
 pgbackrest_repo1_retention_full: 7
 pgbackrest_compress_type: "lz4"
-pgbackrest_archive_command: "/usr/bin/pgbackrest archive-push %p"
-pgbackrest_restore_command: "/usr/bin/pgbackrest archive-get %f %p"
+pgbackrest_archive_command: "/usr/bin/pgbackrest --stanza={{ pgbackrest_stanza_name }} archive-push %p"
+pgbackrest_restore_command: "/usr/bin/pgbackrest --stanza={{ pgbackrest_stanza_name }} archive-get %f %p"
+pgbackrest_create_initial_backup: true
+pgbackrest_initial_backup_type: "full"
+pgbackrest_backup_timeout: 3600
+pgbackrest_check_timeout: 300
+
+pgbackrest_postgresql_parameters:
+  - { option: "wal_level",       value: "replica" }
+  - { option: "archive_mode",    value: "on" }
+  - { option: "archive_timeout", value: "1800s" }
+  - { option: "archive_command", value: "{{ pgbackrest_archive_command }}" }
+  - { option: "restore_command", value: "{{ pgbackrest_restore_command }}" }

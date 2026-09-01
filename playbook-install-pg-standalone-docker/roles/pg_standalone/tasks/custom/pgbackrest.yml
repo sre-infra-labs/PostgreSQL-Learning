@@ -41,13 +41,15 @@
 
 - name: Fail if stanza-create returned real errors
   ansible.builtin.fail:
-    msg: "pgbackrest stanza-create failed: {{ stanza_result.stdout | default('Unknown') }}"
+    msg: >-
+      pgbackrest stanza-create failed:
+      {{ stanza_result.stdout | default('') }}
+      {{ stanza_result.stderr | default('') }}
   when:
     - stanza_result is defined
     - stanza_result.rc is defined
     - stanza_result.rc != 0
-    - "'ERROR' in (stanza_result.stdout | default(''))"
-    - "'did an error occur during stanza-upgrade' not in (stanza_result.stdout | default(''))"
+    - "'did an error occur during stanza-upgrade' not in ((stanza_result.stdout | default('')) + (stanza_result.stderr | default('')))"
 
 - name: Upgrade pgBackRest stanza if needed
   ansible.builtin.command:
@@ -57,8 +59,78 @@
     - stanza_result is defined
     - stanza_result.rc is defined
     - stanza_result.rc != 0
-    - "'did an error occur during stanza-upgrade' in (stanza_result.stdout | default(''))"
+    - "'did an error occur during stanza-upgrade' in ((stanza_result.stdout | default('')) + (stanza_result.stderr | default('')))"
   register: stanza_upgrade_result
   retries: 2
   delay: 5
   timeout: 30
+
+- name: Configure PostgreSQL WAL archiving for pgBackRest
+  community.postgresql.postgresql_alter_system:
+    param: "{{ item.option }}"
+    value: "{{ item.value }}"
+    login_user: postgres
+  become_user: postgres
+  loop: "{{ pgbackrest_postgresql_parameters }}"
+  loop_control:
+    label: "{{ item.option }}"
+  register: pgbackrest_postgresql_config
+
+- name: Restart PostgreSQL to enable WAL archiving
+  ansible.builtin.systemd:
+    name: postgresql
+    state: restarted
+  when: pgbackrest_postgresql_config.changed
+
+- name: Wait for PostgreSQL after WAL archiving restart
+  ansible.builtin.wait_for:
+    host: localhost
+    port: "{{ postgresql_port }}"
+    state: started
+    timeout: 120
+    delay: 5
+  when: pgbackrest_postgresql_config.changed
+
+- name: Check pgBackRest stanza and WAL archiving
+  ansible.builtin.command:
+    cmd: pgbackrest --stanza={{ pgbackrest_stanza_name }} --log-level-console=info check
+  become_user: postgres
+  register: pgbackrest_check_result
+  changed_when: false
+  retries: 2
+  delay: 5
+  timeout: "{{ pgbackrest_check_timeout }}"
+
+- name: Inspect existing pgBackRest backups
+  ansible.builtin.command:
+    cmd: pgbackrest --stanza={{ pgbackrest_stanza_name }} --output=json info
+  become_user: postgres
+  register: pgbackrest_info_before
+  changed_when: false
+
+- name: Create initial pgBackRest backup when repository has no backups
+  ansible.builtin.command:
+    cmd: >-
+      pgbackrest --stanza={{ pgbackrest_stanza_name }}
+      --type={{ pgbackrest_initial_backup_type }}
+      --log-level-console=info backup
+  become_user: postgres
+  register: pgbackrest_initial_backup_result
+  timeout: "{{ pgbackrest_backup_timeout }}"
+  when:
+    - pgbackrest_create_initial_backup | bool
+    - ((pgbackrest_info_before.stdout | from_json | first).backup | length) == 0
+
+- name: Verify pgBackRest repository contains a valid backup
+  ansible.builtin.command:
+    cmd: pgbackrest --stanza={{ pgbackrest_stanza_name }} --output=json info
+  become_user: postgres
+  register: pgbackrest_info_after
+  changed_when: false
+
+- name: Assert pgBackRest repository contains a valid backup
+  ansible.builtin.assert:
+    that:
+      - ((pgbackrest_info_after.stdout | from_json | first).backup | length) > 0
+    fail_msg: "pgBackRest repository does not contain a valid backup"
+  when: pgbackrest_create_initial_backup | bool
