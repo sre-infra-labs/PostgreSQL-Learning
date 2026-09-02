@@ -1,25 +1,26 @@
 # Graph Report - .  (2026-09-02)
 
 ## Corpus Check
-- Large corpus: 664 files · ~658,246 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder.
+- 5 files · ~662,442 words
+- Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 611 nodes · 688 edges · 115 communities (59 shown, 56 thin omitted)
-- Extraction: 81% EXTRACTED · 19% INFERRED · 0% AMBIGUOUS · INFERRED: 132 edges (avg confidence: 0.84)
+- 618 nodes · 704 edges · 113 communities (59 shown, 54 thin omitted)
+- Extraction: 81% EXTRACTED · 19% INFERRED · 0% AMBIGUOUS · INFERRED: 135 edges (avg confidence: 0.84)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
+- [[_COMMUNITY_Docker exec-based Management with No Host Port Mappings  etcd Distributed Configuration Store|Docker exec-based Management with No Host Port Mappings / etcd Distributed Configuration Store]]
 - [[_COMMUNITY_DataFrame  dataframe_to_prettytable.py|DataFrame / dataframe_to_prettytable.py]]
 - [[_COMMUNITY_environment_variables.sh  ANSIBLE_SSH_PRIVATE_KEY|environment_variables.sh / ANSIBLE_SSH_PRIVATE_KEY]]
 - [[_COMMUNITY_alter-database.sh  PGPASSWORD|alter-database.sh / PGPASSWORD]]
 - [[_COMMUNITY_repl_slot_manager.py  db_log()|repl_slot_manager.py / db_log()]]
 - [[_COMMUNITY_Ansible Vault - Credential encryption and management  Change Data Capture (CDC) - Capturing database changes|Ansible Vault - Credential encryption and management / Change Data Capture (CDC) - Capturing database changes]]
-- [[_COMMUNITY_Backup Strategy Using pgBackRest  PostgreSQL Environment Variables Configuration|Backup Strategy Using pgBackRest / PostgreSQL Environment Variables Configuration]]
-- [[_COMMUNITY_Primary Cluster Setup Procedure  Disaster Recovery (DR)|Primary Cluster Setup Procedure / Disaster Recovery (DR)]]
-- [[_COMMUNITY_Docker exec-based Management with No Host Port Mappings  etcd Distributed Configuration Store|Docker exec-based Management with No Host Port Mappings / etcd Distributed Configuration Store]]
+- [[_COMMUNITY_Application Database Users  Backup Strategy Using pgBackRest|Application Database Users / Backup Strategy Using pgBackRest]]
 - [[_COMMUNITY_Debezium PostgreSQL Connector  Kafka Message Broker|Debezium PostgreSQL Connector / Kafka Message Broker]]
-- [[_COMMUNITY_Docker exec Ansible Connectivity Model  Docker Network Architecture|Docker exec Ansible Connectivity Model / Docker Network Architecture]]
+- [[_COMMUNITY_PostgreSQL Configuration Parameters  Disaster Recovery (DR)|PostgreSQL Configuration Parameters / Disaster Recovery (DR)]]
 - [[_COMMUNITY_object  string_to_array.py|object / string_to_array.py]]
+- [[_COMMUNITY_Docker Network Architecture  Graceful Switchover Procedure|Docker Network Architecture / Graceful Switchover Procedure]]
 - [[_COMMUNITY_Cache Hit Ratio Metric  Caching Strategy|Cache Hit Ratio Metric / Caching Strategy]]
 - [[_COMMUNITY_Apache Kafka for PostgreSQL Data Replication  MIT License|Apache Kafka for PostgreSQL Data Replication / MIT License]]
 - [[_COMMUNITY_Disk space management and table sizing  pg_dump and pg_restore backup methods|Disk space management and table sizing / pg_dump and pg_restore backup methods]]
@@ -75,7 +76,6 @@
 - [[_COMMUNITY_psql connection|psql connection]]
 - [[_COMMUNITY_Row count estimation|Row count estimation]]
 - [[_COMMUNITY_PostgreSQL version and server metadata|PostgreSQL version and server metadata]]
-- [[_COMMUNITY_systemctl service management|systemctl service management]]
 - [[_COMMUNITY_pg_basebackup for physical backups|pg_basebackup for physical backups]]
 - [[_COMMUNITY_pg_stat_statements for query statistics|pg_stat_statements for query statistics]]
 - [[_COMMUNITY_pg_trgm for text search and fuzzy matching|pg_trgm for text search and fuzzy matching]]
@@ -83,8 +83,8 @@
 - [[_COMMUNITY_PostgreSQL replication and high availability|PostgreSQL replication and high availability]]
 - [[_COMMUNITY_Documentation Update Summary|Documentation Update Summary]]
 - [[_COMMUNITY_Ansible Inventory Configuration|Ansible Inventory Configuration]]
-- [[_COMMUNITY_Debezium CDC Kafka Learning Infrastructure|Debezium CDC Kafka Learning Infrastructure]]
 - [[_COMMUNITY_Vault Deployment Secrets Documentation|Vault Deployment Secrets Documentation]]
+- [[_COMMUNITY_pg_hba.conf Access Control Rules|pg_hba.conf Access Control Rules]]
 - [[_COMMUNITY_Docker Image Build Process|Docker Image Build Process]]
 - [[_COMMUNITY_Standby Cluster Setup Procedure|Standby Cluster Setup Procedure]]
 - [[_COMMUNITY_Standard Python Project .gitignore|Standard Python Project .gitignore]]
@@ -99,19 +99,18 @@
 - [[_COMMUNITY_PostgreSQL Major-Version Upgrade to 18 Runbook|PostgreSQL Major-Version Upgrade to 18 Runbook]]
 - [[_COMMUNITY_Removal of pgBouncer and pg_exporter for Simplification|Removal of pgBouncer and pg_exporter for Simplification]]
 - [[_COMMUNITY_pg_upgrade Procedure with Copy Mode for Safe Major Version Migration|pg_upgrade Procedure with Copy Mode for Safe Major Version Migration]]
-- [[_COMMUNITY_Technical Implementation Summary|Technical Implementation Summary]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `main()` - 19 edges
-2. `run()` - 14 edges
-3. `PostgreSQL Standalone Role` - 10 edges
-4. `PostgreSQL Parameters for Performance Tuning` - 10 edges
-5. `PostgreSQL-Learning Repository` - 10 edges
-6. `Debezium PostgreSQL Connector` - 9 edges
-7. `Full Stack Deployment Playbook` - 9 edges
-8. `Docker-Based PostgreSQL 18 HA Cluster` - 9 edges
-9. `Inventory` - 8 edges
-10. `Deployment Validation and Health Checks` - 8 edges
+1. `Docker-Based PostgreSQL HA Cluster` - 24 edges
+2. `main()` - 19 edges
+3. `run()` - 14 edges
+4. `Patroni` - 12 edges
+5. `PostgreSQL Standalone Role` - 10 edges
+6. `PostgreSQL Parameters for Performance Tuning` - 10 edges
+7. `PostgreSQL-Learning Repository` - 10 edges
+8. `Debezium PostgreSQL Connector` - 9 edges
+9. `Full Stack Deployment Playbook` - 9 edges
+10. `Inventory` - 8 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `HashiCorp Consul for service discovery` --semantically_similar_to--> `etcd for distributed coordination`  [INFERRED] [semantically similar]
@@ -120,95 +119,60 @@
   Debezium-CDC-Kafka/scripts/validate-deployment.sh → Debezium-CDC-Kafka/playbook-deploy-all.yml
 - `CDC Flow Test Script` --references--> `Debezium PostgreSQL Connector`  [EXTRACTED]
   Debezium-CDC-Kafka/scripts/test-cdc-flow.sh → Debezium-CDC-Kafka/CDC-Using-Debezium-n-Kafka.md
-- `pgBadger Logging Configuration` --complements--> `Postgres Exporter Monitoring`  [INFERRED]
-  Setup-Configuration/pgBadger-settings.md → Monitoring/Postgres-Exporter.md
-- `PostgreSQL on Podman Container Setup` --uses--> `Docker Network Setup`  [INFERRED]
-  Setup-Configuration/Podman+PostgreSQL.md → Debezium-CDC-Kafka/vars/main.yml
+- `Maintenance Mode` --conceptually_related_to--> `Patroni`  [INFERRED]
+  playbook-install-pg-cluster-docker-etcd/DR_FAILOVER_GUIDE__GRACEFUL.md → playbook-install-pg-cluster-docker-etcd/docker-based-postgresql-cluster.md
+- `DBA Variables Configuration` --rationale_for--> `PostgreSQL Version Configuration`  [INFERRED]
+  playbook-install-pg-standalone-docker/vars/dba_vars.yml → playbook-install-pg-cluster-docker-etcd/vars/dba_vars.yml
 
 ## Import Cycles
 - 1-file cycle: `playbook-postgres-configuration/miscellaneous_scripts/dba_package/dataframe_to_prettytable.py -> playbook-postgres-configuration/miscellaneous_scripts/dba_package/dataframe_to_prettytable.py`
 - 1-file cycle: `playbook-postgres-configuration/miscellaneous_scripts/dba_package/filter_pretty_table.py -> playbook-postgres-configuration/miscellaneous_scripts/dba_package/filter_pretty_table.py`
 
-## Hyperedges (group relationships)
-- **CDC Infrastructure Deployment Orchestration** — debezium_cdc_kafka_deploy, debezium_cdc_kafka_deploy_with_vault, debezium_cdc_kafka_run_deployment, ansible_orchestration [INFERRED 0.85]
-- **Complete CDC Infrastructure Stack** — postgresql_service, kafka_service, zookeeper_service, debezium_service, pgadmin_service, kafka_ui_service [INFERRED 0.90]
-- **Deployment Validation and Monitoring Suite** — debezium_cdc_kafka_deployment_monitor, debezium_cdc_kafka_check1, debezium_cdc_kafka_monitor_deployment, debezium_cdc_kafka_scripts_validate_deployment, debezium_cdc_kafka_scripts_quick_status [EXTRACTED 1.00]
-- **CDC Data Flow Pipeline** — component_postgres_cdc, component_debezium_connector, component_kafka_broker, concept_kafka_topics [INFERRED 0.95]
-- **Kafka Coordination Services** — component_zookeeper, component_kafka_broker, component_debezium_connector, component_kafka_ui [INFERRED 0.85]
-- **Deployment Automation Roles** — playbook_deploy_all, role_docker_infrastructure, role_kafka_ecosystem, role_postgres_source, role_pgadmin [EXTRACTED 1.00]
-- **Query Performance Monitoring** — monitoring_query_analysis, monitoring_stats_queries, monitoring_index_analysis, monitoring_database_workload_analysis [INFERRED 0.80]
-- **Concurrency and Locking** — monitoring_blocking_session_queries, monitoring_lock_queries, monitoring_session_queries, monitoring_connection_management [INFERRED 0.85]
-- **SQL Learning Progression** — stackoverflow_beginner_queries, stackoverflow_beginner_sql, stackoverflow_pattern_matching_queries, stackoverflow_intermediate_queries, stackoverflow_cte_recursive_queries [INFERRED 0.75]
-- **PostgreSQL HA Component Stack** — docker_based_postgresql_cluster_postgresql, docker_based_postgresql_cluster_patroni, docker_based_postgresql_cluster_etcd, docker_based_postgresql_cluster_pgbackrest, docker_based_postgresql_cluster_pgbouncer, docker_based_postgresql_cluster_haproxy, docker_based_postgresql_cluster_keepalived [EXTRACTED 1.00]
-- **Primary Cluster Nodes** — docker_based_postgresql_cluster_docpg_cls1_pg1, docker_based_postgresql_cluster_docpg_cls1_pg2, docker_based_postgresql_cluster_docpg_cls1_pg3 [EXTRACTED 1.00]
-- **Planned DR Switchover Workflow** — dr_failover_guide__graceful_maintenance_mode, dr_failover_guide__graceful_connection_management, dr_failover_guide__graceful_replication_lag_validation [EXTRACTED 1.00]
-- **Primary Cluster HA Nodes** — container_docpg_cls1_pg1, container_docpg_cls1_pg2, container_docpg_cls1_pg3 [EXTRACTED 1.00]
-- **Cluster Orchestration and Coordination Stack** — concept_patroni_orchestration, concept_etcd_dcs, concept_synchronous_replication [INFERRED 0.90]
-- **Virtual IP Routing and Failover Management** — concept_haproxy_routing, concept_keepalived_vip, vip_primary_write, vip_replica_read [EXTRACTED 0.95]
-- **Disaster Recovery Multi-Region Setup** — container_docpg_cls1_pg1, container_docpg_cls1_pg4, concept_multi_region_dr, concept_standby_cluster_slot [EXTRACTED 0.95]
-- **PostgreSQL Installation Pipeline** — standalone_pg_prechecks, standalone_pgdg_repository, standalone_package_installation, standalone_postgresql_init [INFERRED 0.85]
-- **Docker Infrastructure Setup Pipeline** — standalone_docker_network_setup, standalone_docker_image_build, standalone_pg_container_creation [INFERRED 0.85]
-- **Backup and Recovery System with pgBackRest** — standalone_pgbackrest_config, standalone_backup_strategy, standalone_pgbackrest_conf_template [INFERRED 0.85]
-- **Debezium CDC Infrastructure Deployment Process** — debezium_cdc_kafka_playbook_deploy_all, debezium_cdc_kafka_docker_infrastructure, debezium_cdc_kafka_kafka_ecosystem, debezium_cdc_kafka_documentation_update [INFERRED 0.85]
-- **Debezium CDC Learning Documentation** — debezium_cdc_kafka_readme, debezium_cdc_kafka_quick_start, debezium_cdc_kafka_implementation_guide, debezium_cdc_kafka_final_deployment_guide [EXTRACTED 1.00]
-- **CDC Architecture Components** — debezium_concept, kafka_concept, logical_replication_concept, docker_network_concept [INFERRED 0.85]
-- **CDC Deployment Pipeline** — postgres_source_deployment, debezium_cdc_kafka_pgadmin_tasks, cdc_main_configuration, docker_network_setup [INFERRED 0.85]
-- **Performance Monitoring Ecosystem** — postgres_exporter_monitoring, postgres_exporter_metrics, prometheus_monitoring_stack, slow_queries_analysis [INFERRED 0.85]
-- **Parameter Tuning Strategy** — shared_buffers_parameter, work_mem_parameter, effective_cache_size_parameter, random_page_cost_parameter, max_connections_parameter [EXTRACTED 1.00]
-- **PostgreSQL monitoring and observability tools** — book__learn_postgres_chp14_logging_auditing_auto_explain, book__learn_postgres_chp14_logging_auditing_pgstat_statements, book__learn_postgres_chp19_useful_tools_pg_stat_monitor [INFERRED 0.85]
-- **PostgreSQL backup and disaster recovery tools** — book__learn_postgres_chp15_backup_restore_pg_dump, book__learn_postgres_chp15_backup_restore_pg_basebackup, book__learn_postgres_chp19_useful_tools_pgbackrest, miscellaneous_aws_s3_pgbackrest_backup [INFERRED 0.85]
-- **Patroni cluster deployment on multiple platforms** — playbook_convert_standalone_2_patroni_cluster_docker_containers, playbook_convert_standalone_2_patroni_cluster_podman_containers, playbook_convert_standalone_2_patroni_cluster_rhel_setup, playbook_convert_standalone_2_patroni_cluster_ubuntu_setup [INFERRED 0.85]
-- **Primary Cluster HA Infrastructure Components** — primary_cluster_nodes, synchronous_replication, keepalived_vip_management, patroni_dcs_config, docker_network_architecture [INFERRED 0.90]
-- **Disaster Recovery Switchover Workflow** — graceful_switchover_procedure, real_disaster_switchover_procedure, standby_cluster_promotion, timeline_management, standby_cluster_slot [INFERRED 0.85]
-- **Patroni Operational Patterns** — maintenance_mode_concept, patroni_role_change_callback, patroni_dcs_config, replication_lag_validation [INFERRED 0.80]
-- **PostgreSQL High Availability Architecture** — postgres_dr_servers, postgres_streaming_replication, postgres_cascading_replication, postgres_load_balancing [INFERRED 0.85]
-- **PostgreSQL Connection and Resource Management** — postgres_pgbouncer_pooling, postgres_pgpool, postgres_load_balancing [INFERRED 0.80]
+## Communities (113 total, 54 thin omitted)
 
-## Communities (115 total, 56 thin omitted)
+### Community 0 - "Docker exec-based Management with No Host Port Mappings / etcd Distributed Configuration Store"
+Cohesion: 0.07
+Nodes (45): Docker exec-based Management with No Host Port Mappings, etcd Distributed Configuration Store, HAProxy Connection Routing with Health Checks, Keepalived Virtual IP Management, Multi-Region Disaster Recovery Architecture, Patroni High Availability Orchestration, pgBackRest Backup and Restore, Physical Replication Slot for Standby Cluster Streaming (+37 more)
 
-### Community 0 - "DataFrame / dataframe_to_prettytable.py"
+### Community 1 - "DataFrame / dataframe_to_prettytable.py"
 Cohesion: 0.08
 Nodes (24): DataFrame, dataframe_to_prettytable(), Converts a pandas DataFrame to a PrettyTable object.      Parameters:         df, execute_psql_using_ssh(), get_csv_result_using_ssh(), get_json_result_using_ssh(), Executes a command on multiple hosts via SSH, expects JSON output,     and retur, get_private_key() (+16 more)
 
-### Community 1 - "environment_variables.sh / ANSIBLE_SSH_PRIVATE_KEY"
+### Community 2 - "environment_variables.sh / ANSIBLE_SSH_PRIVATE_KEY"
 Cohesion: 0.05
 Nodes (40): ANSIBLE_SSH_PRIVATE_KEY, ANSIBLE_SSH_PRIVATE_KEY_OFFICE, ANSIBLE_SSH_PRIVATE_KEY_PERSONAL, EMAIL_FROM, EMAIL_TO, PAGERDUTY_PGDBA_INTEGRATION_KEY, PAGERDUTY_PGDBA_SERVICE_DIRECTORY_URL, PGPWD (+32 more)
 
-### Community 2 - "alter-database.sh / PGPASSWORD"
+### Community 3 - "alter-database.sh / PGPASSWORD"
 Cohesion: 0.09
 Nodes (26): PGPASSWORD, Ansible Infrastructure Automation, Ansible Vault Secret Management, Change Data Capture Flow, Quick CDC Service Status Check, End-to-End CDC Flow Test, Deployment Validation and Health Checks, Debezium CDC Platform (+18 more)
 
-### Community 3 - "repl_slot_manager.py / db_log()"
+### Community 4 - "repl_slot_manager.py / db_log()"
 Cohesion: 0.13
 Nodes (30): db_log(), drop_physical_logical_slots(), get_cluster_name(), get_config_table_slots(), get_last_slot_removed_time(), get_node_role(), get_patroni_config(), get_wal_level() (+22 more)
 
-### Community 4 - "Ansible Vault - Credential encryption and management / Change Data Capture (CDC) - Capturing database changes"
+### Community 5 - "Ansible Vault - Credential encryption and management / Change Data Capture (CDC) - Capturing database changes"
 Cohesion: 0.08
 Nodes (30): Ansible Vault - Credential encryption and management, Change Data Capture (CDC) - Capturing database changes, Debezium CDC Main Configuration, Deployment Status Report, Docker Infrastructure Role, Documentation Index, Final Deployment Guide, Implementation Guide (+22 more)
 
-### Community 5 - "Backup Strategy Using pgBackRest / PostgreSQL Environment Variables Configuration"
+### Community 6 - "Application Database Users / Backup Strategy Using pgBackRest"
 Cohesion: 0.08
-Nodes (29): Backup Strategy Using pgBackRest, PostgreSQL Environment Variables Configuration, DBA Variables Configuration, Docker Connection Plugin Pattern for Containerized Ansible Control, Docker Image Build Process, Docker Infrastructure Role, Docker Network Creation and Verification, Docker Network CIDR Subnet Definition (+21 more)
+Nodes (30): Application Database Users, Backup Strategy Using pgBackRest, PostgreSQL Environment Variables Configuration, DBA Variables Configuration, Docker Connection Plugin Pattern for Containerized Ansible Control, Docker Image Build Process, Docker Infrastructure Role, Docker Network Creation and Verification (+22 more)
 
-### Community 6 - "Primary Cluster Setup Procedure / Disaster Recovery (DR)"
-Cohesion: 0.10
-Nodes (28): Primary Cluster Setup Procedure, Disaster Recovery (DR), Docker-Based PostgreSQL 18 HA Cluster, Docker lab-network (172.18.0.0/16), docpg-cls1-pg1 (Primary Leader), docpg-cls1-pg2 (Sync Standby), docpg-cls1-pg3 (Async Replica), docpg-cls1-pg4 (Standby Leader) (+20 more)
-
-### Community 7 - "Docker exec-based Management with No Host Port Mappings / etcd Distributed Configuration Store"
-Cohesion: 0.12
-Nodes (27): Docker exec-based Management with No Host Port Mappings, etcd Distributed Configuration Store, HAProxy Connection Routing with Health Checks, Keepalived Virtual IP Management, Multi-Region Disaster Recovery Architecture, Patroni High Availability Orchestration, pgBackRest Backup and Restore, Physical Replication Slot for Standby Cluster Streaming (+19 more)
-
-### Community 8 - "Debezium PostgreSQL Connector / Kafka Message Broker"
+### Community 7 - "Debezium PostgreSQL Connector / Kafka Message Broker"
 Cohesion: 0.10
 Nodes (26): Debezium PostgreSQL Connector, Kafka Message Broker, Kafka UI Monitoring Portal, pgAdmin Database Management, PostgreSQL CDC Source Container, Zookeeper Coordination Service, Change Data Capture, Docker Network Isolation (+18 more)
 
-### Community 9 - "Docker exec Ansible Connectivity Model / Docker Network Architecture"
-Cohesion: 0.12
-Nodes (22): Docker exec Ansible Connectivity Model, Docker Network Architecture, Graceful Switchover Procedure, Keepalived VIP Management, Patroni Maintenance Mode, Patroni DCS Configuration, Patroni on_role_change Callback Pattern, pgBouncer Stale Connection Management (+14 more)
+### Community 8 - "PostgreSQL Configuration Parameters / Disaster Recovery (DR)"
+Cohesion: 0.11
+Nodes (23): PostgreSQL Configuration Parameters, Disaster Recovery (DR), docpg-cls1-pg1 (Primary Leader), docpg-cls1-pg2 (Sync Standby), docpg-cls1-pg3 (Async Replica), docpg-cls1-pg4 (Standby Leader), HAProxy Read Endpoint (5001), HAProxy Write Endpoint (5000) (+15 more)
 
-### Community 10 - "object / string_to_array.py"
+### Community 9 - "object / string_to_array.py"
 Cohesion: 0.09
 Nodes (16): object, FilterModule, Ansible filter module class., Return filter functions dictionary., Convert a multiline string into an array of strings., string_to_array(), FilterModule, Ansible filter module class. (+8 more)
+
+### Community 10 - "Docker Network Architecture / Graceful Switchover Procedure"
+Cohesion: 0.14
+Nodes (17): Docker Network Architecture, Graceful Switchover Procedure, Keepalived VIP Management, Patroni Maintenance Mode, Primary Cluster Group Variables, Ansible Inventory (hosts.yml), Add Replicas Playbook, Install Primary Cluster Playbook (+9 more)
 
 ### Community 11 - "Cache Hit Ratio Metric / Caching Strategy"
 Cohesion: 0.17
@@ -307,24 +271,24 @@ Cohesion: 0.67
 Nodes (3): CTE and Recursive Queries, NULL Handling and Comparison, Subqueries and Correlation
 
 ## Knowledge Gaps
-- **170 isolated node(s):** `alter-database.sh script`, `PGPASSWORD`, `config-changes.sh script`, `extract-filter-logs-files.sh script`, `read-active-settings.sh script` (+165 more)
+- **176 isolated node(s):** `alter-database.sh script`, `PGPASSWORD`, `config-changes.sh script`, `extract-filter-logs-files.sh script`, `read-active-settings.sh script` (+171 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **56 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **54 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
+- **Why does `Docker-Based PostgreSQL HA Cluster` connect `Docker exec-based Management with No Host Port Mappings / etcd Distributed Configuration Store` to `PostgreSQL Configuration Parameters / Disaster Recovery (DR)`, `Docker Network Architecture / Graceful Switchover Procedure`?**
+  _High betweenness centrality (0.012) - this node is a cross-community bridge._
+- **Why does `Patroni` connect `Docker exec-based Management with No Host Port Mappings / etcd Distributed Configuration Store` to `PostgreSQL Configuration Parameters / Disaster Recovery (DR)`?**
+  _High betweenness centrality (0.005) - this node is a cross-community bridge._
 - **Why does `Debezium CDC Learning Infrastructure` connect `Ansible Vault - Credential encryption and management / Change Data Capture (CDC) - Capturing database changes` to `Debezium PostgreSQL Connector / Kafka Message Broker`?**
   _High betweenness centrality (0.005) - this node is a cross-community bridge._
-- **Why does `Change Data Capture` connect `Debezium PostgreSQL Connector / Kafka Message Broker` to `Ansible Vault - Credential encryption and management / Change Data Capture (CDC) - Capturing database changes`?**
-  _High betweenness centrality (0.004) - this node is a cross-community bridge._
+- **Are the 5 inferred relationships involving `Patroni` (e.g. with `Cluster Management Roles` and `Primary Cluster Topology`) actually correct?**
+  _`Patroni` has 5 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `alter-database.sh script`, `PGPASSWORD`, `config-changes.sh script` to the rest of the system?**
-  _274 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _279 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `Docker exec-based Management with No Host Port Mappings / etcd Distributed Configuration Store` be split into smaller, more focused modules?**
+  _Cohesion score 0.06767676767676768 - nodes in this community are weakly interconnected._
 - **Should `DataFrame / dataframe_to_prettytable.py` be split into smaller, more focused modules?**
   _Cohesion score 0.07751937984496124 - nodes in this community are weakly interconnected._
-- **Should `environment_variables.sh / ANSIBLE_SSH_PRIVATE_KEY` be split into smaller, more focused modules?**
-  _Cohesion score 0.04878048780487805 - nodes in this community are weakly interconnected._
-- **Should `alter-database.sh / PGPASSWORD` be split into smaller, more focused modules?**
-  _Cohesion score 0.08771929824561403 - nodes in this community are weakly interconnected._
-- **Should `repl_slot_manager.py / db_log()` be split into smaller, more focused modules?**
-  _Cohesion score 0.13118279569892474 - nodes in this community are weakly interconnected._

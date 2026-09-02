@@ -1330,14 +1330,14 @@
     "semantic_hash": "4096ed421843078ac24693ff2ac21dd7"
   },
   "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/README-HA-PG-Major-Version-Upgrade.md": {
-    "mtime": 1788247523.7927306,
-    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
-    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+    "mtime": 1788325548.2326753,
+    "ast_hash": "928f4f32948667f4e28cefce3351fb1c",
+    "semantic_hash": "928f4f32948667f4e28cefce3351fb1c"
   },
   "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/docker-based-postgresql-cluster.md": {
-    "mtime": 1781242148.4211507,
-    "ast_hash": "a57dc18237ef501954a556e5849826d5",
-    "semantic_hash": "a57dc18237ef501954a556e5849826d5"
+    "mtime": 1788322611.8683758,
+    "ast_hash": "b5ac632c5b98f6a274185993cfcf5229",
+    "semantic_hash": "b5ac632c5b98f6a274185993cfcf5229"
   },
   "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/group_vars/primary_cluster.yml": {
     "mtime": 1781153904.4498537,
@@ -1430,9 +1430,9 @@
     "semantic_hash": "f349f0acac484da6f8f636130c4bd950"
   },
   "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/defaults/main.yml": {
-    "mtime": 1781194523.191058,
-    "ast_hash": "d497c053f049875bfebabf1cdd01e838",
-    "semantic_hash": "d497c053f049875bfebabf1cdd01e838"
+    "mtime": 1788323281.6059413,
+    "ast_hash": "8d29f203fafbe30afc3d534b88e94f9b",
+    "semantic_hash": "8d29f203fafbe30afc3d534b88e94f9b"
   },
   "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/handlers/main.yml": {
     "mtime": 1777474006.1906922,
@@ -1525,9 +1525,9 @@
     "semantic_hash": "2c10bedde56a2c162984745b039315f2"
   },
   "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/custom/user.yml": {
-    "mtime": 1779685797.5197093,
-    "ast_hash": "542e5a9535909ac74db49cff9ec0f526",
-    "semantic_hash": "542e5a9535909ac74db49cff9ec0f526"
+    "mtime": 1788323701.3588245,
+    "ast_hash": "743a1f52b51993e6a468febaf35e40af",
+    "semantic_hash": "743a1f52b51993e6a468febaf35e40af"
   },
   "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/main.yml": {
     "mtime": 1781235881.2970195,
@@ -1540,9 +1540,9 @@
     "semantic_hash": "7689db08970524b3e6ca7d0325afe5e4"
   },
   "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/vars/dba_vars.yml": {
-    "mtime": 1781006456.2861843,
-    "ast_hash": "72cf3200ac07b8bcd086741383d0147a",
-    "semantic_hash": "72cf3200ac07b8bcd086741383d0147a"
+    "mtime": 1788321878.142425,
+    "ast_hash": "35fa81841fb0b8cc2c9f744613386000",
+    "semantic_hash": "35fa81841fb0b8cc2c9f744613386000"
   },
   "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/DR_FAILOVER_GUIDE__GRACEFUL.md": {
     "mtime": 1781158482.4007547,
