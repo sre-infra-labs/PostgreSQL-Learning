@@ -161,23 +161,23 @@ Enter the leader container and run:
 
 ```bash
 # CONTAINER — run on the current leader
-runuser -u postgres -- psql -h 127.0.0.1 -U postgres -Atqc \
+runuser -u postgres -- "$OLD_BIN/psql" -h 127.0.0.1 -U postgres -Atqc \
   "SHOW server_version; SHOW server_version_num; SHOW data_directory;" \
   > "$UPGRADE_DIR/source-settings.txt"
-runuser -u postgres -- psql -h 127.0.0.1 -U postgres -Atqc \
+runuser -u postgres -- "$OLD_BIN/psql" -h 127.0.0.1 -U postgres -Atqc \
   "SELECT datname, datcollate, datctype FROM pg_database ORDER BY 1;" \
   >> "$UPGRADE_DIR/source-settings.txt"
 
-runuser -u postgres -- psql -h 127.0.0.1 -U postgres -P pager=off -c \
+runuser -u postgres -- "$OLD_BIN/psql" -h 127.0.0.1 -U postgres -P pager=off -c \
   "SELECT datname, pg_size_pretty(pg_database_size(datname)) AS size
      FROM pg_database ORDER BY pg_database_size(datname) DESC;" \
   > "$UPGRADE_DIR/database-sizes.txt"
 
-runuser -u postgres -- psql -h 127.0.0.1 -U postgres -P pager=off -c \
+runuser -u postgres -- "$OLD_BIN/psql" -h 127.0.0.1 -U postgres -P pager=off -c \
   "SELECT extname, extversion FROM pg_extension ORDER BY 1;" \
   > "$UPGRADE_DIR/extensions.txt"
 
-runuser -u postgres -- psql -h 127.0.0.1 -U postgres -P pager=off -c \
+runuser -u postgres -- "$OLD_BIN/psql" -h 127.0.0.1 -U postgres -P pager=off -c \
   "SELECT client_addr, application_name, state, sync_state,
           sent_lsn, write_lsn, flush_lsn, replay_lsn
      FROM pg_stat_replication ORDER BY client_addr;" \
@@ -212,9 +212,9 @@ replication slots or prepared transactions.
 
 ```bash
 # CONTAINER — leader
-runuser -u postgres -- pg_dumpall --globals-only \
+runuser -u postgres -- "$OLD_BIN/pg_dumpall" --globals-only \
   > "$UPGRADE_DIR/globals.sql"
-runuser -u postgres -- pg_dumpall \
+runuser -u postgres -- "$OLD_BIN/pg_dumpall" \
   > "$UPGRADE_DIR/all-databases.sql"
 chmod 600 "$UPGRADE_DIR"/*.sql
 ```
@@ -331,11 +331,13 @@ source's actual compatible settings. Do not guess a locale.
 
 ```bash
 # CONTAINER — former leader only
+set -o pipefail
 runuser -u postgres -- bash -lc \
   "cd /var/lib/postgresql && '$NEW_BIN/pg_upgrade' --check --copy \
     --old-bindir='$OLD_BIN' --new-bindir='$NEW_BIN' \
     --old-datadir='$OLD_DATA' --new-datadir='$NEW_DATA' \
-    --username=postgres --jobs=2"
+    --username=postgres --jobs=2" \
+  2>&1 | tee "$UPGRADE_DIR/pg-upgrade-check.log"
 ```
 
 Resolve every error before the real upgrade. In particular, install a PG18
@@ -350,11 +352,13 @@ initialized PG18 target empty apart from `initdb` output:
 
 ```bash
 # CONTAINER — former leader only
+set -o pipefail
 runuser -u postgres -- bash -lc \
   "cd /var/lib/postgresql && '$NEW_BIN/pg_upgrade' --copy \
     --old-bindir='$OLD_BIN' --new-bindir='$NEW_BIN' \
     --old-datadir='$OLD_DATA' --new-datadir='$NEW_DATA' \
-    --username=postgres --jobs=2"
+    --username=postgres --jobs=2" \
+  2>&1 | tee "$UPGRADE_DIR/pg-upgrade.log"
 ```
 
 Save the output. A successful run prints `Upgrade Complete` and creates
@@ -387,11 +391,39 @@ grep -E 'data_dir:|bin_dir:|pg1-path=' \
   /etc/patroni/patroni.yml /etc/pgbackrest/pgbackrest.conf
 ```
 
+If the old data directory contains Patroni's dynamic configuration file, copy
+it to the upgraded primary if `pg_upgrade` did not already copy it. Review it
+first; it preserves DCS-stored Patroni settings when the old initialization
+state is removed:
+
+```bash
+# CONTAINER — former leader only
+if [ -f "$OLD_DATA/patroni.dynamic.json" ] && \
+   [ ! -f "$NEW_DATA/patroni.dynamic.json" ]; then
+  cp -p "$OLD_DATA/patroni.dynamic.json" "$NEW_DATA/patroni.dynamic.json"
+  chown postgres:postgres "$NEW_DATA/patroni.dynamic.json"
+fi
+```
+
 The former leader's PG18 data directory now exists. On each replica, leave the
 PG15 directory preserved for rollback but ensure `/var/lib/postgresql/18/main`
 does not contain a package-created cluster. Patroni will create it by cloning.
 
-## 10. Remove the old Patroni initialization state from etcd
+## 10. Upgrade pgBackRest metadata while PG18 is offline
+
+The new PostgreSQL system identifier and path must be registered in pgBackRest
+before the new primary starts archiving. Run `stanza-upgrade` with
+`--no-online` because PG18 is not running yet:
+
+```bash
+# CONTAINER — former leader only; PG18 must still be offline
+runuser -u postgres -- pgbackrest --stanza="$STANZA_NAME" \
+  --no-online --log-level-console=info stanza-upgrade
+```
+
+Stop if this fails. Do not delete the stanza or repository as a first response.
+
+## 11. Remove the old Patroni initialization state from etcd
 
 The PG18 cluster has a new PostgreSQL system identifier. With Patroni stopped
 on every node and etcd still healthy, remove the old cluster state once from
@@ -399,18 +431,20 @@ the former leader's container:
 
 ```bash
 # CONTAINER — former leader only; Patroni must be stopped everywhere
-patronictl -c /etc/patroni/patroni.yml remove "$CLUSTER_NAME" --force
+patronictl -c /etc/patroni/patroni.yml remove "$CLUSTER_NAME"
 ```
 
-Confirm the command targets exactly `docpg-cls1` before accepting it. This
-removes the old Patroni cluster keys, not the etcd member database. It does not
-delete PostgreSQL data. If your Patroni version does not accept `--force`, run
-the command interactively and confirm only the exact configured scope.
+Confirm the command targets exactly `docpg-cls1`, then type the confirmation
+phrase requested by Patroni. This removes the old Patroni cluster keys, not
+the etcd member database. It does not delete PostgreSQL data. The `remove`
+subcommand is intentionally interactive in Patroni 4.x and does not support a
+`--force` option. If Patroni additionally asks for the leader name, enter the
+former leader recorded in step 2.
 
 Do not use an etcd `rm -rf` operation or delete the entire etcd data directory.
 The etcd cluster is still needed for the new Patroni DCS.
 
-## 11. Start the upgraded primary
+## 12. Start the upgraded primary
 
 Start Patroni only on the former leader first. Patroni will create the new
 cluster state in etcd from the updated local configuration and the upgraded
@@ -428,22 +462,26 @@ done
 curl -sf http://127.0.0.1:8008/primary
 runuser -u postgres -- "$NEW_BIN/psql" -h 127.0.0.1 -U postgres -x -c \
   "SELECT version(), current_setting('data_directory') AS data_directory;"
+runuser -u postgres -- "$NEW_BIN/psql" -h 127.0.0.1 -U postgres -Atqc \
+  "SELECT name || '=' || setting
+     FROM pg_settings
+    WHERE name IN ('server_version', 'archive_mode', 'archive_command', 'wal_level')
+    ORDER BY name;"
 ```
 
 The response must show a PostgreSQL 18 primary and
 `/var/lib/postgresql/18/main`. If Patroni does not become leader, stop it and
 inspect `journalctl -u patroni`; do not start the replicas blindly.
 
-## 12. Upgrade pgBackRest metadata and create a PG18 backup
+## 13. Validate pgBackRest and create a PG18 backup
 
-Run these on the upgraded primary. `stanza-upgrade` updates the stanza metadata
-for the new PostgreSQL version/system ID while retaining the old repository
-history. Then create a new full backup for replica cloning and rollback.
+Run these on the upgraded primary. The offline `stanza-upgrade` in step 10
+updated the stanza metadata while retaining the old repository history. Now
+verify the live archive configuration and create a new full backup for replica
+cloning and rollback.
 
 ```bash
 # CONTAINER — upgraded primary only
-runuser -u postgres -- pgbackrest --stanza="$STANZA_NAME" \
-  --log-level-console=info stanza-upgrade
 runuser -u postgres -- pgbackrest --stanza="$STANZA_NAME" check
 runuser -u postgres -- pgbackrest --stanza="$STANZA_NAME" \
   --type=full --log-level-console=info backup
@@ -454,7 +492,7 @@ Do not expire the PG15 backups yet. If `stanza-upgrade` or `check` reports a
 path/system-ID mismatch, stop and correct `/etc/pgbackrest/pgbackrest.conf`;
 do not delete the stanza or repository as a first response.
 
-## 13. Rebuild replicas one at a time with Patroni
+## 14. Rebuild replicas one at a time with Patroni
 
 Do not run `pg_upgrade` on these nodes. For each replica, perform the following
 sequence separately. Keep at least the upgraded primary and etcd quorum
@@ -489,9 +527,11 @@ for i in $(seq 1 90); do
 done
 ```
 
-Patroni tries the configured `pgbackrest` method and then `basebackup`. Wait
-until this node is `Replica`/`streaming` and lag is acceptable before moving to
-the next replica:
+The current `vars/dba_vars.yml` configures Patroni's `basebackup` method (the
+replicas do not have a local pgBackRest repository). Patroni therefore clones
+the new replica from the upgraded primary with `pg_basebackup`. Wait until this
+node is `Replica`/`streaming` and lag is acceptable before moving to the next
+replica:
 
 ```bash
 # CONTAINER — query the current primary or use patronictl from any node
@@ -504,7 +544,7 @@ If cloning fails, stop Patroni on that replica, inspect
 `journalctl -u patroni` and pgBackRest logs, and fix the cause. Do not enable
 `reinit_cluster` in the installation role as a shortcut.
 
-## 14. Restore traffic services and validate the HA cluster
+## 15. Restore traffic services and validate the HA cluster
 
 After every replica has joined and the intended synchronous standby is
 streaming, start the traffic services on all nodes. Keepalived and HAProxy
@@ -541,7 +581,7 @@ Verify all of the following before reopening application traffic:
 - pgBouncer accepts connections and points at the current primary;
 - representative application login, read, write, and transaction tests pass.
 
-## 15. Apply extension updates and refresh statistics
+## 16. Apply extension updates and refresh statistics
 
 `pg_upgrade` may generate `update_extensions.sql`. Run it once with the PG18
 `psql` binary from the directory where `pg_upgrade` was executed. The generated
@@ -567,7 +607,7 @@ Use the versioned PG18 binaries explicitly. The unversioned Debian/Ubuntu
 `psql`/`vacuumdb` wrappers can still select a PG15 cluster and can reject
 options that are not available in PG15.
 
-## 16. Update Ansible's desired version — HOST ONLY
+## 17. Update Ansible's desired version — HOST ONLY
 
 Only after the cluster has passed acceptance checks, leave the container and
 update the source-of-truth variable on the Mac:
@@ -599,7 +639,7 @@ ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml \
 Any future run that renders `patroni.yml` or `pgbackrest.conf` must be reviewed
 to ensure it preserves the PG18 paths and does not invoke reinitialization.
 
-## 17. Rollback before acceptance
+## 18. Rollback before acceptance
 
 Rollback is possible only while the preserved PG15 primary is available and no
 unrecoverable writes have been accepted by PG18. Writes made only to PG18 do
@@ -635,7 +675,7 @@ On the former leader:
 
 ```bash
 # CONTAINER — former leader only
-patronictl -c /etc/patroni/patroni.yml remove "$CLUSTER_NAME" --force
+patronictl -c /etc/patroni/patroni.yml remove "$CLUSTER_NAME"
 systemctl start patroni
 curl -sf http://127.0.0.1:8008/primary
 runuser -u postgres -- "$OLD_BIN/psql" -h 127.0.0.1 -U postgres -x -c \
@@ -651,7 +691,7 @@ PG15 Patroni configuration. Validate the old cluster before restoring traffic.
 On the Mac, set `postgresql_version: "15"` in `vars/dba_vars.yml`. Do not run
 the full installer; review any targeted configuration run before applying it.
 
-## 18. Cleanup after acceptance
+## 19. Cleanup after acceptance
 
 After the application has passed its acceptance period, backups are verified,
 and rollback is no longer required:

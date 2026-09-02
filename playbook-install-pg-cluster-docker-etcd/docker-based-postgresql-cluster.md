@@ -227,6 +227,7 @@ ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml --vault-passw
 
 # Verify cluster status
 docker exec docpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list
+docker exec docpg-cls1-pg1 sudo -u postgres psql -c "select version();"
 ```
 
 ## Standby Cluster Setup

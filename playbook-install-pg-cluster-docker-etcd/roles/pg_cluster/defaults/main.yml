@@ -24,6 +24,7 @@ system_packages:
   - acl
   - libpq-dev
   - curl
+  - iputils-arping
   - gnupg2
   - wget
   - tldr

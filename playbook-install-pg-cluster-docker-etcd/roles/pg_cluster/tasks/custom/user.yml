@@ -100,11 +100,27 @@
 
 - name: Configure replication_group membership and privileges
   community.postgresql.postgresql_query:
+    db: postgres
     login_user: postgres
     query: |
       GRANT replication_group TO replication_admin WITH ADMIN OPTION;
       GRANT replication_group TO master WITH ADMIN OPTION;
-      GRANT pg_create_subscription TO replication_group;
+      DO $$
+      BEGIN
+        -- pg_* role names are reserved. PostgreSQL 15 and earlier cannot
+        -- create a compatibility role or emulate this PG16 capability.
+        IF current_setting('server_version_num')::integer >= 160000
+           AND EXISTS (SELECT 1 FROM pg_roles
+                       WHERE rolname = 'pg_create_subscription') THEN
+          EXECUTE 'GRANT pg_create_subscription TO replication_group';
+        END IF;
+      END
+      $$;
+      -- PostgreSQL 16+ also requires CONNECT and CREATE on the target database.
+      -- These grants are valid on PostgreSQL 14/15 as well, but do not make
+      -- CREATE SUBSCRIPTION non-superuser-capable on pre-16 versions.
+      GRANT CONNECT, CREATE ON DATABASE postgres TO replication_group;
+      GRANT CONNECT, CREATE ON DATABASE "{{ db_name }}" TO replication_group;
   become_user: postgres
   when: inventory_hostname in groups['primary_cluster_leader']
 

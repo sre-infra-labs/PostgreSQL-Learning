@@ -21,7 +21,7 @@ basebackup:
 # cleanup_pgbackrest_backups: true
 
 # PostgreSQL version (PGDG repo)
-postgresql_version: "18"
+postgresql_version: "14"
 postgresql_port: "5432"
 
 # Hardware info (Docker container resources — adjust based on your Mac's allocation)
