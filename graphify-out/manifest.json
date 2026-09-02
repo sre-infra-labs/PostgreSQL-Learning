@@ -1,0 +1,3322 @@
+{
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Admin-Queries/alter-database.sh": {
+    "mtime": 1771928068.0402775,
+    "ast_hash": "3c35ff647a86cce783e23f9ffe56ce89",
+    "semantic_hash": "3c35ff647a86cce783e23f9ffe56ce89"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Admin-Queries/config-changes.sh": {
+    "mtime": 1771928068.040352,
+    "ast_hash": "d65d1828fae3ec498bfa568ecb5818f0",
+    "semantic_hash": "d65d1828fae3ec498bfa568ecb5818f0"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Admin-Queries/extract-filter-logs-files.sh": {
+    "mtime": 1771928068.040425,
+    "ast_hash": "517b713bf6f1919520f1b9483cd1f356",
+    "semantic_hash": "517b713bf6f1919520f1b9483cd1f356"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Admin-Queries/read-active-settings.sh": {
+    "mtime": 1771928068.040501,
+    "ast_hash": "5ed1ed0b5b85fdfb93b4344c6e993f0c",
+    "semantic_hash": "5ed1ed0b5b85fdfb93b4344c6e993f0c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/DEPLOYMENT_MONITOR.sh": {
+    "mtime": 1778245754.856356,
+    "ast_hash": "d4f947ce91e6bb56fa2bd2d4741495e0",
+    "semantic_hash": "d4f947ce91e6bb56fa2bd2d4741495e0"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/check-deployment-status.sh": {
+    "mtime": 1778245788.3127515,
+    "ast_hash": "68b329da9893e34099c7d8ad5cb9c940",
+    "semantic_hash": "68b329da9893e34099c7d8ad5cb9c940"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/check1.sh": {
+    "mtime": 1778246566.1448061,
+    "ast_hash": "e3e1d55049fafdc1029b6dadf07467db",
+    "semantic_hash": "e3e1d55049fafdc1029b6dadf07467db"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/deploy.sh": {
+    "mtime": 1778245164.9802036,
+    "ast_hash": "07ef93c39b960aeb05b0b7529346494c",
+    "semantic_hash": "07ef93c39b960aeb05b0b7529346494c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/deploy_with_vault.sh": {
+    "mtime": 1778476111.4133184,
+    "ast_hash": "6304de56e92ba02bf68d1c8da60d8c53",
+    "semantic_hash": "6304de56e92ba02bf68d1c8da60d8c53"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/diagnose_network.sh": {
+    "mtime": 1778478216.815037,
+    "ast_hash": "5e51fbf16bddc57e7bec08e91a66253c",
+    "semantic_hash": "5e51fbf16bddc57e7bec08e91a66253c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/fix_debezium.sh": {
+    "mtime": 1778478229.91702,
+    "ast_hash": "cbca03e08c5ea00f489b6e6f55195aeb",
+    "semantic_hash": "cbca03e08c5ea00f489b6e6f55195aeb"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/monitor-deployment.sh": {
+    "mtime": 1778246594.3745837,
+    "ast_hash": "fa99ea40467ef59b8d1c0174ac7af497",
+    "semantic_hash": "fa99ea40467ef59b8d1c0174ac7af497"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/read_vault.py": {
+    "mtime": 1778476084.3331604,
+    "ast_hash": "529f940038e20a6444ae58107bccaaa7",
+    "semantic_hash": "529f940038e20a6444ae58107bccaaa7"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/run_deployment.py": {
+    "mtime": 1778251320.785358,
+    "ast_hash": "505bde769e2616ce502c47dd6a3458f9",
+    "semantic_hash": "505bde769e2616ce502c47dd6a3458f9"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/scripts/quick-status.sh": {
+    "mtime": 1778243416.5383327,
+    "ast_hash": "462c7cbb4b02ab833552495f94740c9c",
+    "semantic_hash": "462c7cbb4b02ab833552495f94740c9c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/scripts/test-cdc-flow.sh": {
+    "mtime": 1778243406.6757867,
+    "ast_hash": "914e64202cb6467d0be03dd85ecda15c",
+    "semantic_hash": "914e64202cb6467d0be03dd85ecda15c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/scripts/validate-deployment.sh": {
+    "mtime": 1778243394.5508938,
+    "ast_hash": "b610f501b7c9f9735597c2d9fb0e6c7a",
+    "semantic_hash": "b610f501b7c9f9735597c2d9fb0e6c7a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/update_vault.sh": {
+    "mtime": 1778472796.0324557,
+    "ast_hash": "4df4675c0e61ba5b324a26ed82473c7f",
+    "semantic_hash": "4df4675c0e61ba5b324a26ed82473c7f"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/verify_and_update.py": {
+    "mtime": 1778476173.9205186,
+    "ast_hash": "9c7a0cc8d54ab62a4120f77594867929",
+    "semantic_hash": "9c7a0cc8d54ab62a4120f77594867929"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/verify_deployment.sh": {
+    "mtime": 1778476148.920168,
+    "ast_hash": "e72641d199bf0dc9564f651af18d4df2",
+    "semantic_hash": "e72641d199bf0dc9564f651af18d4df2"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/General-Commands/Introduction-to-ChatGpt.sql": {
+    "mtime": 1771928068.0409713,
+    "ast_hash": "e2e22e34ba07106ab42f50ab304a0497",
+    "semantic_hash": "e2e22e34ba07106ab42f50ab304a0497"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/General-Commands/explore-pg-cluster-process.sh": {
+    "mtime": 1771928068.0410533,
+    "ast_hash": "3f7a07fa91ee63be633c3aac871b36d3",
+    "semantic_hash": "3f7a07fa91ee63be633c3aac871b36d3"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Monitoring/PostgreSQL - Core Metrics - EXTERNAL.json": {
+    "mtime": 1771928068.0415902,
+    "ast_hash": "d620152014ef592d77ceef4a8648acf5",
+    "semantic_hash": "d620152014ef592d77ceef4a8648acf5"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Monitoring/PostgreSQL - Core Metrics - INTERNAL.json": {
+    "mtime": 1771928068.041738,
+    "ast_hash": "f4a6d9930f0cf9d596e008746c85068f",
+    "semantic_hash": "f4a6d9930f0cf9d596e008746c85068f"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Monitoring/postgres_exporter_grafana_dashboard_curated_01.json": {
+    "mtime": 1775012475.5368946,
+    "ast_hash": "b9143c6b145752f91bd3a0c5b91bb76c",
+    "semantic_hash": "b9143c6b145752f91bd3a0c5b91bb76c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Monitoring/postgres_exporter_grafana_dashboard_curated_02.json": {
+    "mtime": 1775012475.5371597,
+    "ast_hash": "40c01f5e6f7ed4ea1b832f7aea37c184",
+    "semantic_hash": "40c01f5e6f7ed4ea1b832f7aea37c184"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Queries/General-Queries.sql": {
+    "mtime": 1771928068.0430906,
+    "ast_hash": "e727650d4fa2f262d7d30a92a563a485",
+    "semantic_hash": "e727650d4fa2f262d7d30a92a563a485"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Queries/check-stats.sql": {
+    "mtime": 1771928068.0431526,
+    "ast_hash": "05000fdd43c722f72423336f6d9dad75",
+    "semantic_hash": "05000fdd43c722f72423336f6d9dad75"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Queries/check_indexes.sql": {
+    "mtime": 1771928068.0432537,
+    "ast_hash": "822f6c5e7e02ea1f4d41a42dfbbc3933",
+    "semantic_hash": "822f6c5e7e02ea1f4d41a42dfbbc3933"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Queries/connection-distribution.sql": {
+    "mtime": 1771928068.0433474,
+    "ast_hash": "3e812695bb766b2801760510d9a9608c",
+    "semantic_hash": "3e812695bb766b2801760510d9a9608c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Queries/get-database-size.sql": {
+    "mtime": 1771928068.0434122,
+    "ast_hash": "fffc1759f1cd23561c8740833510daf6",
+    "semantic_hash": "fffc1759f1cd23561c8740833510daf6"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Queries/get-index-rows-pages.sql": {
+    "mtime": 1771928068.043479,
+    "ast_hash": "a96788464ab443757ab58764af6a1e55",
+    "semantic_hash": "a96788464ab443757ab58764af6a1e55"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Queries/get-index-usage-stats.sql": {
+    "mtime": 1771928068.0435443,
+    "ast_hash": "34215e90ac3e99921ad900c47967b69a",
+    "semantic_hash": "34215e90ac3e99921ad900c47967b69a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Queries/get-indexes-and-attributes.sql": {
+    "mtime": 1771928068.0436108,
+    "ast_hash": "5f22f45195f50afa32df9bfb0e82ad95",
+    "semantic_hash": "5f22f45195f50afa32df9bfb0e82ad95"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Queries/get-table-index-sizes-rows.sql": {
+    "mtime": 1771928068.0437667,
+    "ast_hash": "dc9ee4f7dbacb6211b4fd39963b13e1e",
+    "semantic_hash": "dc9ee4f7dbacb6211b4fd39963b13e1e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Queries/get-tables-and-row-count-size-estimates.sql": {
+    "mtime": 1771928068.0438988,
+    "ast_hash": "47acf89c493ebed02bdafcc176aac350",
+    "semantic_hash": "47acf89c493ebed02bdafcc176aac350"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Queries/invalidate-index.sql": {
+    "mtime": 1771928068.04399,
+    "ast_hash": "deb7519e2eb8c20b6cbad15005c92be5",
+    "semantic_hash": "deb7519e2eb8c20b6cbad15005c92be5"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Queries/kill-queries.sql": {
+    "mtime": 1771928068.0440547,
+    "ast_hash": "00e87625a9c93535d6b31b3cee7ad6ab",
+    "semantic_hash": "00e87625a9c93535d6b31b3cee7ad6ab"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Queries/what-is-my-ip.sql": {
+    "mtime": 1776312018.78157,
+    "ast_hash": "6dc7b0c41ab630c17e9efca8d1a580d1",
+    "semantic_hash": "6dc7b0c41ab630c17e9efca8d1a580d1"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Queries/what-is-running.sql": {
+    "mtime": 1771928068.0442004,
+    "ast_hash": "db82aad1acff2c4df7c8616aeb2ff02a",
+    "semantic_hash": "db82aad1acff2c4df7c8616aeb2ff02a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Queries/whoami.sql": {
+    "mtime": 1771928068.0442615,
+    "ast_hash": "348fd425f1d05ecdd8c44f24ad4da369",
+    "semantic_hash": "348fd425f1d05ecdd8c44f24ad4da369"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Security/automatic-login-using-pgpass.sql": {
+    "mtime": 1771928068.0444458,
+    "ast_hash": "9cd19147c5f4c3be68b5cf94c7e956ce",
+    "semantic_hash": "9cd19147c5f4c3be68b5cf94c7e956ce"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Security/create-linux-login-with-no-gui-login.sh": {
+    "mtime": 1771928068.0445275,
+    "ast_hash": "9dbee66eabd38b51dae976df01cee259",
+    "semantic_hash": "9dbee66eabd38b51dae976df01cee259"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Security/create-user-read-write.sql": {
+    "mtime": 1771928068.0446017,
+    "ast_hash": "51fc5b4d6baa37d35f7f865fde53cc9c",
+    "semantic_hash": "51fc5b4d6baa37d35f7f865fde53cc9c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Security/enable-postgres-user-with-sudoers.sh": {
+    "mtime": 1771928068.04467,
+    "ast_hash": "95e610e924830113419796f2f344341c",
+    "semantic_hash": "95e610e924830113419796f2f344341c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Security/qry-pg_hba.conf-file.sql": {
+    "mtime": 1771928068.0447369,
+    "ast_hash": "5ebffa9646c16dc9f013d90b0360188c",
+    "semantic_hash": "5ebffa9646c16dc9f013d90b0360188c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Security/qry-roles.sql": {
+    "mtime": 1771928068.0448089,
+    "ast_hash": "f5be68add5b3a32c0553b932aeffba0a",
+    "semantic_hash": "f5be68add5b3a32c0553b932aeffba0a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Security/remove-user.sql": {
+    "mtime": 1771928068.044872,
+    "ast_hash": "fab1b73e198562f4bcda3a330df9c105",
+    "semantic_hash": "fab1b73e198562f4bcda3a330df9c105"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Security/users-roles.sql": {
+    "mtime": 1771928068.0449874,
+    "ast_hash": "31b9404caa33910ac6ca11f1de82f969",
+    "semantic_hash": "31b9404caa33910ac6ca11f1de82f969"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Setup-Configuration/General.sh": {
+    "mtime": 1771928068.045113,
+    "ast_hash": "12066783860651527efd823b9ba2dbbd",
+    "semantic_hash": "12066783860651527efd823b9ba2dbbd"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Setup-Configuration/Postgres-in-Podman-on-MAC.sh": {
+    "mtime": 1771928068.0454607,
+    "ast_hash": "7e094bc0aa75b55902ec51a5dc52ebd3",
+    "semantic_hash": "7e094bc0aa75b55902ec51a5dc52ebd3"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Setup-Configuration/extensions-to-install.sql": {
+    "mtime": 1771928068.0458574,
+    "ast_hash": "9b081fa77215bdb8119495ec8907cf07",
+    "semantic_hash": "9b081fa77215bdb8119495ec8907cf07"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Setup-Configuration/generate_dummy_log.sh": {
+    "mtime": 1771928068.0459254,
+    "ast_hash": "71a0d0e0546abbb813a74dd1d3be5e32",
+    "semantic_hash": "71a0d0e0546abbb813a74dd1d3be5e32"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Setup-Configuration/pg_ctl.sh": {
+    "mtime": 1771928068.0460615,
+    "ast_hash": "3f345ef71781c108bb3656b980046221",
+    "semantic_hash": "3f345ef71781c108bb3656b980046221"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Setup-Configuration/psql-prompt.sh": {
+    "mtime": 1771928068.0461462,
+    "ast_hash": "a558679a4d05b1f0a825599fffe6b21a",
+    "semantic_hash": "a558679a4d05b1f0a825599fffe6b21a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Setup-Configuration/restore-sample-dbs.sh": {
+    "mtime": 1771928068.0462346,
+    "ast_hash": "a6896e5835f80d7572b1bcb8db00f2ff",
+    "semantic_hash": "a6896e5835f80d7572b1bcb8db00f2ff"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Setup-Configuration/upgrade.sh": {
+    "mtime": 1771928068.0463085,
+    "ast_hash": "caf13bed8cfb13aa2fc589fda08bd1d9",
+    "semantic_hash": "caf13bed8cfb13aa2fc589fda08bd1d9"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Troubleshooting/qry-kill-idle-connections.sql": {
+    "mtime": 1771928068.0464172,
+    "ast_hash": "08432c55895d408f8e7589be6d1b4f32",
+    "semantic_hash": "08432c55895d408f8e7589be6d1b4f32"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--learn-postgres/chp10-users-roles-and-database-security.sql": {
+    "mtime": 1771928068.066388,
+    "ast_hash": "2272b87ab050fbf66e8acf223e1c3706",
+    "semantic_hash": "2272b87ab050fbf66e8acf223e1c3706"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--learn-postgres/chp11-transactions-mvcc-wals-and-checkpoints.sql": {
+    "mtime": 1771928068.0664568,
+    "ast_hash": "bbc95aad9dda1f1900b85d619721f249",
+    "semantic_hash": "bbc95aad9dda1f1900b85d619721f249"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--learn-postgres/chp13-performance-tuning.sql": {
+    "mtime": 1771928068.066605,
+    "ast_hash": "2cd353d8b3981f2553ebe299b8abfe53",
+    "semantic_hash": "2cd353d8b3981f2553ebe299b8abfe53"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--learn-postgres/chp4-Sorting-with-NULL-values.sql": {
+    "mtime": 1771928068.067039,
+    "ast_hash": "8446e620f2c1232c7eb9bcd368b855a9",
+    "semantic_hash": "8446e620f2c1232c7eb9bcd368b855a9"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--learn-postgres/chp5-CTE.sql": {
+    "mtime": 1771928068.0670972,
+    "ast_hash": "6bea6a9bb2a6c86a0d341c9c4f2ba3cc",
+    "semantic_hash": "6bea6a9bb2a6c86a0d341c9c4f2ba3cc"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--learn-postgres/chp5-MERGE.sql": {
+    "mtime": 1771928068.0671532,
+    "ast_hash": "12c0783ace09fefeab7eaf1f1b6337be",
+    "semantic_hash": "12c0783ace09fefeab7eaf1f1b6337be"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--learn-postgres/chp5-Using-Lateral-Joins.sql": {
+    "mtime": 1771928068.0672157,
+    "ast_hash": "a0b3325a3fa8d88111bbd8c09fe10d4e",
+    "semantic_hash": "a0b3325a3fa8d88111bbd8c09fe10d4e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--learn-postgres/chp5-Using-UPSERT.sql": {
+    "mtime": 1771928068.0672774,
+    "ast_hash": "279134cad0e50a9e9d5b29768da935df",
+    "semantic_hash": "279134cad0e50a9e9d5b29768da935df"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--learn-postgres/chp8-Triggers-and-Rules.sql": {
+    "mtime": 1771928068.0673447,
+    "ast_hash": "76110ecb8a1cd9402d9de707b084eb46",
+    "semantic_hash": "76110ecb8a1cd9402d9de707b084eb46"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--learn-postgres/managing-tables.sql": {
+    "mtime": 1771928068.0674071,
+    "ast_hash": "c2f807ec81e634a62b5af292c7233344",
+    "semantic_hash": "c2f807ec81e634a62b5af292c7233344"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp1-listing1.sql": {
+    "mtime": 1771928068.0675075,
+    "ast_hash": "257d74178d09ad8e93ec1b32ae2339c3",
+    "semantic_hash": "257d74178d09ad8e93ec1b32ae2339c3"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp1-listing5.sql": {
+    "mtime": 1771928068.0675704,
+    "ast_hash": "60bd29416521a36c843c04fc815af93a",
+    "semantic_hash": "60bd29416521a36c843c04fc815af93a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp11-Data-Manipulation-with-Functions.sql": {
+    "mtime": 1771928068.0676408,
+    "ast_hash": "2abc8ffc561b470be2c89346ecd3af3b",
+    "semantic_hash": "2abc8ffc561b470be2c89346ecd3af3b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp11-Transaction-Management-with-Procedures.sql": {
+    "mtime": 1771928068.0677152,
+    "ast_hash": "e01f06c551c153d761371061ff1d9f5a",
+    "semantic_hash": "e01f06c551c153d761371061ff1d9f5a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp11-function-overloading.sql": {
+    "mtime": 1771928068.067789,
+    "ast_hash": "4a41368ad69ab096e4e98496100db464",
+    "semantic_hash": "4a41368ad69ab096e4e98496100db464"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp11-functions-Using-Composite-Types.sql": {
+    "mtime": 1771928068.0678616,
+    "ast_hash": "0ca7af3db31a13ab2a23827ed291dd7f",
+    "semantic_hash": "0ca7af3db31a13ab2a23827ed291dd7f"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp12-Using-Dynamic-SQL-for-Flexibility.sql": {
+    "mtime": 1771928068.0679252,
+    "ast_hash": "c8d6cce042408131aabdaea7de8ac609",
+    "semantic_hash": "c8d6cce042408131aabdaea7de8ac609"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp12-dynamic-sql.sql": {
+    "mtime": 1771928068.0679886,
+    "ast_hash": "15fa4c087846ece8b8fb0c696c61d0df",
+    "semantic_hash": "15fa4c087846ece8b8fb0c696c61d0df"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp12-dynamic_sql-Help-Optimizer.sql": {
+    "mtime": 1771928068.0680542,
+    "ast_hash": "c99890b8c9143659f33d62872453c171",
+    "semantic_hash": "c99890b8c9143659f33d62872453c171"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp12-dynamic_sql-OLAP-Systems.sql": {
+    "mtime": 1771928068.0681207,
+    "ast_hash": "846390e61a61142a503f888ec878e70e",
+    "semantic_hash": "846390e61a61142a503f888ec878e70e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp3-listing2.sql": {
+    "mtime": 1771928068.0681765,
+    "ast_hash": "3ad63811778d47eb533dbacffff535bd",
+    "semantic_hash": "3ad63811778d47eb533dbacffff535bd"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp4-listing1.sql": {
+    "mtime": 1771928068.0682335,
+    "ast_hash": "e827b343c0c44219e18d7bc6120c7d42",
+    "semantic_hash": "e827b343c0c44219e18d7bc6120c7d42"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp4-listing3-4.sql": {
+    "mtime": 1771928068.0682921,
+    "ast_hash": "bea541c4c0872d195b4128ad6917f968",
+    "semantic_hash": "bea541c4c0872d195b4128ad6917f968"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp5-Indexes-and-Join-Order.sql": {
+    "mtime": 1771928068.0683758,
+    "ast_hash": "7a6d316c2549736c5ed37b0b640e6ff5",
+    "semantic_hash": "7a6d316c2549736c5ed37b0b640e6ff5"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp5-Why-does-Postgres-Ignore-My-Index.sql": {
+    "mtime": 1771928068.0684416,
+    "ast_hash": "179aaeff665f00c7f5b5e8240410d7de",
+    "semantic_hash": "179aaeff665f00c7f5b5e8240410d7de"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp5-column-transformations--functional-index.sql": {
+    "mtime": 1771928068.0685098,
+    "ast_hash": "553d2127456c2d5f4954470f139563c9",
+    "semantic_hash": "553d2127456c2d5f4954470f139563c9"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp5-indexes.sql": {
+    "mtime": 1771928068.0685673,
+    "ast_hash": "b0ef766f4096f75b54c7134779145a93",
+    "semantic_hash": "b0ef766f4096f75b54c7134779145a93"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp5-like-operator--pattern-search-index.sql": {
+    "mtime": 1771928068.0686362,
+    "ast_hash": "1459d6eff12d512f0d40dbfc7e4e574a",
+    "semantic_hash": "1459d6eff12d512f0d40dbfc7e4e574a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp5-listing1-2.sql": {
+    "mtime": 1771928068.068703,
+    "ast_hash": "ce049b40d2a3021de85c686e618f1f1c",
+    "semantic_hash": "ce049b40d2a3021de85c686e618f1f1c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp5-listing10-Excessive-Selection-Criteria.sql": {
+    "mtime": 1771928068.0687864,
+    "ast_hash": "92e6ebb89d0d87dca414a8a1ae16c48b",
+    "semantic_hash": "92e6ebb89d0d87dca414a8a1ae16c48b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp5-listing15-Let-PostgreSQL-Do-Its-Job.sql": {
+    "mtime": 1771928068.0688477,
+    "ast_hash": "c73eed0a2302679f4c7a3d3ca2a0dbf6",
+    "semantic_hash": "c73eed0a2302679f4c7a3d3ca2a0dbf6"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp5-listing4.sql": {
+    "mtime": 1771928068.068925,
+    "ast_hash": "8a7d457e885d30451b3528e177b0f23e",
+    "semantic_hash": "8a7d457e885d30451b3528e177b0f23e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp5-listing6.sql": {
+    "mtime": 1771928068.0689936,
+    "ast_hash": "5f7a487fbbce1b773c04de64e611f72c",
+    "semantic_hash": "5f7a487fbbce1b773c04de64e611f72c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp5-listing9-Using-Multiple-n-Compound-Indexes.sql": {
+    "mtime": 1771928068.0690577,
+    "ast_hash": "e90731b174f48cd74d91dc632a8afe35",
+    "semantic_hash": "e90731b174f48cd74d91dc632a8afe35"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp5-partial-indexes.sql": {
+    "mtime": 1771928068.0691385,
+    "ast_hash": "4f6848e527d5206aed9a93a9ff864f96",
+    "semantic_hash": "4f6848e527d5206aed9a93a9ff864f96"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp6-Anti-Joins.sql": {
+    "mtime": 1771928068.0692127,
+    "ast_hash": "1615c8c9b1395267767f2215d1d1afd4",
+    "semantic_hash": "1615c8c9b1395267767f2215d1d1afd4"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp6-Semi-Join.sql": {
+    "mtime": 1771928068.0692513,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp6-Using-SET-operations.sql": {
+    "mtime": 1771928068.0693471,
+    "ast_hash": "40921b95501fd7fac8cea9d7870679e3",
+    "semantic_hash": "40921b95501fd7fac8cea9d7870679e3"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp6-group-group-first-select-last.sql": {
+    "mtime": 1771928068.0694373,
+    "ast_hash": "f0fa7147f3005bcda9ae52b6bede90c9",
+    "semantic_hash": "f0fa7147f3005bcda9ae52b6bede90c9"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp6-grouping-filter-first-group-last.sql": {
+    "mtime": 1771928068.069525,
+    "ast_hash": "ac96f5253f0f7364f99936546bca1292",
+    "semantic_hash": "ac96f5253f0f7364f99936546bca1292"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp6-join-order-using-join_collapse_limit.sql": {
+    "mtime": 1771928068.0696003,
+    "ast_hash": "8ff52329de04c696ab3943cdbe9a4a9d",
+    "semantic_hash": "8ff52329de04c696ab3943cdbe9a4a9d"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp6-listing3-semi-join-EXISTS.sql": {
+    "mtime": 1771928068.0696814,
+    "ast_hash": "f05dafd475faa3fd28a1d73c3c2b470b",
+    "semantic_hash": "f05dafd475faa3fd28a1d73c3c2b470b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp6-listing6-Two-SemiJoins-in-Long-Query.sql": {
+    "mtime": 1771928068.0697606,
+    "ast_hash": "04fb4db3544142f70b700766c5d12f69",
+    "semantic_hash": "04fb4db3544142f70b700766c5d12f69"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp7-Parallelism.sql": {
+    "mtime": 1771928068.0698533,
+    "ast_hash": "eb49fbd575b7c099da79d8d7e5cb7349",
+    "semantic_hash": "eb49fbd575b7c099da79d8d7e5cb7349"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp7-Partitioning.sql": {
+    "mtime": 1771928068.0699248,
+    "ast_hash": "249fe6806c0c05e504a7cec83dd45791",
+    "semantic_hash": "249fe6806c0c05e504a7cec83dd45791"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp7-Views.sql": {
+    "mtime": 1771928068.06999,
+    "ast_hash": "e721131dffa027193b20b6723d0721e6",
+    "semantic_hash": "e721131dffa027193b20b6723d0721e6"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp7-temp-tables-CTEs.sql": {
+    "mtime": 1771928068.070059,
+    "ast_hash": "bdf0d3bcd5232a5212d25f586a5c4126",
+    "semantic_hash": "bdf0d3bcd5232a5212d25f586a5c4126"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp7-views-Dependencies.sql": {
+    "mtime": 1771928068.070133,
+    "ast_hash": "47b2a5aca877d3111de0b135e8b07369",
+    "semantic_hash": "47b2a5aca877d3111de0b135e8b07369"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp7-views-Materialized-views.sql": {
+    "mtime": 1771928068.0702078,
+    "ast_hash": "d83ea45aad935f82506dd85877631af9",
+    "semantic_hash": "d83ea45aad935f82506dd85877631af9"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/chp8-Optimizing Data  Modification.sql": {
+    "mtime": 1771928068.0702875,
+    "ast_hash": "6c4869c2edd4ee9bf5ddf48a30ff906c",
+    "semantic_hash": "6c4869c2edd4ee9bf5ddf48a30ff906c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/qry-get-postgres_air-index-n-size.sql": {
+    "mtime": 1771928068.0703588,
+    "ast_hash": "7d0d7c8cfea854f2838e1ce62f9fb7a9",
+    "semantic_hash": "7d0d7c8cfea854f2838e1ce62f9fb7a9"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/qry-get-postgres_air-index-n-types.sql": {
+    "mtime": 1771928068.0704384,
+    "ast_hash": "7b779bd5a7a2056757d168c2fa34bb3f",
+    "semantic_hash": "7b779bd5a7a2056757d168c2fa34bb3f"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/qry-get-postgres_air-tables-n-rowcounts.sql": {
+    "mtime": 1771928068.0705132,
+    "ast_hash": "c54b1cae56b61a20afdf1bc61332c30d",
+    "semantic_hash": "c54b1cae56b61a20afdf1bc61332c30d"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/setup-postgres_air-boarding_pass_large.sql": {
+    "mtime": 1771928068.0706766,
+    "ast_hash": "a44012a8f883df123f35ea9b8ddf2913",
+    "semantic_hash": "a44012a8f883df123f35ea9b8ddf2913"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--query-optimization/setup-postgres_air-indexes.sql": {
+    "mtime": 1771928068.0707455,
+    "ast_hash": "0b92a636f1d2c386510df77d4816434a",
+    "semantic_hash": "0b92a636f1d2c386510df77d4816434a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/build-pgbackrest-pg19.sh": {
+    "mtime": 1781153226.6354086,
+    "ast_hash": "e7a92bb06325d8ee9e5108c1b9fb3d2f",
+    "semantic_hash": "e7a92bb06325d8ee9e5108c1b9fb3d2f"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/course-udemy-hadr/custom-insert-script.sql": {
+    "mtime": 1771928068.0712917,
+    "ast_hash": "203d4f75ed47bf273111f2892234ac6c",
+    "semantic_hash": "203d4f75ed47bf273111f2892234ac6c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/course-udemy-hadr/custom-select-script.sql": {
+    "mtime": 1771928068.0713518,
+    "ast_hash": "9b05efcbdd23c17e6c7f54498f7ef2b4",
+    "semantic_hash": "9b05efcbdd23c17e6c7f54498f7ef2b4"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/course-udemy-hadr/tpc-b-default.sql": {
+    "mtime": 1771928068.0714254,
+    "ast_hash": "6543eb5d2d1e8f1277d197a5e7603c2b",
+    "semantic_hash": "6543eb5d2d1e8f1277d197a5e7603c2b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/miscellaneous/pgvector-load-data.py": {
+    "mtime": 1771928068.0717669,
+    "ast_hash": "d30c2913a4b580adfb91b540c5a0fe04",
+    "semantic_hash": "d30c2913a4b580adfb91b540c5a0fe04"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/miscellaneous/upload-2-s3-bucket.py": {
+    "mtime": 1771928068.0719807,
+    "ast_hash": "3d254b2c3ba262a095232a62e36bdb61",
+    "semantic_hash": "3d254b2c3ba262a095232a62e36bdb61"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/miscellaneous/upload-2-s3-bucket.sh": {
+    "mtime": 1771928068.0720453,
+    "ast_hash": "75f81ea37789e495ff2eb738a8f50f2b",
+    "semantic_hash": "75f81ea37789e495ff2eb738a8f50f2b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/plugins/__init__.py": {
+    "mtime": 1781241517.7575562,
+    "ast_hash": "fb18aa8e62b9b964622166fd210bc4aa",
+    "semantic_hash": "fb18aa8e62b9b964622166fd210bc4aa"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/plugins/filters/__init__.py": {
+    "mtime": 1781241523.0484009,
+    "ast_hash": "763a1d253b1d672c2527f0d6223a56d1",
+    "semantic_hash": "763a1d253b1d672c2527f0d6223a56d1"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/plugins/filters/string_to_array.py": {
+    "mtime": 1781241577.8514276,
+    "ast_hash": "58b722ff3fafec875cca192abf03ef7a",
+    "semantic_hash": "58b722ff3fafec875cca192abf03ef7a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/files/repl_slot_manager.py": {
+    "mtime": 1779714736.2287092,
+    "ast_hash": "304defba51bc6970dda11499afd0bbad",
+    "semantic_hash": "304defba51bc6970dda11499afd0bbad"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/plugins/__init__.py": {
+    "mtime": 1781241517.7575562,
+    "ast_hash": "fb18aa8e62b9b964622166fd210bc4aa",
+    "semantic_hash": "fb18aa8e62b9b964622166fd210bc4aa"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/plugins/filters/__init__.py": {
+    "mtime": 1781241523.0484009,
+    "ast_hash": "763a1d253b1d672c2527f0d6223a56d1",
+    "semantic_hash": "763a1d253b1d672c2527f0d6223a56d1"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/plugins/filters/string_to_array.py": {
+    "mtime": 1781241577.8514276,
+    "ast_hash": "58b722ff3fafec875cca192abf03ef7a",
+    "semantic_hash": "58b722ff3fafec875cca192abf03ef7a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/files/pg_log_cleanup.sh": {
+    "mtime": 1771928068.0751786,
+    "ast_hash": "6be768b8eeded81ceece39be4457d007",
+    "semantic_hash": "6be768b8eeded81ceece39be4457d007"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/files/pg_log_cleanup.sh": {
+    "mtime": 1771928068.0776012,
+    "ast_hash": "6be768b8eeded81ceece39be4457d007",
+    "semantic_hash": "6be768b8eeded81ceece39be4457d007"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/files/pg_log_cleanup.sh": {
+    "mtime": 1771928068.0812938,
+    "ast_hash": "6be768b8eeded81ceece39be4457d007",
+    "semantic_hash": "6be768b8eeded81ceece39be4457d007"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/files/pg_log_cleanup.sh": {
+    "mtime": 1771928068.0838723,
+    "ast_hash": "6be768b8eeded81ceece39be4457d007",
+    "semantic_hash": "6be768b8eeded81ceece39be4457d007"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/plugins/__init__.py": {
+    "mtime": 1787031375.640314,
+    "ast_hash": "fb18aa8e62b9b964622166fd210bc4aa",
+    "semantic_hash": "fb18aa8e62b9b964622166fd210bc4aa"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/plugins/filters/__init__.py": {
+    "mtime": 1787031375.6409883,
+    "ast_hash": "763a1d253b1d672c2527f0d6223a56d1",
+    "semantic_hash": "763a1d253b1d672c2527f0d6223a56d1"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/plugins/filters/string_to_array.py": {
+    "mtime": 1787031375.641893,
+    "ast_hash": "58b722ff3fafec875cca192abf03ef7a",
+    "semantic_hash": "58b722ff3fafec875cca192abf03ef7a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_redhat/files/pg_log_cleanup.sh": {
+    "mtime": 1771928068.085941,
+    "ast_hash": "6be768b8eeded81ceece39be4457d007",
+    "semantic_hash": "6be768b8eeded81ceece39be4457d007"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_ubuntu/files/pg_log_cleanup.sh": {
+    "mtime": 1771928068.0876615,
+    "ast_hash": "6be768b8eeded81ceece39be4457d007",
+    "semantic_hash": "6be768b8eeded81ceece39be4457d007"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/check_patroni_loop.sh": {
+    "mtime": 1771928068.089174,
+    "ast_hash": "0f83bacb20cfd1f630949594ce39481d",
+    "semantic_hash": "0f83bacb20cfd1f630949594ce39481d"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/dba_package/__init__.py": {
+    "mtime": 1771928068.0909271,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/dba_package/dataframe_to_prettytable.py": {
+    "mtime": 1771928068.0910044,
+    "ast_hash": "273622f762261b651c2215c7b5865dbf",
+    "semantic_hash": "273622f762261b651c2215c7b5865dbf"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/dba_package/df_cols_to_prettysize.py": {
+    "mtime": 1771928068.0910723,
+    "ast_hash": "0aa6ed68b46acec4692015e2d0e0ef7b",
+    "semantic_hash": "0aa6ed68b46acec4692015e2d0e0ef7b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/dba_package/environment_variables.sh": {
+    "mtime": 1771928068.0911343,
+    "ast_hash": "b684f6946d47692a65a1f511c0305ab9",
+    "semantic_hash": "b684f6946d47692a65a1f511c0305ab9"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/dba_package/execute_psql_using_ssh.py": {
+    "mtime": 1771928068.0912182,
+    "ast_hash": "1acbc14038a38fdefd313a6ea0e32474",
+    "semantic_hash": "1acbc14038a38fdefd313a6ea0e32474"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/dba_package/filter_pretty_table.py": {
+    "mtime": 1771928068.0912824,
+    "ast_hash": "28e38cfe8c857b79bde38c58cecb6247",
+    "semantic_hash": "28e38cfe8c857b79bde38c58cecb6247"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/dba_package/get_csv_result_using_ssh.py": {
+    "mtime": 1771928068.0913415,
+    "ast_hash": "315dc8035e932e771e0700793e9f46fe",
+    "semantic_hash": "315dc8035e932e771e0700793e9f46fe"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/dba_package/get_hostname_from_ip.py": {
+    "mtime": 1771928068.0914035,
+    "ast_hash": "6bcdea18123da6af5219691ecdd1d7b3",
+    "semantic_hash": "6bcdea18123da6af5219691ecdd1d7b3"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/dba_package/get_json_result_using_ssh.py": {
+    "mtime": 1771928068.091466,
+    "ast_hash": "858e52808799f5432a81034cc8892925",
+    "semantic_hash": "858e52808799f5432a81034cc8892925"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/dba_package/get_pandas_dataframe.py": {
+    "mtime": 1771928068.0915241,
+    "ast_hash": "7c793bf521b861473d7ef4f9bca4effa",
+    "semantic_hash": "7c793bf521b861473d7ef4f9bca4effa"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/dba_package/get_tsv_result_using_ssh.py": {
+    "mtime": 1771928068.0915492,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/dba_package/get_yml_result_using_ssh.py": {
+    "mtime": 1771928068.0915928,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/dba_package/process_inventory.py": {
+    "mtime": 1771928068.0916734,
+    "ast_hash": "e2e8c44e9ea233f5f92fb8ac50292f52",
+    "semantic_hash": "e2e8c44e9ea233f5f92fb8ac50292f52"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/dba_package/process_ssh_key.py": {
+    "mtime": 1771928068.0917373,
+    "ast_hash": "7682dcff91dc1dae78199fded63a4e2a",
+    "semantic_hash": "7682dcff91dc1dae78199fded63a4e2a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/dba_package/send_email_notification.py": {
+    "mtime": 1771928068.0917947,
+    "ast_hash": "3283881d2ebc51d8415bb138fe0b1658",
+    "semantic_hash": "3283881d2ebc51d8415bb138fe0b1658"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/dba_package/send_slack_notification.py": {
+    "mtime": 1771928068.0918567,
+    "ast_hash": "48b44e97ddc9f269c8b1c70f574ede18",
+    "semantic_hash": "48b44e97ddc9f269c8b1c70f574ede18"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/get-backup-report.py": {
+    "mtime": 1771928068.0920074,
+    "ast_hash": "0b22f6ac4725cf4b0e888e8c95fc9997",
+    "semantic_hash": "0b22f6ac4725cf4b0e888e8c95fc9997"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/get-disk-report.py": {
+    "mtime": 1771928068.0921037,
+    "ast_hash": "b3effdc32ecd7f3ad5b139b21968f9eb",
+    "semantic_hash": "b3effdc32ecd7f3ad5b139b21968f9eb"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/get-host-core-metrics.py": {
+    "mtime": 1771928068.0921974,
+    "ast_hash": "4ab721d84912ce8cd2e2544e8d2c0b4c",
+    "semantic_hash": "4ab721d84912ce8cd2e2544e8d2c0b4c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/get-patroni-cluster-state.py": {
+    "mtime": 1771928068.0922887,
+    "ast_hash": "2a0b6a92f7cc51448f2a95310184be94",
+    "semantic_hash": "2a0b6a92f7cc51448f2a95310184be94"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/get-pg-server-availability.py": {
+    "mtime": 1771928068.09237,
+    "ast_hash": "db51caae0f176b733d9a169fd9ce172f",
+    "semantic_hash": "db51caae0f176b733d9a169fd9ce172f"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/get-ssl-report-using-ssh.py": {
+    "mtime": 1771928068.0924673,
+    "ast_hash": "5990a2a165ab9ba7c60ed7c2b7edb597",
+    "semantic_hash": "5990a2a165ab9ba7c60ed7c2b7edb597"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/smart-postgres/1-introducing-the-problem.sql": {
+    "mtime": 1771928068.0952733,
+    "ast_hash": "0c7c8222d8f37f04bb704917a6aa4852",
+    "semantic_hash": "0c7c8222d8f37f04bb704917a6aa4852"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/smart-postgres/2-unvacuumed-tables-are-bigger-and-slower.sql": {
+    "mtime": 1771928068.0953383,
+    "ast_hash": "823bd01ad1d9842ca0a943264ae6293b",
+    "semantic_hash": "823bd01ad1d9842ca0a943264ae6293b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/smart-postgres/3-how-indexes-are-affected.sql": {
+    "mtime": 1771928068.0954275,
+    "ast_hash": "b628035294e0661c60f0669c83961820",
+    "semantic_hash": "b628035294e0661c60f0669c83961820"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/smart-postgres/4-how-autovacuum-tries-to-handle-it.sql": {
+    "mtime": 1771928068.0954916,
+    "ast_hash": "569ac963d0884dd0fa9512d531adfa1e",
+    "semantic_hash": "569ac963d0884dd0fa9512d531adfa1e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/smart-postgres/fundamentals-of-Selects.sql": {
+    "mtime": 1771928068.0955622,
+    "ast_hash": "810dee2841f4443abd9da9b94def03b6",
+    "semantic_hash": "810dee2841f4443abd9da9b94def03b6"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/smart-postgres/stackoverflow-setup-randomq.sql": {
+    "mtime": 1771928068.095619,
+    "ast_hash": "93a1f755e95e54b5c2302f170dc5073f",
+    "semantic_hash": "93a1f755e95e54b5c2302f170dc5073f"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow-questions/How Unsung am I.sql": {
+    "mtime": 1771928068.0957174,
+    "ast_hash": "629dec7375afaece3da256120edeb946",
+    "semantic_hash": "629dec7375afaece3da256120edeb946"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow-questions/How many upvotes do I have for each tag.sql": {
+    "mtime": 1771928068.095774,
+    "ast_hash": "40f9635057ac09e87f184855a5b68670",
+    "semantic_hash": "40f9635057ac09e87f184855a5b68670"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/Help.sql": {
+    "mtime": 1771928068.0958743,
+    "ast_hash": "580695cf014a63552ea815553ad04117",
+    "semantic_hash": "580695cf014a63552ea815553ad04117"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/MSSQL-vs-PG--IN-Clause.sql": {
+    "mtime": 1771928068.0959458,
+    "ast_hash": "807b14b8a69dadcaee36dade0816a5c2",
+    "semantic_hash": "807b14b8a69dadcaee36dade0816a5c2"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/Setup-RandomQ-PostgreSQL.sql": {
+    "mtime": 1781153226.6426747,
+    "ast_hash": "ce145eaa3f37ad94727c78131801c623",
+    "semantic_hash": "ce145eaa3f37ad94727c78131801c623"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/Setup-RandomQ.sql": {
+    "mtime": 1781153226.6430907,
+    "ast_hash": "d3b39bd45bd979df1417d87f30bb0e98",
+    "semantic_hash": "d3b39bd45bd979df1417d87f30bb0e98"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/_Find Myself, Brent, Sam, and Others.sql": {
+    "mtime": 1771928068.0961468,
+    "ast_hash": "0d25d1f0a6e5de202ab57afadfadfe68",
+    "semantic_hash": "0d25d1f0a6e5de202ab57afadfadfe68"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/fundamentals-of-indexes/how to design for equality and inequality searches.sql": {
+    "mtime": 1771928068.0962443,
+    "ast_hash": "fccf3fd83e6fdec510cdce513647cea9",
+    "semantic_hash": "fccf3fd83e6fdec510cdce513647cea9"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/index seek vs scan.sql": {
+    "mtime": 1771928068.096307,
+    "ast_hash": "287e2fe507184debdbacb58f1582b369",
+    "semantic_hash": "287e2fe507184debdbacb58f1582b369"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/migrate-[badges]-table--mssql-2-postgresql.py": {
+    "mtime": 1781495535.7258627,
+    "ast_hash": "8c13278b9e01ebbadb900237cd1ce4f7",
+    "semantic_hash": "8c13278b9e01ebbadb900237cd1ce4f7"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/migrate-[comments]-table--mssql-2-postgresql.py": {
+    "mtime": 1771928068.0964456,
+    "ast_hash": "980b47cc379ae6e52d0c30254a1f7c9b",
+    "semantic_hash": "980b47cc379ae6e52d0c30254a1f7c9b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/migrate-[linktypes]-table--mssql-2-postgresql.py": {
+    "mtime": 1771928068.0965173,
+    "ast_hash": "6e49ef234ac46fcc9aa41772bff13d92",
+    "semantic_hash": "6e49ef234ac46fcc9aa41772bff13d92"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/migrate-[postlinks]-table--mssql-2-postgresql.py": {
+    "mtime": 1771928068.0965686,
+    "ast_hash": "f68c10f13acff4e8a669185a9b10f120",
+    "semantic_hash": "f68c10f13acff4e8a669185a9b10f120"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/migrate-[posts]-table--mssql-2-postgresql.py": {
+    "mtime": 1771928068.0966203,
+    "ast_hash": "cabc373b0eec51535d4e863c4ca92c82",
+    "semantic_hash": "cabc373b0eec51535d4e863c4ca92c82"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/migrate-[posttypes]-table--mssql-2-postgresql.py": {
+    "mtime": 1771928068.0966709,
+    "ast_hash": "e074b834434d84b898cf11d299f35801",
+    "semantic_hash": "e074b834434d84b898cf11d299f35801"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/migrate-[tags]-table--mssql-2-postgresql.py": {
+    "mtime": 1771928068.096697,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/migrate-[users]-table--mssql-2-postgresql.py": {
+    "mtime": 1781495535.7265184,
+    "ast_hash": "ef7d232cfca6ca4ed1804859e02d93ef",
+    "semantic_hash": "ef7d232cfca6ca4ed1804859e02d93ef"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/migrate-[votes]-table--mssql-2-postgresql.py": {
+    "mtime": 1771928068.0968282,
+    "ast_hash": "e34cbb29e8cbbfe1ab74983ae182577b",
+    "semantic_hash": "e34cbb29e8cbbfe1ab74983ae182577b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/migrate-[votetypes]-table--mssql-2-postgresql.py": {
+    "mtime": 1771928068.096877,
+    "ast_hash": "6b48b921de1149faf21f370c42c6727b",
+    "semantic_hash": "6b48b921de1149faf21f370c42c6727b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/run-workload-test-pgbench.sh": {
+    "mtime": 1781153226.6432176,
+    "ast_hash": "e6506c427b1602cda639b836ceb98940",
+    "semantic_hash": "e6506c427b1602cda639b836ceb98940"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/run-workload-test-python.py": {
+    "mtime": 1781153226.6432872,
+    "ast_hash": "b2d5d1101ed80b029a335b2dd22c8cef",
+    "semantic_hash": "b2d5d1101ed80b029a335b2dd22c8cef"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/setup-migration-env.sh": {
+    "mtime": 1781495535.7268496,
+    "ast_hash": "dc08c941d0fb237ca86428a86474d0fd",
+    "semantic_hash": "dc08c941d0fb237ca86428a86474d0fd"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Common-Issues/common-issues.txt": {
+    "mtime": 1771928068.0406163,
+    "ast_hash": "9c4248193b81559bd97242e0016d0774",
+    "semantic_hash": "9c4248193b81559bd97242e0016d0774"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/00_READ_ME_FIRST.md": {
+    "mtime": 1778245273.04534,
+    "ast_hash": "68b329da9893e34099c7d8ad5cb9c940",
+    "semantic_hash": "68b329da9893e34099c7d8ad5cb9c940"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/CDC-Using-Debezium-n-Kafka.md": {
+    "mtime": 1778584518.613815,
+    "ast_hash": "186ac136e6c06fbc8ffdaec098e4c0b4",
+    "semantic_hash": "186ac136e6c06fbc8ffdaec098e4c0b4"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/COMPLETE_DEPLOYMENT_SUMMARY.md": {
+    "mtime": 1780912894.2598848,
+    "ast_hash": "329251ade5a5fe404fecfd9bda23c36e",
+    "semantic_hash": "329251ade5a5fe404fecfd9bda23c36e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/CURRENT_STATUS.txt": {
+    "mtime": 1780912894.260649,
+    "ast_hash": "3e1a4bf41b6f671996e27ca6abf722a3",
+    "semantic_hash": "3e1a4bf41b6f671996e27ca6abf722a3"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/DEBEZIUM_SETUP_GUIDE.md": {
+    "mtime": 1780912894.2608743,
+    "ast_hash": "b72d0f5cca923c0c85e492001786af33",
+    "semantic_hash": "b72d0f5cca923c0c85e492001786af33"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/DELIVERABLES.md": {
+    "mtime": 1778243521.3104892,
+    "ast_hash": "13869ae85b2b69cc03a0a65d1635b018",
+    "semantic_hash": "13869ae85b2b69cc03a0a65d1635b018"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/DELIVERABLES_SUMMARY.md": {
+    "mtime": 1778245248.5342302,
+    "ast_hash": "68b329da9893e34099c7d8ad5cb9c940",
+    "semantic_hash": "68b329da9893e34099c7d8ad5cb9c940"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/DEPLOYMENT_IN_PROGRESS.md": {
+    "mtime": 1778245779.46079,
+    "ast_hash": "68b329da9893e34099c7d8ad5cb9c940",
+    "semantic_hash": "68b329da9893e34099c7d8ad5cb9c940"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/DEPLOYMENT_READY.md": {
+    "mtime": 1778244329.1777472,
+    "ast_hash": "68b329da9893e34099c7d8ad5cb9c940",
+    "semantic_hash": "68b329da9893e34099c7d8ad5cb9c940"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/DEPLOYMENT_STARTED.md": {
+    "mtime": 1778245821.003747,
+    "ast_hash": "700433ad9951532d1bdfe5825acdabd3",
+    "semantic_hash": "700433ad9951532d1bdfe5825acdabd3"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/DEPLOYMENT_STATUS.md": {
+    "mtime": 1780912894.2613997,
+    "ast_hash": "d6c0763cfdf2cbff2e542828a1e6c6eb",
+    "semantic_hash": "d6c0763cfdf2cbff2e542828a1e6c6eb"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/DOCUMENTATION_INDEX.md": {
+    "mtime": 1780912894.2615867,
+    "ast_hash": "dd724ff8db611d16da550988b438273e",
+    "semantic_hash": "dd724ff8db611d16da550988b438273e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/DOCUMENTATION_UPDATE.md": {
+    "mtime": 1778379465.1308002,
+    "ast_hash": "e62f70d4dc4a2f77b48b0c67fa694c15",
+    "semantic_hash": "e62f70d4dc4a2f77b48b0c67fa694c15"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/FINAL_DEPLOYMENT_GUIDE.md": {
+    "mtime": 1780912894.261784,
+    "ast_hash": "d4603ebb60a5db27958433d64d5d7297",
+    "semantic_hash": "d4603ebb60a5db27958433d64d5d7297"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/IMPLEMENTATION_GUIDE.md": {
+    "mtime": 1780912894.2621338,
+    "ast_hash": "d92dc61dc2cb246c64982a0dcaddddc8",
+    "semantic_hash": "d92dc61dc2cb246c64982a0dcaddddc8"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/INDEX.md": {
+    "mtime": 1778243476.0976815,
+    "ast_hash": "68b329da9893e34099c7d8ad5cb9c940",
+    "semantic_hash": "68b329da9893e34099c7d8ad5cb9c940"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/INFRASTRUCTURE_COMPLETE.md": {
+    "mtime": 1780912894.2624338,
+    "ast_hash": "c3123e3c9a74ae36e127476700704009",
+    "semantic_hash": "c3123e3c9a74ae36e127476700704009"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/QUICK_REFERENCE.md": {
+    "mtime": 1778245225.4650373,
+    "ast_hash": "68b329da9893e34099c7d8ad5cb9c940",
+    "semantic_hash": "68b329da9893e34099c7d8ad5cb9c940"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/QUICK_START.md": {
+    "mtime": 1778243443.8585906,
+    "ast_hash": "467e3f20ddceca9c3925b0681c706601",
+    "semantic_hash": "467e3f20ddceca9c3925b0681c706601"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/README.md": {
+    "mtime": 1778476046.2211792,
+    "ast_hash": "e6c4ab4d6c34d6dc1448983001286793",
+    "semantic_hash": "e6c4ab4d6c34d6dc1448983001286793"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/SESSION_SUMMARY.md": {
+    "mtime": 1778245292.6684675,
+    "ast_hash": "68b329da9893e34099c7d8ad5cb9c940",
+    "semantic_hash": "68b329da9893e34099c7d8ad5cb9c940"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/START_HERE.md": {
+    "mtime": 1778244358.518733,
+    "ast_hash": "68b329da9893e34099c7d8ad5cb9c940",
+    "semantic_hash": "68b329da9893e34099c7d8ad5cb9c940"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/TECHNICAL_SUMMARY.md": {
+    "mtime": 1780912894.262833,
+    "ast_hash": "0ca4e3b1086db7c81cbcc767c8aed0c8",
+    "semantic_hash": "0ca4e3b1086db7c81cbcc767c8aed0c8"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/hosts.yml": {
+    "mtime": 1778243140.290138,
+    "ast_hash": "c2b1fe993590b662163427fd2cd59587",
+    "semantic_hash": "c2b1fe993590b662163427fd2cd59587"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/playbook-cleanup.yml": {
+    "mtime": 1778243313.5012906,
+    "ast_hash": "16198b4fc08eb195cfb884b75d2abc59",
+    "semantic_hash": "16198b4fc08eb195cfb884b75d2abc59"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/playbook-deploy-all.yml": {
+    "mtime": 1781190401.4866235,
+    "ast_hash": "51149ed49ac545a50fe153b9ea95df95",
+    "semantic_hash": "51149ed49ac545a50fe153b9ea95df95"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/playbook-deploy-component.yml": {
+    "mtime": 1778244235.8714874,
+    "ast_hash": "77e6a90136ab71c03369a0cacd4ca737",
+    "semantic_hash": "77e6a90136ab71c03369a0cacd4ca737"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/playbook-setup-pgbadger.yml": {
+    "mtime": 1778243327.4151533,
+    "ast_hash": "d8f8f1a72f6a3daeb9df58e4edb59b3f",
+    "semantic_hash": "d8f8f1a72f6a3daeb9df58e4edb59b3f"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/roles/docker_infrastructure/defaults/main.yml": {
+    "mtime": 1778243175.2622504,
+    "ast_hash": "9b4d9e9d03f2db0cf16a0ae627e42ed1",
+    "semantic_hash": "9b4d9e9d03f2db0cf16a0ae627e42ed1"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/roles/docker_infrastructure/tasks/main.yml": {
+    "mtime": 1778483559.1588995,
+    "ast_hash": "3106f31b5b159b36cc12f2db051b809d",
+    "semantic_hash": "3106f31b5b159b36cc12f2db051b809d"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/roles/kafka_ecosystem/defaults/main.yml": {
+    "mtime": 1778480989.8498647,
+    "ast_hash": "183cb2f61681330c2da5fa1c7ace2dd7",
+    "semantic_hash": "183cb2f61681330c2da5fa1c7ace2dd7"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/roles/kafka_ecosystem/tasks/main.yml": {
+    "mtime": 1781190401.4940207,
+    "ast_hash": "0fefc4a6a59bf9e3bd3951a3af08a335",
+    "semantic_hash": "0fefc4a6a59bf9e3bd3951a3af08a335"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/roles/pgadmin/defaults/main.yml": {
+    "mtime": 1778482233.2894113,
+    "ast_hash": "5b941306114fe6454c260dd0427ed794",
+    "semantic_hash": "5b941306114fe6454c260dd0427ed794"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/roles/pgadmin/tasks/main.yml": {
+    "mtime": 1778550431.8619053,
+    "ast_hash": "6bf17f10597e13752104d1609a72038c",
+    "semantic_hash": "6bf17f10597e13752104d1609a72038c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/roles/postgres_source/defaults/main.yml": {
+    "mtime": 1778243210.0992799,
+    "ast_hash": "3cac90acb5e7d7bd697a3ec4863720ea",
+    "semantic_hash": "3cac90acb5e7d7bd697a3ec4863720ea"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/roles/postgres_source/tasks/main.yml": {
+    "mtime": 1778551280.1657908,
+    "ast_hash": "4a7708fc891dfa2d17d7af0264d24c03",
+    "semantic_hash": "4a7708fc891dfa2d17d7af0264d24c03"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Debezium-CDC-Kafka/vars/main.yml": {
+    "mtime": 1778564209.6991057,
+    "ast_hash": "d459417055f648a32cfda39ca37f4b74",
+    "semantic_hash": "d459417055f648a32cfda39ca37f4b74"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/General-Commands/postgres-on-windows.txt": {
+    "mtime": 1771928068.0411212,
+    "ast_hash": "4782e538600c01963d9fa503f55f1b32",
+    "semantic_hash": "4782e538600c01963d9fa503f55f1b32"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Job-Description/postgresql-dba.txt": {
+    "mtime": 1771928068.0412374,
+    "ast_hash": "6f17d244e2bae5b3e600ca3fb26d5eb8",
+    "semantic_hash": "6f17d244e2bae5b3e600ca3fb26d5eb8"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/LICENSE.txt": {
+    "mtime": 1771928068.0414066,
+    "ast_hash": "ae715d918e7e66fd3aaecde1191d00ca",
+    "semantic_hash": "ae715d918e7e66fd3aaecde1191d00ca"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Monitoring/Postgres-Exporter.md": {
+    "mtime": 1771928068.0418274,
+    "ast_hash": "50fa4fd50abec6fb37d857078420a8a4",
+    "semantic_hash": "50fa4fd50abec6fb37d857078420a8a4"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Monitoring/postgres_exporter_metrics.txt": {
+    "mtime": 1775012475.537432,
+    "ast_hash": "e489b378c774a1d60b040cfe8d4272e9",
+    "semantic_hash": "e489b378c774a1d60b040cfe8d4272e9"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Queries/get-slow-queries.md": {
+    "mtime": 1771928068.043689,
+    "ast_hash": "e1b799a3b16eb677dfea9d3eec373867",
+    "semantic_hash": "e1b799a3b16eb677dfea9d3eec373867"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/README.md": {
+    "mtime": 1771928068.0443344,
+    "ast_hash": "8c98c08d1a239ad4b79c32308974fc1d",
+    "semantic_hash": "8c98c08d1a239ad4b79c32308974fc1d"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Setup-Configuration/Podman+MSSQL.md": {
+    "mtime": 1771928068.0451849,
+    "ast_hash": "d749c618d5d7322748a03d72e15e01f2",
+    "semantic_hash": "d749c618d5d7322748a03d72e15e01f2"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Setup-Configuration/Podman+PostgreSQL.md": {
+    "mtime": 1771928068.045253,
+    "ast_hash": "d9ac9fe3f99f6b52bf2e3a20f85ff410",
+    "semantic_hash": "d9ac9fe3f99f6b52bf2e3a20f85ff410"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Setup-Configuration/Podman-commands-help.md": {
+    "mtime": 1771928068.0453203,
+    "ast_hash": "b03cd249435ebb0e558ad7da6c3606da",
+    "semantic_hash": "b03cd249435ebb0e558ad7da6c3606da"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Setup-Configuration/Postgres-in-Android-Using-Termux.md": {
+    "mtime": 1772164670.3920102,
+    "ast_hash": "501df631e18b684a8cd3e2dc040c7058",
+    "semantic_hash": "501df631e18b684a8cd3e2dc040c7058"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Setup-Configuration/explain.ajaydwivedi.com.md": {
+    "mtime": 1771928068.0457928,
+    "ast_hash": "11984fa7afdf7749733c3c580ae2438b",
+    "semantic_hash": "11984fa7afdf7749733c3c580ae2438b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Setup-Configuration/pgBadger-settings.md": {
+    "mtime": 1771928068.045989,
+    "ast_hash": "471159e2f69c6a0c06fcb3b5ca5f0c69",
+    "semantic_hash": "471159e2f69c6a0c06fcb3b5ca5f0c69"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Troubleshooting/troubleshooting-os-cpu-ram-disk-network.md": {
+    "mtime": 1771928068.0465543,
+    "ast_hash": "5258930acc2dc944625599d94864f7f2",
+    "semantic_hash": "5258930acc2dc944625599d94864f7f2"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/pg-for-mssql-dba.md": {
+    "mtime": 1771928068.0657296,
+    "ast_hash": "045369e1ec910abec90b33a27fd3e896",
+    "semantic_hash": "045369e1ec910abec90b33a27fd3e896"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/pg-parameters-to-prevent-poor-performance.md": {
+    "mtime": 1771928068.065821,
+    "ast_hash": "c0d9f95da70c90a9f2453c9fe44a59e3",
+    "semantic_hash": "c0d9f95da70c90a9f2453c9fe44a59e3"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/time-travel-queries-with-postgres.md": {
+    "mtime": 1771928068.0658913,
+    "ast_hash": "36c6f0b2061da514c400c0bc2749b5cf",
+    "semantic_hash": "36c6f0b2061da514c400c0bc2749b5cf"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--administration-cookbook/chp01--first-steps.md": {
+    "mtime": 1771928068.0660243,
+    "ast_hash": "62a085276dbebed122f14fb61f01d9ed",
+    "semantic_hash": "62a085276dbebed122f14fb61f01d9ed"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--administration-cookbook/chp02--exploring-the-database.md": {
+    "mtime": 1771928068.0661488,
+    "ast_hash": "0b05494a015051e1ca23fe5181a14f3e",
+    "semantic_hash": "0b05494a015051e1ca23fe5181a14f3e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--administration-cookbook/chp03--server-configuration.md": {
+    "mtime": 1771928068.0662115,
+    "ast_hash": "1d8106fb55269d67221cde8fb7b147e5",
+    "semantic_hash": "1d8106fb55269d67221cde8fb7b147e5"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--administration-cookbook/chp04--server-control.md": {
+    "mtime": 1771928068.0662768,
+    "ast_hash": "280f5084ad579ab0f70ab5d785a58577",
+    "semantic_hash": "280f5084ad579ab0f70ab5d785a58577"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--learn-postgres/chp12-Extensions-Ecosystem.md": {
+    "mtime": 1771928068.0665448,
+    "ast_hash": "9a2465af1e0c44f40d3df3d512a670c7",
+    "semantic_hash": "9a2465af1e0c44f40d3df3d512a670c7"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--learn-postgres/chp14-logging-and-auditing.md": {
+    "mtime": 1771928068.0666845,
+    "ast_hash": "5ab1fe6bf123371040b582a3e5240ca0",
+    "semantic_hash": "5ab1fe6bf123371040b582a3e5240ca0"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--learn-postgres/chp15-backup-and-restore.md": {
+    "mtime": 1771928068.066796,
+    "ast_hash": "b7aed1f5a523734b8a73fcb8f6cc94ab",
+    "semantic_hash": "b7aed1f5a523734b8a73fcb8f6cc94ab"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--learn-postgres/chp16-Configuration-and-Monitoring.md": {
+    "mtime": 1771928068.0668697,
+    "ast_hash": "e4e7408162fcec5a0d7153066d36f575",
+    "semantic_hash": "e4e7408162fcec5a0d7153066d36f575"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/book--learn-postgres/chp19-useful-tools-n-extensions.md": {
+    "mtime": 1777274214.1792245,
+    "ast_hash": "fc8bad5371b3e9adf049ad81a5465423",
+    "semantic_hash": "fc8bad5371b3e9adf049ad81a5465423"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/course-udemy-hadr/PgBouncer.md": {
+    "mtime": 1771928068.0710642,
+    "ast_hash": "2a8e9b31a8816ee1578727094fe45633",
+    "semantic_hash": "2a8e9b31a8816ee1578727094fe45633"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/course-udemy-hadr/README-pgbench.md": {
+    "mtime": 1771928068.07114,
+    "ast_hash": "2486b0a63dafaed020b32b272ab0fc89",
+    "semantic_hash": "2486b0a63dafaed020b32b272ab0fc89"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/course-udemy-hadr/benchmarking-with-pgbench.md": {
+    "mtime": 1771928068.0712209,
+    "ast_hash": "757bf2337fd291c6cf608b6f0a9c951c",
+    "semantic_hash": "757bf2337fd291c6cf608b6f0a9c951c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/course-udemy-hadr/udemy-postgresql-replication-hadr-scalability.md": {
+    "mtime": 1771928068.071513,
+    "ast_hash": "cab8b4f35b16f674807e1598d56f5c0c",
+    "semantic_hash": "cab8b4f35b16f674807e1598d56f5c0c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/miscellaneous/create-aws-s3-bucket.md": {
+    "mtime": 1771928068.0716963,
+    "ast_hash": "8260bb51fa324197e7a74b7553bda7b3",
+    "semantic_hash": "8260bb51fa324197e7a74b7553bda7b3"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/miscellaneous/pgvector.md": {
+    "mtime": 1771928068.0718372,
+    "ast_hash": "f2cd527c392b577180ca969c8cadb061",
+    "semantic_hash": "f2cd527c392b577180ca969c8cadb061"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/miscellaneous/requirements.txt": {
+    "mtime": 1771928068.0719066,
+    "ast_hash": "1830d48e2ff292ac13b46153331e946b",
+    "semantic_hash": "1830d48e2ff292ac13b46153331e946b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-convert-standalone-2-patroni-cluster/Convert-a-Standalone-to-a-Patroni-Cluster--Docker.md": {
+    "mtime": 1781011153.545603,
+    "ast_hash": "3d6168f13a65fa94dc8210eb7cc2a460",
+    "semantic_hash": "3d6168f13a65fa94dc8210eb7cc2a460"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-convert-standalone-2-patroni-cluster/Convert-a-Standalone-to-a-Patroni-Cluster--Podman.md": {
+    "mtime": 1780987182.9496229,
+    "ast_hash": "131504a8e77325b30a2b5607633b55a3",
+    "semantic_hash": "131504a8e77325b30a2b5607633b55a3"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-convert-standalone-2-patroni-cluster/Convert-a-Standalone-to-a-Patroni-Cluster--RHEL.md": {
+    "mtime": 1780912894.263146,
+    "ast_hash": "d66ba3f8b8933e5e34d2a4d9f3d6524e",
+    "semantic_hash": "d66ba3f8b8933e5e34d2a4d9f3d6524e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-convert-standalone-2-patroni-cluster/Convert-a-Standalone-to-a-Patroni-Cluster--Ubuntu-ryzen9.md": {
+    "mtime": 1780912894.2633266,
+    "ast_hash": "bbb5b7051eca915317bdafa8a93e358e",
+    "semantic_hash": "bbb5b7051eca915317bdafa8a93e358e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-convert-standalone-2-patroni-cluster/Convert-a-Standalone-to-a-Patroni-Cluster-PG19--Podman.md": {
+    "mtime": 1781153226.635612,
+    "ast_hash": "84dda3385ad793f91c90ebbb53ccbd9b",
+    "semantic_hash": "84dda3385ad793f91c90ebbb53ccbd9b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-consul/install-consul.md": {
+    "mtime": 1771928068.0723042,
+    "ast_hash": "a187470aecfd69e5edb30eceeb3ecc10",
+    "semantic_hash": "a187470aecfd69e5edb30eceeb3ecc10"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/DR_FAILOVER_GUIDE__GRACEFUL.md": {
+    "mtime": 1781236937.5086992,
+    "ast_hash": "59f0545fb7d9fb1a1e3cbacb40d6c7e2",
+    "semantic_hash": "59f0545fb7d9fb1a1e3cbacb40d6c7e2"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/DR_FAILOVER_GUIDE__REAL_DISASTER.md": {
+    "mtime": 1781236961.8160563,
+    "ast_hash": "4096ed421843078ac24693ff2ac21dd7",
+    "semantic_hash": "4096ed421843078ac24693ff2ac21dd7"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/README-HA-PG-Major-Version-Upgrade.md": {
+    "mtime": 1788247523.7927306,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/docker-based-postgresql-cluster.md": {
+    "mtime": 1781242148.4211507,
+    "ast_hash": "a57dc18237ef501954a556e5849826d5",
+    "semantic_hash": "a57dc18237ef501954a556e5849826d5"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/group_vars/primary_cluster.yml": {
+    "mtime": 1781153904.4498537,
+    "ast_hash": "8db43f6cb4c4741ac2e47ff4e7b45a0d",
+    "semantic_hash": "8db43f6cb4c4741ac2e47ff4e7b45a0d"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/group_vars/primary_cluster_replica.yml": {
+    "mtime": 1781153915.5599341,
+    "ast_hash": "aa48532feec25453c46e483d8e9dcc25",
+    "semantic_hash": "aa48532feec25453c46e483d8e9dcc25"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/group_vars/standby_cluster.yml": {
+    "mtime": 1781231479.8007722,
+    "ast_hash": "f0d1c1a038a2d85ec2bec9dcc85efb8e",
+    "semantic_hash": "f0d1c1a038a2d85ec2bec9dcc85efb8e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/group_vars/standby_cluster_replica.yml": {
+    "mtime": 1781153919.6827807,
+    "ast_hash": "7537c4e64826c2cbafe586afc34c835d",
+    "semantic_hash": "7537c4e64826c2cbafe586afc34c835d"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/hosts.yml": {
+    "mtime": 1784695950.8026583,
+    "ast_hash": "d99aa4b02c8111c9eb6654c1e5bbc88a",
+    "semantic_hash": "d99aa4b02c8111c9eb6654c1e5bbc88a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/playbook-add-replicas.yml": {
+    "mtime": 1781243086.83397,
+    "ast_hash": "5ae89a90a84c6dd67c1a4501c427f2a9",
+    "semantic_hash": "5ae89a90a84c6dd67c1a4501c427f2a9"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/playbook-cleanup.yml": {
+    "mtime": 1781154859.6825237,
+    "ast_hash": "cc87f9b437b9c26b3020e3140f1aee84",
+    "semantic_hash": "cc87f9b437b9c26b3020e3140f1aee84"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/playbook-install-primary-cluster.yml": {
+    "mtime": 1781195505.7635522,
+    "ast_hash": "23802780793fc672e93d97c693e91df0",
+    "semantic_hash": "23802780793fc672e93d97c693e91df0"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/playbook-install-standby-cluster.yml": {
+    "mtime": 1781195497.4306016,
+    "ast_hash": "89238a828eef95b1e203df252a02df2e",
+    "semantic_hash": "89238a828eef95b1e203df252a02df2e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/playbook-setup-primary-cluster-containers.yml": {
+    "mtime": 1781241225.805082,
+    "ast_hash": "64c655797f26f09fd6cee6de29e5490a",
+    "semantic_hash": "64c655797f26f09fd6cee6de29e5490a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/playbook-setup-standby-cluster-containers.yml": {
+    "mtime": 1781241216.2398899,
+    "ast_hash": "dd80e8289732de5544e0a14521a28c89",
+    "semantic_hash": "dd80e8289732de5544e0a14521a28c89"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/docker_infrastructure/defaults/main.yml": {
+    "mtime": 1780998434.9113662,
+    "ast_hash": "c4e9048999ce98bbfe5e5b3c2170dccb",
+    "semantic_hash": "c4e9048999ce98bbfe5e5b3c2170dccb"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/docker_infrastructure/tasks/custom/build_image.yml": {
+    "mtime": 1777462883.7768314,
+    "ast_hash": "95f56797dc9d43e8306aa80c33a0ff3c",
+    "semantic_hash": "95f56797dc9d43e8306aa80c33a0ff3c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/docker_infrastructure/tasks/custom/network.yml": {
+    "mtime": 1780998466.5912356,
+    "ast_hash": "9a3b5d9491ebada6ab7a9615dbbcb5ce",
+    "semantic_hash": "9a3b5d9491ebada6ab7a9615dbbcb5ce"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/docker_infrastructure/tasks/custom/pg_containers.yml": {
+    "mtime": 1780998475.9265692,
+    "ast_hash": "7c5c7b5937d6ec9e224ef74dde42b5c8",
+    "semantic_hash": "7c5c7b5937d6ec9e224ef74dde42b5c8"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/docker_infrastructure/tasks/custom/standby_pg_containers.yml": {
+    "mtime": 1780998484.0089383,
+    "ast_hash": "19a21ac9d33418be044a8af1defe67ac",
+    "semantic_hash": "19a21ac9d33418be044a8af1defe67ac"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/docker_infrastructure/tasks/main.yml": {
+    "mtime": 1779291229.0456853,
+    "ast_hash": "3aec322e49edf2f0449b01a6039c8e77",
+    "semantic_hash": "3aec322e49edf2f0449b01a6039c8e77"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/defaults/creds.yml": {
+    "mtime": 1777267521.9585588,
+    "ast_hash": "f349f0acac484da6f8f636130c4bd950",
+    "semantic_hash": "f349f0acac484da6f8f636130c4bd950"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/defaults/main.yml": {
+    "mtime": 1781194523.191058,
+    "ast_hash": "d497c053f049875bfebabf1cdd01e838",
+    "semantic_hash": "d497c053f049875bfebabf1cdd01e838"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/handlers/main.yml": {
+    "mtime": 1777474006.1906922,
+    "ast_hash": "917a55190abae310803d711b66a3e980",
+    "semantic_hash": "917a55190abae310803d711b66a3e980"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/custom/container_env.yml": {
+    "mtime": 1780994915.33823,
+    "ast_hash": "bf288981090c0300ff7d1b6af0934585",
+    "semantic_hash": "bf288981090c0300ff7d1b6af0934585"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/custom/container_hosts.yml": {
+    "mtime": 1781004011.3359382,
+    "ast_hash": "cebc11e945d3f6c16a01236f84be38b8",
+    "semantic_hash": "cebc11e945d3f6c16a01236f84be38b8"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/custom/etcd.yml": {
+    "mtime": 1781195734.6005855,
+    "ast_hash": "9d0afbb8bdfe2f8bed62e585957dd1a3",
+    "semantic_hash": "9d0afbb8bdfe2f8bed62e585957dd1a3"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/custom/haproxy.yml": {
+    "mtime": 1777473711.9076076,
+    "ast_hash": "c7bb11e1fa5b4a88176363398e0a03a9",
+    "semantic_hash": "c7bb11e1fa5b4a88176363398e0a03a9"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/custom/keepalived.yml": {
+    "mtime": 1781179779.3578482,
+    "ast_hash": "0970917ccea872fcea1db56d2fde286c",
+    "semantic_hash": "0970917ccea872fcea1db56d2fde286c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/custom/network_connectivity.yml": {
+    "mtime": 1781243250.4893107,
+    "ast_hash": "e04801e13a3ed9f4e5722a9585df0512",
+    "semantic_hash": "e04801e13a3ed9f4e5722a9585df0512"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/custom/packages.yml": {
+    "mtime": 1781166597.9851296,
+    "ast_hash": "d1cb015fd90a6bfa217d0069420f7ab9",
+    "semantic_hash": "d1cb015fd90a6bfa217d0069420f7ab9"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/custom/patroni.yml": {
+    "mtime": 1781191646.3483355,
+    "ast_hash": "c9f91ee5cd8698da50f13911cf36935c",
+    "semantic_hash": "c9f91ee5cd8698da50f13911cf36935c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/custom/patronictl_list.yml": {
+    "mtime": 1777267705.469946,
+    "ast_hash": "f5e8928ffd5d19bd4490ce7e3964193f",
+    "semantic_hash": "f5e8928ffd5d19bd4490ce7e3964193f"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/custom/pg_exporter.yml": {
+    "mtime": 1779282432.5113862,
+    "ast_hash": "ca0d1aeca2a1889cc48dc320ae003281",
+    "semantic_hash": "ca0d1aeca2a1889cc48dc320ae003281"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/custom/pgbackrest.yml": {
+    "mtime": 1781175313.6516097,
+    "ast_hash": "8bf86a047e16bf8bc3a6d5c95c04d151",
+    "semantic_hash": "8bf86a047e16bf8bc3a6d5c95c04d151"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/custom/pgbouncer.yml": {
+    "mtime": 1781190322.218031,
+    "ast_hash": "767009183c80935d2c8a47b4f93d4375",
+    "semantic_hash": "767009183c80935d2c8a47b4f93d4375"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/custom/pgpass.yml": {
+    "mtime": 1780994288.0398328,
+    "ast_hash": "4b896c1c9c5b69d7ba037144706cd620",
+    "semantic_hash": "4b896c1c9c5b69d7ba037144706cd620"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/custom/prechecks.yml": {
+    "mtime": 1781243272.0637498,
+    "ast_hash": "db05c17a059dd7abfb85b05cd89ca1a8",
+    "semantic_hash": "db05c17a059dd7abfb85b05cd89ca1a8"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/custom/repl_slot_config.yml": {
+    "mtime": 1779698721.695342,
+    "ast_hash": "289a1c93cc765219e26b3ffe3ec20335",
+    "semantic_hash": "289a1c93cc765219e26b3ffe3ec20335"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/custom/repl_slot_manager.yml": {
+    "mtime": 1779699451.248847,
+    "ast_hash": "42e2aa17c5cb59a7925f073d1e496ca1",
+    "semantic_hash": "42e2aa17c5cb59a7925f073d1e496ca1"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/custom/repository.yml": {
+    "mtime": 1777905262.8569977,
+    "ast_hash": "2c10bedde56a2c162984745b039315f2",
+    "semantic_hash": "2c10bedde56a2c162984745b039315f2"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/custom/user.yml": {
+    "mtime": 1779685797.5197093,
+    "ast_hash": "542e5a9535909ac74db49cff9ec0f526",
+    "semantic_hash": "542e5a9535909ac74db49cff9ec0f526"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/roles/pg_cluster/tasks/main.yml": {
+    "mtime": 1781235881.2970195,
+    "ast_hash": "1745b2825cd84a785aaf739767dd5f17",
+    "semantic_hash": "1745b2825cd84a785aaf739767dd5f17"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/site.yml": {
+    "mtime": 1777267397.7166424,
+    "ast_hash": "7689db08970524b3e6ca7d0325afe5e4",
+    "semantic_hash": "7689db08970524b3e6ca7d0325afe5e4"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-docker-etcd/vars/dba_vars.yml": {
+    "mtime": 1781006456.2861843,
+    "ast_hash": "72cf3200ac07b8bcd086741383d0147a",
+    "semantic_hash": "72cf3200ac07b8bcd086741383d0147a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/DR_FAILOVER_GUIDE__GRACEFUL.md": {
+    "mtime": 1781158482.4007547,
+    "ast_hash": "0a730f4dfd825562fff60068b08011d8",
+    "semantic_hash": "0a730f4dfd825562fff60068b08011d8"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/DR_FAILOVER_GUIDE__REAL_DISASTER.md": {
+    "mtime": 1781153226.636164,
+    "ast_hash": "bc8383636b85731d1ebb658ff2d52b7c",
+    "semantic_hash": "bc8383636b85731d1ebb658ff2d52b7c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/DR_SPLIT_BRAIN_GUIDE.md": {
+    "mtime": 1781153226.6363878,
+    "ast_hash": "0f6a8f6fb2f0dc1288a42832897facab",
+    "semantic_hash": "0f6a8f6fb2f0dc1288a42832897facab"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/hosts.yml": {
+    "mtime": 1781153226.6368587,
+    "ast_hash": "7a839eeb52e74f95042c42314d9935eb",
+    "semantic_hash": "7a839eeb52e74f95042c42314d9935eb"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/playbook-add-replicas.yml": {
+    "mtime": 1781190401.4860744,
+    "ast_hash": "6558563f32710b1a0f1bc9c1b8fd0b0d",
+    "semantic_hash": "6558563f32710b1a0f1bc9c1b8fd0b0d"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/playbook-cleanup.yml": {
+    "mtime": 1781153226.6371768,
+    "ast_hash": "76c1dcd7c84f88c18fc18e548d3d62f4",
+    "semantic_hash": "76c1dcd7c84f88c18fc18e548d3d62f4"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/playbook-install-primary-cluster.yml": {
+    "mtime": 1781153226.63725,
+    "ast_hash": "8ab2316d0003c00bef717f2800896a92",
+    "semantic_hash": "8ab2316d0003c00bef717f2800896a92"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/playbook-install-standby-cluster.yml": {
+    "mtime": 1781153226.6373672,
+    "ast_hash": "819cf65bec25bc3770f6affe38c40848",
+    "semantic_hash": "819cf65bec25bc3770f6affe38c40848"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/playbook-setup-podman.yml": {
+    "mtime": 1781153226.6376374,
+    "ast_hash": "e6f2c2493829368ba952d8586d46b55b",
+    "semantic_hash": "e6f2c2493829368ba952d8586d46b55b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/podman-based-postgresql-cluster.md": {
+    "mtime": 1781153226.6382642,
+    "ast_hash": "ce1ab03cfc7aab1fcb02739bd078fd9f",
+    "semantic_hash": "ce1ab03cfc7aab1fcb02739bd078fd9f"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/pg_cluster/defaults/creds.yml": {
+    "mtime": 1777899417.8351135,
+    "ast_hash": "f349f0acac484da6f8f636130c4bd950",
+    "semantic_hash": "f349f0acac484da6f8f636130c4bd950"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/pg_cluster/defaults/dba_vars.yml": {
+    "mtime": 1777899417.835239,
+    "ast_hash": "f99180c22ec392c0a8c6722555ab1adb",
+    "semantic_hash": "f99180c22ec392c0a8c6722555ab1adb"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/pg_cluster/defaults/main.yml": {
+    "mtime": 1781153226.638693,
+    "ast_hash": "0831373f2299c3d79910a6d55182f799",
+    "semantic_hash": "0831373f2299c3d79910a6d55182f799"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/pg_cluster/handlers/main.yml": {
+    "mtime": 1781153226.6389093,
+    "ast_hash": "fddf71f72978fe0df4314ad9cdccf3eb",
+    "semantic_hash": "fddf71f72978fe0df4314ad9cdccf3eb"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/pg_cluster/tasks/custom/container_env.yml": {
+    "mtime": 1781153226.6390004,
+    "ast_hash": "15259eae570b2305e601d79b98b4f03c",
+    "semantic_hash": "15259eae570b2305e601d79b98b4f03c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/pg_cluster/tasks/custom/container_hosts.yml": {
+    "mtime": 1781153226.639069,
+    "ast_hash": "161123edf0b05b54cc997c7ec274a0dd",
+    "semantic_hash": "161123edf0b05b54cc997c7ec274a0dd"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/pg_cluster/tasks/custom/etcd.yml": {
+    "mtime": 1781153226.6394458,
+    "ast_hash": "ed00aec5a8af6160a0e64878b5da79c1",
+    "semantic_hash": "ed00aec5a8af6160a0e64878b5da79c1"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/pg_cluster/tasks/custom/haproxy.yml": {
+    "mtime": 1777977838.0978296,
+    "ast_hash": "cfebe3da9f22b09eb28dc7b5ba6773c3",
+    "semantic_hash": "cfebe3da9f22b09eb28dc7b5ba6773c3"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/pg_cluster/tasks/custom/keepalived.yml": {
+    "mtime": 1781153226.6395478,
+    "ast_hash": "e05c39f199b1f7a7d726db8a0837ae34",
+    "semantic_hash": "e05c39f199b1f7a7d726db8a0837ae34"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/pg_cluster/tasks/custom/packages.yml": {
+    "mtime": 1781153226.6398106,
+    "ast_hash": "1932bf6152bf386a3ad22f5903c63c59",
+    "semantic_hash": "1932bf6152bf386a3ad22f5903c63c59"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/pg_cluster/tasks/custom/patroni.yml": {
+    "mtime": 1781153226.6401057,
+    "ast_hash": "7f23d8141d382d42e74918e5c80c54f9",
+    "semantic_hash": "7f23d8141d382d42e74918e5c80c54f9"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/pg_cluster/tasks/custom/patronictl_list.yml": {
+    "mtime": 1781153226.6402533,
+    "ast_hash": "d80c34b73d7ac96af486bceae7c2a0f6",
+    "semantic_hash": "d80c34b73d7ac96af486bceae7c2a0f6"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/pg_cluster/tasks/custom/pg_exporter.yml": {
+    "mtime": 1781153226.640367,
+    "ast_hash": "e53259de82f8896cb84a336662f8c1a8",
+    "semantic_hash": "e53259de82f8896cb84a336662f8c1a8"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/pg_cluster/tasks/custom/pgbackrest.yml": {
+    "mtime": 1781153226.6405995,
+    "ast_hash": "3e95197790b2ddaf90893bcd46dd74d5",
+    "semantic_hash": "3e95197790b2ddaf90893bcd46dd74d5"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/pg_cluster/tasks/custom/pgbouncer.yml": {
+    "mtime": 1781190401.494317,
+    "ast_hash": "767009183c80935d2c8a47b4f93d4375",
+    "semantic_hash": "767009183c80935d2c8a47b4f93d4375"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/pg_cluster/tasks/custom/pgpass.yml": {
+    "mtime": 1781153226.6406996,
+    "ast_hash": "6b3c4bb705558daf3f02b2979e225182",
+    "semantic_hash": "6b3c4bb705558daf3f02b2979e225182"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/pg_cluster/tasks/custom/prechecks.yml": {
+    "mtime": 1781153226.6408682,
+    "ast_hash": "a58ad9e26dacd10ac015abd19c1d2bce",
+    "semantic_hash": "a58ad9e26dacd10ac015abd19c1d2bce"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/pg_cluster/tasks/custom/repository.yml": {
+    "mtime": 1777977838.0991206,
+    "ast_hash": "4c5050340821a43f1ebb09cb8720a55c",
+    "semantic_hash": "4c5050340821a43f1ebb09cb8720a55c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/pg_cluster/tasks/custom/user.yml": {
+    "mtime": 1781153226.6410534,
+    "ast_hash": "bb8c2daf7c68e94935a454944ee53c94",
+    "semantic_hash": "bb8c2daf7c68e94935a454944ee53c94"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/pg_cluster/tasks/main.yml": {
+    "mtime": 1781153226.6412303,
+    "ast_hash": "6bb95b4fbf57ea50caf1f423a8ca4954",
+    "semantic_hash": "6bb95b4fbf57ea50caf1f423a8ca4954"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/podman_infrastructure/defaults/main.yml": {
+    "mtime": 1781153226.6417308,
+    "ast_hash": "47a194769eb4f201a4944b70695b0eed",
+    "semantic_hash": "47a194769eb4f201a4944b70695b0eed"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/podman_infrastructure/tasks/custom/build_image.yml": {
+    "mtime": 1777899417.8402526,
+    "ast_hash": "6a72c1f9772aea2271f523b789e97595",
+    "semantic_hash": "6a72c1f9772aea2271f523b789e97595"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/podman_infrastructure/tasks/custom/network.yml": {
+    "mtime": 1781153226.6419628,
+    "ast_hash": "e34c34b165634e7c667c0a10702e5ed1",
+    "semantic_hash": "e34c34b165634e7c667c0a10702e5ed1"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/podman_infrastructure/tasks/custom/pg_containers.yml": {
+    "mtime": 1781153226.6421063,
+    "ast_hash": "49416bb9acb838425ebaa2b9e3954b21",
+    "semantic_hash": "49416bb9acb838425ebaa2b9e3954b21"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/roles/podman_infrastructure/tasks/main.yml": {
+    "mtime": 1777899417.840767,
+    "ast_hash": "7d17b960974219479ad3e1a18755bf98",
+    "semantic_hash": "7d17b960974219479ad3e1a18755bf98"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/site.yml": {
+    "mtime": 1780987182.9543643,
+    "ast_hash": "0ec7bb02629c816ed12c8b7f1cfc9044",
+    "semantic_hash": "0ec7bb02629c816ed12c8b7f1cfc9044"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-podman-etcd/vars/dba_vars.yml": {
+    "mtime": 1781153226.642331,
+    "ast_hash": "e86326da7d7c9da9085ff8c1b1eba2a3",
+    "semantic_hash": "e86326da7d7c9da9085ff8c1b1eba2a3"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/hosts__multi_datacenter.yml": {
+    "mtime": 1778217544.1637442,
+    "ast_hash": "b133e922228afb1c74f76dec737f2efe",
+    "semantic_hash": "b133e922228afb1c74f76dec737f2efe"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/hosts__primary_cluster.yml": {
+    "mtime": 1771928068.0727427,
+    "ast_hash": "fa14fe391ca2693acc57ac4d23975e53",
+    "semantic_hash": "fa14fe391ca2693acc57ac4d23975e53"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/hosts__standby_cluster.yml": {
+    "mtime": 1771928068.0728354,
+    "ast_hash": "97c59c130721775375ad3fc5c40766d2",
+    "semantic_hash": "97c59c130721775375ad3fc5c40766d2"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/multi_dc_failover/defaults/creds.yml": {
+    "mtime": 1771928068.0730143,
+    "ast_hash": "56bed2fdc7e90660aa90dcc688284591",
+    "semantic_hash": "56bed2fdc7e90660aa90dcc688284591"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/multi_dc_failover/defaults/dba_vars.yml": {
+    "mtime": 1771928068.0730934,
+    "ast_hash": "c090707ff3c08be64d2becdaf81d0f94",
+    "semantic_hash": "c090707ff3c08be64d2becdaf81d0f94"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/multi_dc_failover/defaults/main.yml": {
+    "mtime": 1771928068.073174,
+    "ast_hash": "37060eb0edc9ff426390980712507893",
+    "semantic_hash": "37060eb0edc9ff426390980712507893"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/multi_dc_failover/tasks/custom/cluster_promote_demote.yml": {
+    "mtime": 1771928068.0733962,
+    "ast_hash": "681957c71caf25872d6d82a3591f24d0",
+    "semantic_hash": "681957c71caf25872d6d82a3591f24d0"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/multi_dc_failover/tasks/custom/get_db_cluster_role.yml": {
+    "mtime": 1771928068.0735085,
+    "ast_hash": "5fb9d8cca6f735fd108362d51e216f19",
+    "semantic_hash": "5fb9d8cca6f735fd108362d51e216f19"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/multi_dc_failover/tasks/custom/get_patroni_cluster_role.yml": {
+    "mtime": 1771928068.07359,
+    "ast_hash": "f2ac1af744aea6debab63560c24a0934",
+    "semantic_hash": "f2ac1af744aea6debab63560c24a0934"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/multi_dc_failover/tasks/custom/get_postgresql_data_directory.yml": {
+    "mtime": 1771928068.0736768,
+    "ast_hash": "a15147ba7fa1032794d0ce108d75a08c",
+    "semantic_hash": "a15147ba7fa1032794d0ce108d75a08c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/multi_dc_failover/tasks/custom/get_postgresql_log_directory.yml": {
+    "mtime": 1771928068.073767,
+    "ast_hash": "26338606a1bd1ba1251d57d75a07e03a",
+    "semantic_hash": "26338606a1bd1ba1251d57d75a07e03a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/multi_dc_failover/tasks/custom/get_postgresql_version.yml": {
+    "mtime": 1771928068.0738444,
+    "ast_hash": "60e3df0aeb18a6f4a412074c333ad18b",
+    "semantic_hash": "60e3df0aeb18a6f4a412074c333ad18b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/multi_dc_failover/tasks/custom/patronictl_list.yml": {
+    "mtime": 1771928068.0739439,
+    "ast_hash": "658344af0843f00e3788c13637fed2ca",
+    "semantic_hash": "658344af0843f00e3788c13637fed2ca"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/multi_dc_failover/tasks/custom/set_patroni_cluster_leader.yml": {
+    "mtime": 1771928068.074042,
+    "ast_hash": "dc7d6ab3e6dc1d3bbfa1e25f1abaf822",
+    "semantic_hash": "dc7d6ab3e6dc1d3bbfa1e25f1abaf822"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/multi_dc_failover/tasks/main.yml": {
+    "mtime": 1771928068.0741715,
+    "ast_hash": "aa7224e7eb1f381e410a66b97e8a90b0",
+    "semantic_hash": "aa7224e7eb1f381e410a66b97e8a90b0"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/pg-cluster-on-redhat.md": {
+    "mtime": 1778217544.1642566,
+    "ast_hash": "e337c54cc89089baccfc3ee914414b2c",
+    "semantic_hash": "e337c54cc89089baccfc3ee914414b2c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/playbook-multi-dc-failover.yml": {
+    "mtime": 1771928068.074374,
+    "ast_hash": "7de9569c94a818727dae10ffdfdc4803",
+    "semantic_hash": "7de9569c94a818727dae10ffdfdc4803"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/playbook-primary-cluster.yml": {
+    "mtime": 1771928068.0744505,
+    "ast_hash": "750672a4c445a36e8e861a4ce3cd5b3f",
+    "semantic_hash": "750672a4c445a36e8e861a4ce3cd5b3f"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/playbook-standby-cluster.yml": {
+    "mtime": 1771928068.074526,
+    "ast_hash": "e74d5f47622e9c5cae2d130b362ac02f",
+    "semantic_hash": "e74d5f47622e9c5cae2d130b362ac02f"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/playbook-update-pgbackrest-smb.yml": {
+    "mtime": 1778217544.1645067,
+    "ast_hash": "a45f483c9f704ccb799f086b4922aeef",
+    "semantic_hash": "a45f483c9f704ccb799f086b4922aeef"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/defaults/creds.yml": {
+    "mtime": 1771928068.0747125,
+    "ast_hash": "56bed2fdc7e90660aa90dcc688284591",
+    "semantic_hash": "56bed2fdc7e90660aa90dcc688284591"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/defaults/dba_vars.yml": {
+    "mtime": 1771928068.074798,
+    "ast_hash": "4a7d4f981fa56656d33896346e9bfbed",
+    "semantic_hash": "4a7d4f981fa56656d33896346e9bfbed"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/defaults/main.yml": {
+    "mtime": 1778217544.164911,
+    "ast_hash": "d0d931ae7e4cfc981b2f2aff5e6ae9f8",
+    "semantic_hash": "d0d931ae7e4cfc981b2f2aff5e6ae9f8"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/handlers/main.yml": {
+    "mtime": 1771928068.0753438,
+    "ast_hash": "ed8a1a233e98d432accf830fdc5dd9ee",
+    "semantic_hash": "ed8a1a233e98d432accf830fdc5dd9ee"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/handlers/restart_consul.yml": {
+    "mtime": 1771928068.0754008,
+    "ast_hash": "bfd1b24a0b4c09ac5cafe3adaf4800d7",
+    "semantic_hash": "bfd1b24a0b4c09ac5cafe3adaf4800d7"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/handlers/systemd_daemon_reload.yml": {
+    "mtime": 1771928068.0754561,
+    "ast_hash": "3513afce6acb9f572c0cba07f31fdc96",
+    "semantic_hash": "3513afce6acb9f572c0cba07f31fdc96"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/tasks/custom/backup.yml": {
+    "mtime": 1771928068.0756953,
+    "ast_hash": "8f5660885ce0b5e3934cfe31f0ed2b06",
+    "semantic_hash": "8f5660885ce0b5e3934cfe31f0ed2b06"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/tasks/custom/consul_client_config.yml": {
+    "mtime": 1771928068.0757644,
+    "ast_hash": "6adb3c95acd25b12eb9db142909335cf",
+    "semantic_hash": "6adb3c95acd25b12eb9db142909335cf"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/tasks/custom/consul_client_install.yml": {
+    "mtime": 1771928068.0758271,
+    "ast_hash": "8d822415cd28da7ff67852d38b1ce91c",
+    "semantic_hash": "8d822415cd28da7ff67852d38b1ce91c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/tasks/custom/etc_hosts.yml": {
+    "mtime": 1771928068.0758953,
+    "ast_hash": "89947d6036220f4ed195b1cdfd90e63e",
+    "semantic_hash": "89947d6036220f4ed195b1cdfd90e63e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/tasks/custom/filebeat.yml": {
+    "mtime": 1771928068.0759609,
+    "ast_hash": "7dceb3d2ae79a8fe5e1b52804a37c337",
+    "semantic_hash": "7dceb3d2ae79a8fe5e1b52804a37c337"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/tasks/custom/firewall.yml": {
+    "mtime": 1771928068.0760202,
+    "ast_hash": "dbb91a5bd3071ea592617b23a0e01eed",
+    "semantic_hash": "dbb91a5bd3071ea592617b23a0e01eed"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/tasks/custom/packages.yml": {
+    "mtime": 1771928068.0760896,
+    "ast_hash": "d77a07d74ba3f74a06e91353ffafb0f9",
+    "semantic_hash": "d77a07d74ba3f74a06e91353ffafb0f9"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/tasks/custom/patroni.yml": {
+    "mtime": 1771928068.0761497,
+    "ast_hash": "d7684ad071612c85accf04dc1066e6ed",
+    "semantic_hash": "d7684ad071612c85accf04dc1066e6ed"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/tasks/custom/patronictl_list.yml": {
+    "mtime": 1771928068.0762057,
+    "ast_hash": "658344af0843f00e3788c13637fed2ca",
+    "semantic_hash": "658344af0843f00e3788c13637fed2ca"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/tasks/custom/pg_exporter.yml": {
+    "mtime": 1771928068.0762756,
+    "ast_hash": "62ea2f344b6c18562ea1559626df2169",
+    "semantic_hash": "62ea2f344b6c18562ea1559626df2169"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/tasks/custom/pgbackrest.yml": {
+    "mtime": 1771928068.0763485,
+    "ast_hash": "9ca654d6502e3ba817e6cda47a30fd68",
+    "semantic_hash": "9ca654d6502e3ba817e6cda47a30fd68"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/tasks/custom/pgpass.yml": {
+    "mtime": 1771928068.0764103,
+    "ast_hash": "1e2a52bf6193ed859f2dad9d82d1cfa6",
+    "semantic_hash": "1e2a52bf6193ed859f2dad9d82d1cfa6"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/tasks/custom/prechecks.yml": {
+    "mtime": 1771928068.0764732,
+    "ast_hash": "3646c4f062a7c4396c6915bf4925765f",
+    "semantic_hash": "3646c4f062a7c4396c6915bf4925765f"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/tasks/custom/repository.yml": {
+    "mtime": 1771928068.0765336,
+    "ast_hash": "c5c4bf0f6d446216e5c900e6833c0d0e",
+    "semantic_hash": "c5c4bf0f6d446216e5c900e6833c0d0e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/tasks/custom/smb_mount.yml": {
+    "mtime": 1778217544.1651647,
+    "ast_hash": "5fe76c8f2af10033e7832f3d1ee5fa88",
+    "semantic_hash": "5fe76c8f2af10033e7832f3d1ee5fa88"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/tasks/custom/user.yml": {
+    "mtime": 1771928068.0765963,
+    "ast_hash": "1111e98b2bf6ac8825231f17bb172d7b",
+    "semantic_hash": "1111e98b2bf6ac8825231f17bb172d7b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/primary_cluster/tasks/main.yml": {
+    "mtime": 1778217544.1654065,
+    "ast_hash": "fc2b6b79156a4d19728d93f587e0024e",
+    "semantic_hash": "fc2b6b79156a4d19728d93f587e0024e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/real-dr-recovery.md": {
+    "mtime": 1771928068.0769718,
+    "ast_hash": "a5c7157d9a87660a287b1a8ff5232265",
+    "semantic_hash": "a5c7157d9a87660a287b1a8ff5232265"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/defaults/creds.yml": {
+    "mtime": 1771928068.0772285,
+    "ast_hash": "56bed2fdc7e90660aa90dcc688284591",
+    "semantic_hash": "56bed2fdc7e90660aa90dcc688284591"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/defaults/dba_vars.yml": {
+    "mtime": 1771928068.0772865,
+    "ast_hash": "6f90fa43e8b33a588d215bfa2ab58c4d",
+    "semantic_hash": "6f90fa43e8b33a588d215bfa2ab58c4d"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/defaults/main.yml": {
+    "mtime": 1778217544.1660101,
+    "ast_hash": "f2f529777c0c66935cfe1518b16d188b",
+    "semantic_hash": "f2f529777c0c66935cfe1518b16d188b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/handlers/main.yml": {
+    "mtime": 1771928068.0777643,
+    "ast_hash": "ed8a1a233e98d432accf830fdc5dd9ee",
+    "semantic_hash": "ed8a1a233e98d432accf830fdc5dd9ee"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/handlers/restart_consul.yml": {
+    "mtime": 1771928068.077845,
+    "ast_hash": "bfd1b24a0b4c09ac5cafe3adaf4800d7",
+    "semantic_hash": "bfd1b24a0b4c09ac5cafe3adaf4800d7"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/handlers/systemd_daemon_reload.yml": {
+    "mtime": 1771928068.0779138,
+    "ast_hash": "3513afce6acb9f572c0cba07f31fdc96",
+    "semantic_hash": "3513afce6acb9f572c0cba07f31fdc96"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/tasks/custom/backup.yml": {
+    "mtime": 1771928068.0781574,
+    "ast_hash": "8f5660885ce0b5e3934cfe31f0ed2b06",
+    "semantic_hash": "8f5660885ce0b5e3934cfe31f0ed2b06"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/tasks/custom/consul_client_config.yml": {
+    "mtime": 1771928068.0782287,
+    "ast_hash": "6adb3c95acd25b12eb9db142909335cf",
+    "semantic_hash": "6adb3c95acd25b12eb9db142909335cf"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/tasks/custom/consul_client_install.yml": {
+    "mtime": 1771928068.0782938,
+    "ast_hash": "3caf642f4c3d3e4ab97191c6252fcd15",
+    "semantic_hash": "3caf642f4c3d3e4ab97191c6252fcd15"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/tasks/custom/etc_hosts.yml": {
+    "mtime": 1771928068.0783563,
+    "ast_hash": "89947d6036220f4ed195b1cdfd90e63e",
+    "semantic_hash": "89947d6036220f4ed195b1cdfd90e63e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/tasks/custom/filebeat.yml": {
+    "mtime": 1771928068.078416,
+    "ast_hash": "7dceb3d2ae79a8fe5e1b52804a37c337",
+    "semantic_hash": "7dceb3d2ae79a8fe5e1b52804a37c337"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/tasks/custom/firewall.yml": {
+    "mtime": 1771928068.0784814,
+    "ast_hash": "dbb91a5bd3071ea592617b23a0e01eed",
+    "semantic_hash": "dbb91a5bd3071ea592617b23a0e01eed"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/tasks/custom/packages.yml": {
+    "mtime": 1771928068.078538,
+    "ast_hash": "291135efc1ce203120850d2dd000e235",
+    "semantic_hash": "291135efc1ce203120850d2dd000e235"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/tasks/custom/patroni.yml": {
+    "mtime": 1771928068.0786006,
+    "ast_hash": "8f6cb5271170ab3f36484d1b0e5a06f7",
+    "semantic_hash": "8f6cb5271170ab3f36484d1b0e5a06f7"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/tasks/custom/patronictl_list.yml": {
+    "mtime": 1771928068.0786707,
+    "ast_hash": "658344af0843f00e3788c13637fed2ca",
+    "semantic_hash": "658344af0843f00e3788c13637fed2ca"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/tasks/custom/pg_exporter.yml": {
+    "mtime": 1771928068.0787401,
+    "ast_hash": "5d123d0b2f34a36498cff8c454885bfa",
+    "semantic_hash": "5d123d0b2f34a36498cff8c454885bfa"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/tasks/custom/pgbackrest.yml": {
+    "mtime": 1771928068.0788069,
+    "ast_hash": "9ca654d6502e3ba817e6cda47a30fd68",
+    "semantic_hash": "9ca654d6502e3ba817e6cda47a30fd68"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/tasks/custom/pgpass.yml": {
+    "mtime": 1771928068.0788624,
+    "ast_hash": "1e2a52bf6193ed859f2dad9d82d1cfa6",
+    "semantic_hash": "1e2a52bf6193ed859f2dad9d82d1cfa6"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/tasks/custom/prechecks.yml": {
+    "mtime": 1771928068.0789232,
+    "ast_hash": "b969694a9b3f7b369eb61bcc12516bbd",
+    "semantic_hash": "b969694a9b3f7b369eb61bcc12516bbd"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/tasks/custom/repository.yml": {
+    "mtime": 1771928068.0789936,
+    "ast_hash": "c5c4bf0f6d446216e5c900e6833c0d0e",
+    "semantic_hash": "c5c4bf0f6d446216e5c900e6833c0d0e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/tasks/custom/smb_mount.yml": {
+    "mtime": 1778217544.1661935,
+    "ast_hash": "1f5bac19af711181673d031d8e1ae0e3",
+    "semantic_hash": "1f5bac19af711181673d031d8e1ae0e3"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/tasks/custom/user.yml": {
+    "mtime": 1771928068.0790536,
+    "ast_hash": "1111e98b2bf6ac8825231f17bb172d7b",
+    "semantic_hash": "1111e98b2bf6ac8825231f17bb172d7b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-redhat/standby_cluster/tasks/main.yml": {
+    "mtime": 1778217544.166431,
+    "ast_hash": "dbe29780850a3159532adf88f5c01bbf",
+    "semantic_hash": "dbe29780850a3159532adf88f5c01bbf"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/hosts.yml": {
+    "mtime": 1771928068.079427,
+    "ast_hash": "27ef25466a369f8e1c8f0fc1e5eba09a",
+    "semantic_hash": "27ef25466a369f8e1c8f0fc1e5eba09a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/hosts__multi_datacenter.yml": {
+    "mtime": 1778217544.1669288,
+    "ast_hash": "73d5d7d0513cca0660b321f9dcb5f2e6",
+    "semantic_hash": "73d5d7d0513cca0660b321f9dcb5f2e6"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/hosts__primary_cluster.yml": {
+    "mtime": 1771928068.0795467,
+    "ast_hash": "27ef25466a369f8e1c8f0fc1e5eba09a",
+    "semantic_hash": "27ef25466a369f8e1c8f0fc1e5eba09a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/hosts__standby_cluster.yml": {
+    "mtime": 1771928068.0796068,
+    "ast_hash": "f735706f135f243901da95802fb736a8",
+    "semantic_hash": "f735706f135f243901da95802fb736a8"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/multi_dc_failover/defaults/creds.yml": {
+    "mtime": 1771928068.0797565,
+    "ast_hash": "56bed2fdc7e90660aa90dcc688284591",
+    "semantic_hash": "56bed2fdc7e90660aa90dcc688284591"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/multi_dc_failover/defaults/dba_vars.yml": {
+    "mtime": 1771928068.079813,
+    "ast_hash": "c090707ff3c08be64d2becdaf81d0f94",
+    "semantic_hash": "c090707ff3c08be64d2becdaf81d0f94"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/multi_dc_failover/defaults/main.yml": {
+    "mtime": 1771928068.0798745,
+    "ast_hash": "3a4c1fd18472dc0e843528e554a34e83",
+    "semantic_hash": "3a4c1fd18472dc0e843528e554a34e83"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/multi_dc_failover/tasks/custom/cluster_promote_demote.yml": {
+    "mtime": 1771928068.0800073,
+    "ast_hash": "681957c71caf25872d6d82a3591f24d0",
+    "semantic_hash": "681957c71caf25872d6d82a3591f24d0"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/multi_dc_failover/tasks/custom/get_db_cluster_role.yml": {
+    "mtime": 1771928068.080077,
+    "ast_hash": "5fb9d8cca6f735fd108362d51e216f19",
+    "semantic_hash": "5fb9d8cca6f735fd108362d51e216f19"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/multi_dc_failover/tasks/custom/get_patroni_cluster_role.yml": {
+    "mtime": 1771928068.0801425,
+    "ast_hash": "f2ac1af744aea6debab63560c24a0934",
+    "semantic_hash": "f2ac1af744aea6debab63560c24a0934"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/multi_dc_failover/tasks/custom/get_postgresql_data_directory.yml": {
+    "mtime": 1771928068.0802076,
+    "ast_hash": "a15147ba7fa1032794d0ce108d75a08c",
+    "semantic_hash": "a15147ba7fa1032794d0ce108d75a08c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/multi_dc_failover/tasks/custom/get_postgresql_log_directory.yml": {
+    "mtime": 1771928068.0802715,
+    "ast_hash": "26338606a1bd1ba1251d57d75a07e03a",
+    "semantic_hash": "26338606a1bd1ba1251d57d75a07e03a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/multi_dc_failover/tasks/custom/get_postgresql_version.yml": {
+    "mtime": 1771928068.0803313,
+    "ast_hash": "60e3df0aeb18a6f4a412074c333ad18b",
+    "semantic_hash": "60e3df0aeb18a6f4a412074c333ad18b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/multi_dc_failover/tasks/custom/patronictl_list.yml": {
+    "mtime": 1771928068.0803847,
+    "ast_hash": "658344af0843f00e3788c13637fed2ca",
+    "semantic_hash": "658344af0843f00e3788c13637fed2ca"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/multi_dc_failover/tasks/custom/set_patroni_cluster_leader.yml": {
+    "mtime": 1771928068.080445,
+    "ast_hash": "dc7d6ab3e6dc1d3bbfa1e25f1abaf822",
+    "semantic_hash": "dc7d6ab3e6dc1d3bbfa1e25f1abaf822"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/multi_dc_failover/tasks/main.yml": {
+    "mtime": 1771928068.0805092,
+    "ast_hash": "aa7224e7eb1f381e410a66b97e8a90b0",
+    "semantic_hash": "aa7224e7eb1f381e410a66b97e8a90b0"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/pg-cluster-on-ubuntu.md": {
+    "mtime": 1778217544.1671717,
+    "ast_hash": "ecf789b7c88c09a4cfc1f5fa6cec6823",
+    "semantic_hash": "ecf789b7c88c09a4cfc1f5fa6cec6823"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/playbook-install-pg-cluster-ubuntu.yml": {
+    "mtime": 1771928068.0806355,
+    "ast_hash": "c30f9b7f39120812c2593bd20a0bd960",
+    "semantic_hash": "c30f9b7f39120812c2593bd20a0bd960"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/playbook-multi-dc-failover.yml": {
+    "mtime": 1771928068.080692,
+    "ast_hash": "7de9569c94a818727dae10ffdfdc4803",
+    "semantic_hash": "7de9569c94a818727dae10ffdfdc4803"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/playbook-primary-cluster.yml": {
+    "mtime": 1771928068.0807443,
+    "ast_hash": "46e2b42a866759ada3af1ab268c6cebf",
+    "semantic_hash": "46e2b42a866759ada3af1ab268c6cebf"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/playbook-standby-cluster.yml": {
+    "mtime": 1771928068.0808008,
+    "ast_hash": "7270e6243c5b477b747f7a4179e79465",
+    "semantic_hash": "7270e6243c5b477b747f7a4179e79465"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/playbook-update-pgbackrest-smb.yml": {
+    "mtime": 1778217544.167655,
+    "ast_hash": "9d68587f50af05ceed70496f0f0969d5",
+    "semantic_hash": "9d68587f50af05ceed70496f0f0969d5"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/defaults/creds.yml": {
+    "mtime": 1778217544.167882,
+    "ast_hash": "d3e02962e439ec0ca8c2cf25f221380b",
+    "semantic_hash": "d3e02962e439ec0ca8c2cf25f221380b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/defaults/dba_vars.yml": {
+    "mtime": 1771928068.081006,
+    "ast_hash": "4c29f0e9fc6fc374d90e8a55bf8adb32",
+    "semantic_hash": "4c29f0e9fc6fc374d90e8a55bf8adb32"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/defaults/main.yml": {
+    "mtime": 1778217544.168156,
+    "ast_hash": "896658a8bc41e9e39485b59e259f72cb",
+    "semantic_hash": "896658a8bc41e9e39485b59e259f72cb"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/handlers/main.yml": {
+    "mtime": 1771928068.0814664,
+    "ast_hash": "ed8a1a233e98d432accf830fdc5dd9ee",
+    "semantic_hash": "ed8a1a233e98d432accf830fdc5dd9ee"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/handlers/restart_consul.yml": {
+    "mtime": 1771928068.081533,
+    "ast_hash": "bfd1b24a0b4c09ac5cafe3adaf4800d7",
+    "semantic_hash": "bfd1b24a0b4c09ac5cafe3adaf4800d7"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/handlers/systemd_daemon_reload.yml": {
+    "mtime": 1771928068.0816045,
+    "ast_hash": "3513afce6acb9f572c0cba07f31fdc96",
+    "semantic_hash": "3513afce6acb9f572c0cba07f31fdc96"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/tasks/custom/backup.yml": {
+    "mtime": 1771928068.081827,
+    "ast_hash": "0fbfb1a2c2fa22f16c7f612cceda801d",
+    "semantic_hash": "0fbfb1a2c2fa22f16c7f612cceda801d"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/tasks/custom/consul_client_config.yml": {
+    "mtime": 1771928068.081893,
+    "ast_hash": "6adb3c95acd25b12eb9db142909335cf",
+    "semantic_hash": "6adb3c95acd25b12eb9db142909335cf"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/tasks/custom/consul_client_install.yml": {
+    "mtime": 1771928068.0819614,
+    "ast_hash": "3990b1e28045b701694c85723dacb06c",
+    "semantic_hash": "3990b1e28045b701694c85723dacb06c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/tasks/custom/etc_hosts.yml": {
+    "mtime": 1771928068.0820277,
+    "ast_hash": "89947d6036220f4ed195b1cdfd90e63e",
+    "semantic_hash": "89947d6036220f4ed195b1cdfd90e63e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/tasks/custom/filebeat.yml": {
+    "mtime": 1771928068.0820794,
+    "ast_hash": "7dceb3d2ae79a8fe5e1b52804a37c337",
+    "semantic_hash": "7dceb3d2ae79a8fe5e1b52804a37c337"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/tasks/custom/firewall.yml": {
+    "mtime": 1771928068.0821342,
+    "ast_hash": "2cdf65d2c837ddf20210326785a70d6a",
+    "semantic_hash": "2cdf65d2c837ddf20210326785a70d6a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/tasks/custom/packages.yml": {
+    "mtime": 1771928068.0821939,
+    "ast_hash": "d9d1d013b81b6cea125c28fd9d7becb7",
+    "semantic_hash": "d9d1d013b81b6cea125c28fd9d7becb7"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/tasks/custom/patroni.yml": {
+    "mtime": 1771928068.0822582,
+    "ast_hash": "d2445239743ff26ccfe67ee7db25bb54",
+    "semantic_hash": "d2445239743ff26ccfe67ee7db25bb54"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/tasks/custom/patronictl_list.yml": {
+    "mtime": 1771928068.0824172,
+    "ast_hash": "658344af0843f00e3788c13637fed2ca",
+    "semantic_hash": "658344af0843f00e3788c13637fed2ca"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/tasks/custom/pg_exporter.yml": {
+    "mtime": 1771928068.0824852,
+    "ast_hash": "e48f8928846cdd12cb1a3cf7e18085b6",
+    "semantic_hash": "e48f8928846cdd12cb1a3cf7e18085b6"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/tasks/custom/pgbackrest.yml": {
+    "mtime": 1778217544.168473,
+    "ast_hash": "02761f5fe1c6aeab6054b36f7e5e7402",
+    "semantic_hash": "02761f5fe1c6aeab6054b36f7e5e7402"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/tasks/custom/pgpass.yml": {
+    "mtime": 1771928068.082689,
+    "ast_hash": "7fb6d1ec766f475ae6cbdf0519ea8546",
+    "semantic_hash": "7fb6d1ec766f475ae6cbdf0519ea8546"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/tasks/custom/prechecks.yml": {
+    "mtime": 1771928068.0827549,
+    "ast_hash": "840616c4cb0c31ed09b51f623407d999",
+    "semantic_hash": "840616c4cb0c31ed09b51f623407d999"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/tasks/custom/repository.yml": {
+    "mtime": 1771928068.0828257,
+    "ast_hash": "ad63721d195a488ec7e3b6714b6be088",
+    "semantic_hash": "ad63721d195a488ec7e3b6714b6be088"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/tasks/custom/smb_mount.yml": {
+    "mtime": 1778217544.1686578,
+    "ast_hash": "7215c3ced73b88c1206d16f53111e9a1",
+    "semantic_hash": "7215c3ced73b88c1206d16f53111e9a1"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/tasks/custom/user.yml": {
+    "mtime": 1771928068.0828867,
+    "ast_hash": "6b989913dac4ded142547e8c7e162725",
+    "semantic_hash": "6b989913dac4ded142547e8c7e162725"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/primary_cluster/tasks/main.yml": {
+    "mtime": 1778217544.1689727,
+    "ast_hash": "794f4cf34395c0ffad36ab4776e0e461",
+    "semantic_hash": "794f4cf34395c0ffad36ab4776e0e461"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/real-dr-recovery.md": {
+    "mtime": 1771928068.0832353,
+    "ast_hash": "a5c7157d9a87660a287b1a8ff5232265",
+    "semantic_hash": "a5c7157d9a87660a287b1a8ff5232265"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/defaults/creds.yml": {
+    "mtime": 1778217544.169632,
+    "ast_hash": "d3e02962e439ec0ca8c2cf25f221380b",
+    "semantic_hash": "d3e02962e439ec0ca8c2cf25f221380b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/defaults/dba_vars.yml": {
+    "mtime": 1771928068.0835733,
+    "ast_hash": "ccd04619468c422213cd089cae9d723a",
+    "semantic_hash": "ccd04619468c422213cd089cae9d723a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/defaults/main.yml": {
+    "mtime": 1778217544.170207,
+    "ast_hash": "e5ca711fbf2371195d8e957140b369ca",
+    "semantic_hash": "e5ca711fbf2371195d8e957140b369ca"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/handlers/main.yml": {
+    "mtime": 1771928068.0840375,
+    "ast_hash": "ed8a1a233e98d432accf830fdc5dd9ee",
+    "semantic_hash": "ed8a1a233e98d432accf830fdc5dd9ee"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/handlers/restart_consul.yml": {
+    "mtime": 1771928068.084096,
+    "ast_hash": "bfd1b24a0b4c09ac5cafe3adaf4800d7",
+    "semantic_hash": "bfd1b24a0b4c09ac5cafe3adaf4800d7"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/handlers/systemd_daemon_reload.yml": {
+    "mtime": 1771928068.084152,
+    "ast_hash": "3513afce6acb9f572c0cba07f31fdc96",
+    "semantic_hash": "3513afce6acb9f572c0cba07f31fdc96"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/tasks/custom/backup.yml": {
+    "mtime": 1771928068.084413,
+    "ast_hash": "0fbfb1a2c2fa22f16c7f612cceda801d",
+    "semantic_hash": "0fbfb1a2c2fa22f16c7f612cceda801d"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/tasks/custom/consul_client_config.yml": {
+    "mtime": 1771928068.0844784,
+    "ast_hash": "6adb3c95acd25b12eb9db142909335cf",
+    "semantic_hash": "6adb3c95acd25b12eb9db142909335cf"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/tasks/custom/consul_client_install.yml": {
+    "mtime": 1771928068.0845475,
+    "ast_hash": "3990b1e28045b701694c85723dacb06c",
+    "semantic_hash": "3990b1e28045b701694c85723dacb06c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/tasks/custom/etc_hosts.yml": {
+    "mtime": 1771928068.0846145,
+    "ast_hash": "89947d6036220f4ed195b1cdfd90e63e",
+    "semantic_hash": "89947d6036220f4ed195b1cdfd90e63e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/tasks/custom/filebeat.yml": {
+    "mtime": 1771928068.0846725,
+    "ast_hash": "7dceb3d2ae79a8fe5e1b52804a37c337",
+    "semantic_hash": "7dceb3d2ae79a8fe5e1b52804a37c337"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/tasks/custom/firewall.yml": {
+    "mtime": 1771928068.0847359,
+    "ast_hash": "2cdf65d2c837ddf20210326785a70d6a",
+    "semantic_hash": "2cdf65d2c837ddf20210326785a70d6a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/tasks/custom/packages.yml": {
+    "mtime": 1771928068.0848012,
+    "ast_hash": "d9d1d013b81b6cea125c28fd9d7becb7",
+    "semantic_hash": "d9d1d013b81b6cea125c28fd9d7becb7"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/tasks/custom/patroni.yml": {
+    "mtime": 1771928068.0848632,
+    "ast_hash": "d2445239743ff26ccfe67ee7db25bb54",
+    "semantic_hash": "d2445239743ff26ccfe67ee7db25bb54"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/tasks/custom/patronictl_list.yml": {
+    "mtime": 1771928068.0849252,
+    "ast_hash": "658344af0843f00e3788c13637fed2ca",
+    "semantic_hash": "658344af0843f00e3788c13637fed2ca"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/tasks/custom/pg_exporter.yml": {
+    "mtime": 1771928068.084985,
+    "ast_hash": "e48f8928846cdd12cb1a3cf7e18085b6",
+    "semantic_hash": "e48f8928846cdd12cb1a3cf7e18085b6"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/tasks/custom/pgbackrest.yml": {
+    "mtime": 1778217544.1704977,
+    "ast_hash": "02761f5fe1c6aeab6054b36f7e5e7402",
+    "semantic_hash": "02761f5fe1c6aeab6054b36f7e5e7402"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/tasks/custom/pgpass.yml": {
+    "mtime": 1771928068.0851104,
+    "ast_hash": "7fb6d1ec766f475ae6cbdf0519ea8546",
+    "semantic_hash": "7fb6d1ec766f475ae6cbdf0519ea8546"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/tasks/custom/prechecks.yml": {
+    "mtime": 1771928068.0851662,
+    "ast_hash": "840616c4cb0c31ed09b51f623407d999",
+    "semantic_hash": "840616c4cb0c31ed09b51f623407d999"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/tasks/custom/repository.yml": {
+    "mtime": 1771928068.0852282,
+    "ast_hash": "ad63721d195a488ec7e3b6714b6be088",
+    "semantic_hash": "ad63721d195a488ec7e3b6714b6be088"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/tasks/custom/smb_mount.yml": {
+    "mtime": 1778217544.170625,
+    "ast_hash": "7215c3ced73b88c1206d16f53111e9a1",
+    "semantic_hash": "7215c3ced73b88c1206d16f53111e9a1"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/tasks/custom/user.yml": {
+    "mtime": 1771928068.0852845,
+    "ast_hash": "6b989913dac4ded142547e8c7e162725",
+    "semantic_hash": "6b989913dac4ded142547e8c7e162725"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-ubuntu/standby_cluster/tasks/main.yml": {
+    "mtime": 1778217544.1708257,
+    "ast_hash": "d24fa8ae5703aea580856356bf62781c",
+    "semantic_hash": "d24fa8ae5703aea580856356bf62781c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/CHANGES.md": {
+    "mtime": 1787031512.4045217,
+    "ast_hash": "d33624a4477d64d86145751ea59b23b1",
+    "semantic_hash": "d33624a4477d64d86145751ea59b23b1"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/QUICK_START.md": {
+    "mtime": 1788249069.2852037,
+    "ast_hash": "e57d0df34b0846e0503c46e853d7b771",
+    "semantic_hash": "e57d0df34b0846e0503c46e853d7b771"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/README-SI-PG-Major-Version-Upgrade.md": {
+    "mtime": 1788275409.578407,
+    "ast_hash": "f3b1bbbc16ca152ab9dbe84ff411accf",
+    "semantic_hash": "f3b1bbbc16ca152ab9dbe84ff411accf"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/README.md": {
+    "mtime": 1788249069.2852192,
+    "ast_hash": "cc85ad4020c8fb7dee29ec4b8ab9f65b",
+    "semantic_hash": "cc85ad4020c8fb7dee29ec4b8ab9f65b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/STRUCTURE.md": {
+    "mtime": 1788248994.7398489,
+    "ast_hash": "2d50592374f499c6f91812981607569b",
+    "semantic_hash": "2d50592374f499c6f91812981607569b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/hosts.yml": {
+    "mtime": 1787030733.021513,
+    "ast_hash": "578c817ae45675f275190e5a6ba64910",
+    "semantic_hash": "578c817ae45675f275190e5a6ba64910"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/playbook-cleanup.yml": {
+    "mtime": 1786948589.6012576,
+    "ast_hash": "a0ffdf814d41f18781d34d49dc49ba88",
+    "semantic_hash": "a0ffdf814d41f18781d34d49dc49ba88"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/playbook-install-pg-standalone.yml": {
+    "mtime": 1786948586.288547,
+    "ast_hash": "970219bd3df0cf91ed128e7987b47df5",
+    "semantic_hash": "970219bd3df0cf91ed128e7987b47df5"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/playbook-setup-docker.yml": {
+    "mtime": 1787031464.3108666,
+    "ast_hash": "a3e87927c68c69959c5e4b4819e6cd7a",
+    "semantic_hash": "a3e87927c68c69959c5e4b4819e6cd7a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/roles/docker_infrastructure/defaults/main.yml": {
+    "mtime": 1786948805.9016018,
+    "ast_hash": "5691f88c852b121bc82eaced0ee35278",
+    "semantic_hash": "5691f88c852b121bc82eaced0ee35278"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/roles/docker_infrastructure/tasks/custom/build_image.yml": {
+    "mtime": 1786948818.3679078,
+    "ast_hash": "1522e853ec8e18a624688b3bc0a102ad",
+    "semantic_hash": "1522e853ec8e18a624688b3bc0a102ad"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/roles/docker_infrastructure/tasks/custom/network.yml": {
+    "mtime": 1786948814.3154757,
+    "ast_hash": "63d2a21c5e0942f5ffd180693fcc9cb7",
+    "semantic_hash": "63d2a21c5e0942f5ffd180693fcc9cb7"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/roles/docker_infrastructure/tasks/custom/pg_containers.yml": {
+    "mtime": 1788248936.4488926,
+    "ast_hash": "47951ea9ea97374474a7949aae11dedf",
+    "semantic_hash": "47951ea9ea97374474a7949aae11dedf"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/roles/docker_infrastructure/tasks/main.yml": {
+    "mtime": 1786948810.337037,
+    "ast_hash": "37c5f23bed0a06a78d1a8effa62da696",
+    "semantic_hash": "37c5f23bed0a06a78d1a8effa62da696"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/roles/pg_standalone/defaults/creds.yml": {
+    "mtime": 1786948633.7563581,
+    "ast_hash": "f349f0acac484da6f8f636130c4bd950",
+    "semantic_hash": "f349f0acac484da6f8f636130c4bd950"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/roles/pg_standalone/defaults/main.yml": {
+    "mtime": 1788248936.4472053,
+    "ast_hash": "827c7764743e94946030e1f2a608bca8",
+    "semantic_hash": "827c7764743e94946030e1f2a608bca8"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/roles/pg_standalone/handlers/main.yml": {
+    "mtime": 1787031378.5217438,
+    "ast_hash": "4e42e00909630ffd434113b4b58fab26",
+    "semantic_hash": "4e42e00909630ffd434113b4b58fab26"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/roles/pg_standalone/tasks/custom/container_env.yml": {
+    "mtime": 1786948680.750859,
+    "ast_hash": "deb17ee67818e7f51972d6437c37200e",
+    "semantic_hash": "deb17ee67818e7f51972d6437c37200e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/roles/pg_standalone/tasks/custom/packages.yml": {
+    "mtime": 1786948670.254962,
+    "ast_hash": "87e73306044ad2b7b89d0ce8dadf2165",
+    "semantic_hash": "87e73306044ad2b7b89d0ce8dadf2165"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/roles/pg_standalone/tasks/custom/pgbackrest.yml": {
+    "mtime": 1788248699.9436247,
+    "ast_hash": "dd2a7fc30f747e3b2a7c769154730a81",
+    "semantic_hash": "dd2a7fc30f747e3b2a7c769154730a81"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/roles/pg_standalone/tasks/custom/pgpass.yml": {
+    "mtime": 1786948697.728753,
+    "ast_hash": "9b7aba86fa0571de80ca14145a616bf3",
+    "semantic_hash": "9b7aba86fa0571de80ca14145a616bf3"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/roles/pg_standalone/tasks/custom/postgresql.yml": {
+    "mtime": 1788248766.8958142,
+    "ast_hash": "52edca88ecb3b13a79171c3607da95cc",
+    "semantic_hash": "52edca88ecb3b13a79171c3607da95cc"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/roles/pg_standalone/tasks/custom/prechecks.yml": {
+    "mtime": 1786948657.27361,
+    "ast_hash": "b82ae1f15842a084efab4806360573fa",
+    "semantic_hash": "b82ae1f15842a084efab4806360573fa"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/roles/pg_standalone/tasks/custom/repository.yml": {
+    "mtime": 1786948662.032477,
+    "ast_hash": "e3e45d1eaac38a5dbe250e0d249cb1c8",
+    "semantic_hash": "e3e45d1eaac38a5dbe250e0d249cb1c8"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/roles/pg_standalone/tasks/custom/user.yml": {
+    "mtime": 1786948746.2343783,
+    "ast_hash": "bba0e81338ccb7d4bd2d8f5bc2b79c3a",
+    "semantic_hash": "bba0e81338ccb7d4bd2d8f5bc2b79c3a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/roles/pg_standalone/tasks/main.yml": {
+    "mtime": 1787031339.4517167,
+    "ast_hash": "8799456f4b747b648028b8dd79e5735e",
+    "semantic_hash": "8799456f4b747b648028b8dd79e5735e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/site.yml": {
+    "mtime": 1786948581.657559,
+    "ast_hash": "5b42ddbf16b6c9af410a33ccbc0dd72b",
+    "semantic_hash": "5b42ddbf16b6c9af410a33ccbc0dd72b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-standalone-docker/vars/dba_vars.yml": {
+    "mtime": 1787031728.6022587,
+    "ast_hash": "32ee5c54cb601c6911ac953d00fc66fd",
+    "semantic_hash": "32ee5c54cb601c6911ac953d00fc66fd"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/hosts.yml": {
+    "mtime": 1780912894.2636926,
+    "ast_hash": "57c8d6869402d8ee7aa0ce37024e1115",
+    "semantic_hash": "57c8d6869402d8ee7aa0ce37024e1115"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_redhat/README.md": {
+    "mtime": 1771928068.085738,
+    "ast_hash": "433d370732878937b5cf7bdbf13b76d6",
+    "semantic_hash": "433d370732878937b5cf7bdbf13b76d6"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_redhat/defaults/main.yml": {
+    "mtime": 1771928068.0858335,
+    "ast_hash": "0fdcec64258d550a6957b8a7fbf627ec",
+    "semantic_hash": "0fdcec64258d550a6957b8a7fbf627ec"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_redhat/handlers/main.yml": {
+    "mtime": 1771928068.0860457,
+    "ast_hash": "83398e8c529f90ebe02034e16e990e43",
+    "semantic_hash": "83398e8c529f90ebe02034e16e990e43"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_redhat/meta/main.yml": {
+    "mtime": 1771928068.0861642,
+    "ast_hash": "ee2ca434d41857561c3bddf6c3353665",
+    "semantic_hash": "ee2ca434d41857561c3bddf6c3353665"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_redhat/tasks/custom/configure_pgsql_bin_path.yml": {
+    "mtime": 1771928068.0863268,
+    "ast_hash": "48584d9f07c869487b58c9750b184ff7",
+    "semantic_hash": "48584d9f07c869487b58c9750b184ff7"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_redhat/tasks/custom/extensions-from-external-repos.yml": {
+    "mtime": 1771928068.086392,
+    "ast_hash": "69625b0653c6b367d6b3cf9c2599cb21",
+    "semantic_hash": "69625b0653c6b367d6b3cf9c2599cb21"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_redhat/tasks/custom/extensions-from-github-repos.yml": {
+    "mtime": 1771928068.086461,
+    "ast_hash": "c723b829c377d1c0d09b767836902346",
+    "semantic_hash": "c723b829c377d1c0d09b767836902346"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_redhat/tasks/custom/extensions.yml": {
+    "mtime": 1771928068.0865226,
+    "ast_hash": "c9a2722d2efc871349a7060926dc43cf",
+    "semantic_hash": "c9a2722d2efc871349a7060926dc43cf"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_redhat/tasks/custom/packages.yml": {
+    "mtime": 1771928068.0865874,
+    "ast_hash": "5736b168ddf4dcfa27241bd30c507219",
+    "semantic_hash": "5736b168ddf4dcfa27241bd30c507219"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_redhat/tasks/custom/pgpass_file.yml": {
+    "mtime": 1771928068.086652,
+    "ast_hash": "0612a4402ec53924be9ece25fdb4edff",
+    "semantic_hash": "0612a4402ec53924be9ece25fdb4edff"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_redhat/tasks/custom/postgres_configuration.yml": {
+    "mtime": 1771928068.0867248,
+    "ast_hash": "9468232d4c47b4ab31134a08cd11f40b",
+    "semantic_hash": "9468232d4c47b4ab31134a08cd11f40b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_redhat/tasks/custom/postgres_installation.yml": {
+    "mtime": 1771928068.0867999,
+    "ast_hash": "e7f2a0f0a554dc9a803f366b42b0f47e",
+    "semantic_hash": "e7f2a0f0a554dc9a803f366b42b0f47e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_redhat/tasks/main.yml": {
+    "mtime": 1771928068.0868645,
+    "ast_hash": "176e32b491cc6e2c8dadf7fc6c56f3cd",
+    "semantic_hash": "176e32b491cc6e2c8dadf7fc6c56f3cd"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_redhat/tests/test.yml": {
+    "mtime": 1771928068.087172,
+    "ast_hash": "d2bd4d65c8bfadcf430236e576eb9416",
+    "semantic_hash": "d2bd4d65c8bfadcf430236e576eb9416"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_redhat/vars/main.yml": {
+    "mtime": 1771928068.087292,
+    "ast_hash": "111711f8b01a450d645044c4b4e50060",
+    "semantic_hash": "111711f8b01a450d645044c4b4e50060"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_ubuntu/README.md": {
+    "mtime": 1771928068.0874143,
+    "ast_hash": "433d370732878937b5cf7bdbf13b76d6",
+    "semantic_hash": "433d370732878937b5cf7bdbf13b76d6"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_ubuntu/defaults/main.yml": {
+    "mtime": 1780912894.2638853,
+    "ast_hash": "ad545c273e2bcda976503ab1ff6fe7a7",
+    "semantic_hash": "ad545c273e2bcda976503ab1ff6fe7a7"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_ubuntu/handlers/main.yml": {
+    "mtime": 1771928068.0877929,
+    "ast_hash": "d1605ad3b7f0de9dd47a7a8b0d6c1443",
+    "semantic_hash": "d1605ad3b7f0de9dd47a7a8b0d6c1443"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_ubuntu/meta/main.yml": {
+    "mtime": 1771928068.0879116,
+    "ast_hash": "ee2ca434d41857561c3bddf6c3353665",
+    "semantic_hash": "ee2ca434d41857561c3bddf6c3353665"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_ubuntu/tasks/custom/packages.yml": {
+    "mtime": 1780912894.2640676,
+    "ast_hash": "826768b0b0f34a3770dd179647d24ba9",
+    "semantic_hash": "826768b0b0f34a3770dd179647d24ba9"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_ubuntu/tasks/custom/pgpass_file.yml": {
+    "mtime": 1780912894.26425,
+    "ast_hash": "db4fd24bf815168c0ff5bbe1b9359e13",
+    "semantic_hash": "db4fd24bf815168c0ff5bbe1b9359e13"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_ubuntu/tasks/custom/postgres_configuration.yml": {
+    "mtime": 1771928068.0882285,
+    "ast_hash": "d10381bf4bead70d209dcb6591081965",
+    "semantic_hash": "d10381bf4bead70d209dcb6591081965"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_ubuntu/tasks/custom/postgres_installation.yml": {
+    "mtime": 1771928068.0882936,
+    "ast_hash": "99daff51f14d3c5f40c1dede18b0fcfd",
+    "semantic_hash": "99daff51f14d3c5f40c1dede18b0fcfd"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_ubuntu/tasks/main.yml": {
+    "mtime": 1780912894.2644355,
+    "ast_hash": "3e3ac93121e310f0132ed798fd97b265",
+    "semantic_hash": "3e3ac93121e310f0132ed798fd97b265"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_ubuntu/tests/test.yml": {
+    "mtime": 1771928068.088659,
+    "ast_hash": "d2bd4d65c8bfadcf430236e576eb9416",
+    "semantic_hash": "d2bd4d65c8bfadcf430236e576eb9416"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/install_postgresql_on_ubuntu/vars/main.yml": {
+    "mtime": 1771928068.0887687,
+    "ast_hash": "111711f8b01a450d645044c4b4e50060",
+    "semantic_hash": "111711f8b01a450d645044c4b4e50060"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/playbook-install-postgresql.yml": {
+    "mtime": 1780912894.2649138,
+    "ast_hash": "bdb2964eaf5a7384b4efea9c16867705",
+    "semantic_hash": "bdb2964eaf5a7384b4efea9c16867705"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-postgresql--standalone/vars/dba_vars.yml": {
+    "mtime": 1771928068.0890489,
+    "ast_hash": "20086ba089687b3233156ee81ad3d8d4",
+    "semantic_hash": "20086ba089687b3233156ee81ad3d8d4"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/configure_cluster/defaults/creds.yml": {
+    "mtime": 1771928068.089344,
+    "ast_hash": "56bed2fdc7e90660aa90dcc688284591",
+    "semantic_hash": "56bed2fdc7e90660aa90dcc688284591"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/configure_cluster/defaults/dba_vars.yml": {
+    "mtime": 1771928068.0894363,
+    "ast_hash": "8487cc2728273adec573ebc81de968cf",
+    "semantic_hash": "8487cc2728273adec573ebc81de968cf"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/configure_cluster/defaults/main.yml": {
+    "mtime": 1771928068.0895188,
+    "ast_hash": "42019f6f98f370d71a2a724c6a94a429",
+    "semantic_hash": "42019f6f98f370d71a2a724c6a94a429"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/configure_cluster/tasks/custom/get_db_cluster_role.yml": {
+    "mtime": 1771928068.0897014,
+    "ast_hash": "5fb9d8cca6f735fd108362d51e216f19",
+    "semantic_hash": "5fb9d8cca6f735fd108362d51e216f19"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/configure_cluster/tasks/custom/get_patroni_cluster_role.yml": {
+    "mtime": 1771928068.0897813,
+    "ast_hash": "f2ac1af744aea6debab63560c24a0934",
+    "semantic_hash": "f2ac1af744aea6debab63560c24a0934"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/configure_cluster/tasks/custom/get_postgresql_data_directory.yml": {
+    "mtime": 1771928068.0898528,
+    "ast_hash": "bd961cefc2da075c5e747a16521fcc42",
+    "semantic_hash": "bd961cefc2da075c5e747a16521fcc42"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/configure_cluster/tasks/custom/get_postgresql_log_directory.yml": {
+    "mtime": 1771928068.0899293,
+    "ast_hash": "b4a86055da0398a8fabc41ad7fb1765a",
+    "semantic_hash": "b4a86055da0398a8fabc41ad7fb1765a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/configure_cluster/tasks/custom/get_postgresql_version.yml": {
+    "mtime": 1771928068.0900028,
+    "ast_hash": "60e3df0aeb18a6f4a412074c333ad18b",
+    "semantic_hash": "60e3df0aeb18a6f4a412074c333ad18b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/configure_cluster/tasks/custom/get_replica_role_in_patroni.yml": {
+    "mtime": 1771928068.0900757,
+    "ast_hash": "623e4009f56a22165d681afc0397d369",
+    "semantic_hash": "623e4009f56a22165d681afc0397d369"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/configure_cluster/tasks/custom/patronictl_list.yml": {
+    "mtime": 1771928068.090149,
+    "ast_hash": "658344af0843f00e3788c13637fed2ca",
+    "semantic_hash": "658344af0843f00e3788c13637fed2ca"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/configure_cluster/tasks/custom/s3keyrotation.yml": {
+    "mtime": 1771928068.0902252,
+    "ast_hash": "ed51617b594888d3020ead815b39f513",
+    "semantic_hash": "ed51617b594888d3020ead815b39f513"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/configure_cluster/tasks/custom/set_patroni_cluster_leader.yml": {
+    "mtime": 1771928068.0902936,
+    "ast_hash": "dc7d6ab3e6dc1d3bbfa1e25f1abaf822",
+    "semantic_hash": "dc7d6ab3e6dc1d3bbfa1e25f1abaf822"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/configure_cluster/tasks/main.yml": {
+    "mtime": 1771928068.0903888,
+    "ast_hash": "92853124f08f45ebe868a9c41cf9ec8f",
+    "semantic_hash": "92853124f08f45ebe868a9c41cf9ec8f"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/hosts.yml": {
+    "mtime": 1771928068.0906055,
+    "ast_hash": "52637ecf58df885402fa31ce52cf71b8",
+    "semantic_hash": "52637ecf58df885402fa31ce52cf71b8"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/hosts__multi_datacenter.yml": {
+    "mtime": 1771928068.0907373,
+    "ast_hash": "72500d38effea1a8af12a959bab8cb9e",
+    "semantic_hash": "72500d38effea1a8af12a959bab8cb9e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/hosts_all.yml": {
+    "mtime": 1771928068.090806,
+    "ast_hash": "7e60153c33b147a6c164baf690173a3f",
+    "semantic_hash": "7e60153c33b147a6c164baf690173a3f"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/miscellaneous_scripts/dba_package/slack-emojis.md": {
+    "mtime": 1771928068.0919192,
+    "ast_hash": "fffe7e5b13af1930897a39513578de47",
+    "semantic_hash": "fffe7e5b13af1930897a39513578de47"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/playbook-configure-cluster.yml": {
+    "mtime": 1771928068.0925245,
+    "ast_hash": "6bdd4901caa11bb8579b1c300de89f8e",
+    "semantic_hash": "6bdd4901caa11bb8579b1c300de89f8e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/playbook-psql_connectivity_for_multi_cluster_inventory.yml": {
+    "mtime": 1771928068.0925908,
+    "ast_hash": "b4af99654564f8336b3e13046bf0d0b2",
+    "semantic_hash": "b4af99654564f8336b3e13046bf0d0b2"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/playbook-postgres-configuration/playbook-psql_connectivity_for_single_cluster_inventory.yml": {
+    "mtime": 1771928068.0926611,
+    "ast_hash": "04d2ef4aca9a4305c17fb20cbb8a263a",
+    "semantic_hash": "04d2ef4aca9a4305c17fb20cbb8a263a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/poc/COMPARISON_AND_FIX.md": {
+    "mtime": 1778226347.8171642,
+    "ast_hash": "6b76b30ecead9548586b580196cbf903",
+    "semantic_hash": "6b76b30ecead9548586b580196cbf903"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/poc/CONFIG_CHANGES_CHECKLIST.md": {
+    "mtime": 1778226797.7395368,
+    "ast_hash": "62a3c25ce0802d72479dbfb57212d5b8",
+    "semantic_hash": "62a3c25ce0802d72479dbfb57212d5b8"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/poc/FAILOVER_SCENARIOS_EXPLAINED.md": {
+    "mtime": 1778228285.397327,
+    "ast_hash": "02c80824c0fc623f5c0a0eb7e6979fb3",
+    "semantic_hash": "02c80824c0fc623f5c0a0eb7e6979fb3"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/poc/FINAL_COMPARISON_REPORT.md": {
+    "mtime": 1778226491.1828675,
+    "ast_hash": "c3725eee794a13c2019a6c9d7e792d73",
+    "semantic_hash": "c3725eee794a13c2019a6c9d7e792d73"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/poc/PERFORMANCE_IMPACT_EXPLAINED.md": {
+    "mtime": 1778228331.2942722,
+    "ast_hash": "6a274921965abe32be6a9757820deda8",
+    "semantic_hash": "6a274921965abe32be6a9757820deda8"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/poc/QUICK_REFERENCE_SYNC_CONFIG.md": {
+    "mtime": 1778228306.1132116,
+    "ast_hash": "73129add24f78f2bcf6055b7ab906dfa",
+    "semantic_hash": "73129add24f78f2bcf6055b7ab906dfa"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/poc/README_CONFIG_EXPLANATION.md": {
+    "mtime": 1778228387.53482,
+    "ast_hash": "885e5b7b38cb2d010acb4442f1bf1014",
+    "semantic_hash": "885e5b7b38cb2d010acb4442f1bf1014"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/poc/README_SYNCHRONOUS_STANDBY.md": {
+    "mtime": 1778226809.6411412,
+    "ast_hash": "32f1c8f814d2f6ee36080a4f6955a53b",
+    "semantic_hash": "32f1c8f814d2f6ee36080a4f6955a53b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/poc/RECOMMENDATION_SUMMARY.md": {
+    "mtime": 1778226785.1043088,
+    "ast_hash": "1a9b73dd816f8be7468a74ed056d0770",
+    "semantic_hash": "1a9b73dd816f8be7468a74ed056d0770"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/poc/SYNCHRONOUS_CONFIG_EXPLAINED.md": {
+    "mtime": 1778228257.1575663,
+    "ast_hash": "11b0b1f8b19636bd4df10f84af01b300",
+    "semantic_hash": "11b0b1f8b19636bd4df10f84af01b300"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/poc/SYNCHRONOUS_STANDBY_CLUSTER_ANALYSIS.md": {
+    "mtime": 1778226769.6601002,
+    "ast_hash": "9763086d08aad7ccbe2cd262e4aad953",
+    "semantic_hash": "9763086d08aad7ccbe2cd262e4aad953"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/poc/YOUR_CONFIG_EXPLAINED_SUMMARY.md": {
+    "mtime": 1778228362.2199757,
+    "ast_hash": "fef90ec29aa14f0870fc11f08d16d95d",
+    "semantic_hash": "fef90ec29aa14f0870fc11f08d16d95d"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/poc/logins-with-expiry.md": {
+    "mtime": 1771928068.0929384,
+    "ast_hash": "dfa0d0e5ce5eededace7237f0efffa9e",
+    "semantic_hash": "dfa0d0e5ce5eededace7237f0efffa9e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/poc/playbook-multiline-string-2-array.yml": {
+    "mtime": 1781241303.9423587,
+    "ast_hash": "aef2a8b110078f34e01dfe886b12ff56",
+    "semantic_hash": "aef2a8b110078f34e01dfe886b12ff56"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/replication/logical-replication-kb.md": {
+    "mtime": 1778217544.1710453,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/replication/logical-replication-monitoring.md": {
+    "mtime": 1771928068.0944557,
+    "ast_hash": "4ae057bfe84cf548df951bfbd3c33e49",
+    "semantic_hash": "4ae057bfe84cf548df951bfbd3c33e49"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/replication/logical-replication-setup.md": {
+    "mtime": 1771928068.0947347,
+    "ast_hash": "a81c397f6bf1742f6eeea7c8ff20fa59",
+    "semantic_hash": "a81c397f6bf1742f6eeea7c8ff20fa59"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/replication/logical-replication-using-pglogical.md": {
+    "mtime": 1771928068.0947945,
+    "ast_hash": "aad5f59d2003c05107185a4fb4c59453",
+    "semantic_hash": "aad5f59d2003c05107185a4fb4c59453"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/replication/physical-replication-kb.md": {
+    "mtime": 1778217544.1715682,
+    "ast_hash": "8cbbf09169e15e2d2561999aff4d8c67",
+    "semantic_hash": "8cbbf09169e15e2d2561999aff4d8c67"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/replication/physical-steaming-replication--redhat.md": {
+    "mtime": 1771928068.094886,
+    "ast_hash": "008e0eb2fe36fae2a6a81985699b5d77",
+    "semantic_hash": "008e0eb2fe36fae2a6a81985699b5d77"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/replication/physical-steaming-replication--ubuntu.md": {
+    "mtime": 1771928068.0949616,
+    "ast_hash": "28fe419daa0420e8c6587d807e9cf7e8",
+    "semantic_hash": "28fe419daa0420e8c6587d807e9cf7e8"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/replication/replication-rhel-patroni-consul-pgbackrest--chatgpt.md": {
+    "mtime": 1771928068.0950449,
+    "ast_hash": "7bfe79b566d64cf70a3d67f73d6277b4",
+    "semantic_hash": "7bfe79b566d64cf70a3d67f73d6277b4"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/MIGRATION-ENV-REFERENCE.md": {
+    "mtime": 1781495535.724667,
+    "ast_hash": "f4fbabbbbe442233ac43adfd5af6ad31",
+    "semantic_hash": "f4fbabbbbe442233ac43adfd5af6ad31"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/PGBENCH-PARAMETER-GUIDE.md": {
+    "mtime": 1781153226.6424387,
+    "ast_hash": "a14ea5baeda2b9c0b0d248669ea21a8a",
+    "semantic_hash": "a14ea5baeda2b9c0b0d248669ea21a8a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/README-PostgreSQL-Conversion.md": {
+    "mtime": 1781153226.642501,
+    "ast_hash": "d5a84717a9d148bd60dbb8a348bf089d",
+    "semantic_hash": "d5a84717a9d148bd60dbb8a348bf089d"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/stackoverflow/README-StackOverflow.md": {
+    "mtime": 1781495535.7252614,
+    "ast_hash": "b8ce6bad99e69816ff3447d274ec5255",
+    "semantic_hash": "b8ce6bad99e69816ff3447d274ec5255"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/PostgreSQL-Cheat-Sheet.pdf": {
+    "mtime": 1771928068.0425556,
+    "ast_hash": "909c0f7ab5f26e998f9658f4c0ab8681",
+    "semantic_hash": "909c0f7ab5f26e998f9658f4c0ab8681"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Postgres-Cheat-Sheet.pdf": {
+    "mtime": 1771928068.042962,
+    "ast_hash": "2f45b89bf7f92dfb2f6c5ef3f3c0262b",
+    "semantic_hash": "2f45b89bf7f92dfb2f6c5ef3f3c0262b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/postgresql-cheat-sheet-a4.pdf": {
+    "mtime": 1771928068.0931828,
+    "ast_hash": "a33ed34d6391f56fede9e560e1f3a954",
+    "semantic_hash": "a33ed34d6391f56fede9e560e1f3a954"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/postgresql83_psql_cheatsheet.pdf": {
+    "mtime": 1771928068.093482,
+    "ast_hash": "8728ec1aa0eede4a59519eeaef102fc8",
+    "semantic_hash": "8728ec1aa0eede4a59519eeaef102fc8"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/psql command line tutorial.pdf": {
+    "mtime": 1771928068.0941155,
+    "ast_hash": "c4db704766082ca456739d4c81938ff2",
+    "semantic_hash": "c4db704766082ca456739d4c81938ff2"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/replication/Implementing failover of logical replication slots in Patroni.pdf": {
+    "mtime": 1778561028.1183782,
+    "ast_hash": "ce363e20bb16812d872a0bc8b6c73408",
+    "semantic_hash": "ce363e20bb16812d872a0bc8b6c73408"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/.images/background-writer.png": {
+    "mtime": 1771928068.0310187,
+    "ast_hash": "ead63ab3b88b2eaeacd684875c0633ab",
+    "semantic_hash": "ead63ab3b88b2eaeacd684875c0633ab"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/.images/checkpointing.png": {
+    "mtime": 1771928068.0314403,
+    "ast_hash": "be155b1ce30eb08be512df703a4ce32c",
+    "semantic_hash": "be155b1ce30eb08be512df703a4ce32c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/.images/consul-dns-forwarder-on-dc.lab.com.png": {
+    "mtime": 1771928068.0316038,
+    "ast_hash": "dbd337d956a5337dcdc00631c61afa75",
+    "semantic_hash": "dbd337d956a5337dcdc00631c61afa75"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/.images/fdisk-creation-partition.png": {
+    "mtime": 1771928068.0331905,
+    "ast_hash": "b6f5b06bbdee63ddfbad877dea61f3ed",
+    "semantic_hash": "b6f5b06bbdee63ddfbad877dea61f3ed"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/.images/message-severity-levels.png": {
+    "mtime": 1771928068.0335634,
+    "ast_hash": "357e8542c6714f2e262d6f341cf02d24",
+    "semantic_hash": "357e8542c6714f2e262d6f341cf02d24"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/.images/patroni-multi-datacenter-ha-architecture.png": {
+    "mtime": 1771928068.0338192,
+    "ast_hash": "01bdd205432262f785db57ed850957a2",
+    "semantic_hash": "01bdd205432262f785db57ed850957a2"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/.images/patroni-multi-datacenter-ha-result.png": {
+    "mtime": 1771928068.0348248,
+    "ast_hash": "3ba041897cc2728b442103a73ced1e69",
+    "semantic_hash": "3ba041897cc2728b442103a73ced1e69"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/.images/patroni-services-on-consul-server.png": {
+    "mtime": 1771928068.0353432,
+    "ast_hash": "9e84bf94c0870b10c00676445751d0de",
+    "semantic_hash": "9e84bf94c0870b10c00676445751d0de"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/.images/postgres-server-process.png": {
+    "mtime": 1771928068.0356748,
+    "ast_hash": "4a45506f05826135c7114b5e053d4958",
+    "semantic_hash": "4a45506f05826135c7114b5e053d4958"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/.images/query-processing-executor.png": {
+    "mtime": 1771928068.0360973,
+    "ast_hash": "a01c2a06b1200973c76544111cc77cb6",
+    "semantic_hash": "a01c2a06b1200973c76544111cc77cb6"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/.images/query-processing-planner-stats-subsystem.png": {
+    "mtime": 1771928068.0364785,
+    "ast_hash": "1c549f816f326f1c8d0087e8c2ae2d24",
+    "semantic_hash": "1c549f816f326f1c8d0087e8c2ae2d24"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/.images/query-processing.png": {
+    "mtime": 1771928068.036762,
+    "ast_hash": "3b6833b3f8bd54825a47333845119193",
+    "semantic_hash": "3b6833b3f8bd54825a47333845119193"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/.images/replication-log-shipping.png": {
+    "mtime": 1771928068.0370257,
+    "ast_hash": "7925377f1d9c7c9fd813c3cf326aac4c",
+    "semantic_hash": "7925377f1d9c7c9fd813c3cf326aac4c"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/.images/replication-steaming-replication.png": {
+    "mtime": 1771928068.0373938,
+    "ast_hash": "9135c7ed9e3c5cf40c93680c3c6c25e5",
+    "semantic_hash": "9135c7ed9e3c5cf40c93680c3c6c25e5"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/.images/replication-synchronous-steaming.png": {
+    "mtime": 1771928068.0377789,
+    "ast_hash": "6a9fcc3db2048312ed5d35382f3b6376",
+    "semantic_hash": "6a9fcc3db2048312ed5d35382f3b6376"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/.images/ss-established-connections.png": {
+    "mtime": 1771928068.0391877,
+    "ast_hash": "b13fb2a9299af36e65cbce2a07af0b01",
+    "semantic_hash": "b13fb2a9299af36e65cbce2a07af0b01"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/.images/wal-mechanism.png": {
+    "mtime": 1771928068.0395677,
+    "ast_hash": "2569220ada443ec82233d14d61e5dc64",
+    "semantic_hash": "2569220ada443ec82233d14d61e5dc64"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/.images/wireshark.png": {
+    "mtime": 1771928068.0401301,
+    "ast_hash": "5ac4aca4ec84b38b23c98bce180089c6",
+    "semantic_hash": "5ac4aca4ec84b38b23c98bce180089c6"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/General-Commands/Azure-Data-Studio-Keybindings-json.png": {
+    "mtime": 1771928068.0408647,
+    "ast_hash": "9a779553007a37dea50ca0d062a1cd83",
+    "semantic_hash": "9a779553007a37dea50ca0d062a1cd83"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/backups.png": {
+    "mtime": 1771928068.0472395,
+    "ast_hash": "a2ca0cf48a74791164ec2a6b4e3c1109",
+    "semantic_hash": "a2ca0cf48a74791164ec2a6b4e3c1109"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/case-insensitive-searches.png": {
+    "mtime": 1771928068.047906,
+    "ast_hash": "c882a9b2f1e418c9dbcef548f7cd9cc5",
+    "semantic_hash": "c882a9b2f1e418c9dbcef548f7cd9cc5"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/case-sensitivity-in-data.png": {
+    "mtime": 1771928068.0483756,
+    "ast_hash": "644d0c8d53b6b4e8d3b56e20845a65bb",
+    "semantic_hash": "644d0c8d53b6b4e8d3b56e20845a65bb"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/case-sensitivity-in-schema.png": {
+    "mtime": 1771928068.0488596,
+    "ast_hash": "590c80b0929372cc1fde529ab66eaa57",
+    "semantic_hash": "590c80b0929372cc1fde529ab66eaa57"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/concurrency-control.png": {
+    "mtime": 1771928068.0492578,
+    "ast_hash": "686bd3c6bc2512af1ef2a742d5153f9b",
+    "semantic_hash": "686bd3c6bc2512af1ef2a742d5153f9b"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/contrastive_analysis.png": {
+    "mtime": 1771928068.049823,
+    "ast_hash": "be4f5b6cf7e0ea8ff31de3381b696110",
+    "semantic_hash": "be4f5b6cf7e0ea8ff31de3381b696110"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/datatypes-diff-2.png": {
+    "mtime": 1771928068.050238,
+    "ast_hash": "89c7c3c65a3dde78bddc3053d6237de4",
+    "semantic_hash": "89c7c3c65a3dde78bddc3053d6237de4"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/datatypes-diff.png": {
+    "mtime": 1771928068.050796,
+    "ast_hash": "71410b459df72392ce9c543fa7a4fd17",
+    "semantic_hash": "71410b459df72392ce9c543fa7a4fd17"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/exception-handling-capture-any-error.png": {
+    "mtime": 1771928068.0512054,
+    "ast_hash": "cdf432931d31f78d276c9df4c34c6fa4",
+    "semantic_hash": "cdf432931d31f78d276c9df4c34c6fa4"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/exception-handling-example.png": {
+    "mtime": 1771928068.0516176,
+    "ast_hash": "37b7bd13f3fae049f647439544518084",
+    "semantic_hash": "37b7bd13f3fae049f647439544518084"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/exception-handling.png": {
+    "mtime": 1771928068.0519938,
+    "ast_hash": "c95a28cfe7ce52f160c4492777a7345d",
+    "semantic_hash": "c95a28cfe7ce52f160c4492777a7345d"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/functions-2.png": {
+    "mtime": 1771928068.0522742,
+    "ast_hash": "b1065a341af1ab156c38e2a43d008b3e",
+    "semantic_hash": "b1065a341af1ab156c38e2a43d008b3e"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/functions-vs-procedures.png": {
+    "mtime": 1771928068.0526118,
+    "ast_hash": "0121faad43347ac12eb25fea95ef19d5",
+    "semantic_hash": "0121faad43347ac12eb25fea95ef19d5"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/functions.png": {
+    "mtime": 1771928068.052943,
+    "ast_hash": "4d4f4e8b9516f232dc14d095ab53ea34",
+    "semantic_hash": "4d4f4e8b9516f232dc14d095ab53ea34"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/identity-keys.png": {
+    "mtime": 1771928068.0531282,
+    "ast_hash": "e75bfbcec5ae77531beab5a8cfe27f3d",
+    "semantic_hash": "e75bfbcec5ae77531beab5a8cfe27f3d"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/import-export.png": {
+    "mtime": 1771928068.053588,
+    "ast_hash": "d137960b5d7330b090aebc856d589300",
+    "semantic_hash": "d137960b5d7330b090aebc856d589300"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/indexes.png": {
+    "mtime": 1771928068.053985,
+    "ast_hash": "fa923d8525314ac167a7d39db9262a91",
+    "semantic_hash": "fa923d8525314ac167a7d39db9262a91"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/monitoring-dmvs.png": {
+    "mtime": 1771928068.0544217,
+    "ast_hash": "51485d90798097a54c89a575e76e8071",
+    "semantic_hash": "51485d90798097a54c89a575e76e8071"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/monitoring-vacuum-and-backups.png": {
+    "mtime": 1771928068.0549219,
+    "ast_hash": "4f213333e1857a1888fccc69e66c4ff1",
+    "semantic_hash": "4f213333e1857a1888fccc69e66c4ff1"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/ordbms-polymorphism.png": {
+    "mtime": 1771928068.0551317,
+    "ast_hash": "4ec580af88efe3b408db52c06242adcd",
+    "semantic_hash": "4ec580af88efe3b408db52c06242adcd"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/other-objects.png": {
+    "mtime": 1771928068.0553617,
+    "ast_hash": "558aa3041169cbc01ec061ebbfc58541",
+    "semantic_hash": "558aa3041169cbc01ec061ebbfc58541"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/pg-dev-and-dba-features.png": {
+    "mtime": 1771928068.055812,
+    "ast_hash": "9d3f404662cde2722a8dc24e8dc46e97",
+    "semantic_hash": "9d3f404662cde2722a8dc24e8dc46e97"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/plpgsql-block-structured-code.png": {
+    "mtime": 1771928068.056139,
+    "ast_hash": "7c4f31c2c9bbc353ede1dcc73e7f6264",
+    "semantic_hash": "7c4f31c2c9bbc353ede1dcc73e7f6264"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/plpgsql-block-structured-programming-language.png": {
+    "mtime": 1771928068.0564396,
+    "ast_hash": "1a930c587edf96a30db3d1071b69481f",
+    "semantic_hash": "1a930c587edf96a30db3d1071b69481f"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/postgres-extensions.png": {
+    "mtime": 1771928068.0568197,
+    "ast_hash": "ad5a82b74bbbd57ad630cb6b618f48cb",
+    "semantic_hash": "ad5a82b74bbbd57ad630cb6b618f48cb"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/print-variable.png": {
+    "mtime": 1771928068.0570393,
+    "ast_hash": "80082a80b2663efc5d5d7d2e162734fb",
+    "semantic_hash": "80082a80b2663efc5d5d7d2e162734fb"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/replication.png": {
+    "mtime": 1771928068.057369,
+    "ast_hash": "d39e57f66359278132935a0d818a7f02",
+    "semantic_hash": "d39e57f66359278132935a0d818a7f02"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/security.png": {
+    "mtime": 1771928068.0577636,
+    "ast_hash": "bd8d6eae4b89cabb151dbaf012408bd6",
+    "semantic_hash": "bd8d6eae4b89cabb151dbaf012408bd6"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/statistics.png": {
+    "mtime": 1771928068.0581741,
+    "ast_hash": "0e5445650d831b8a68fd99bcc6073348",
+    "semantic_hash": "0e5445650d831b8a68fd99bcc6073348"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/system-databases.png": {
+    "mtime": 1771928068.0583556,
+    "ast_hash": "10b8c701f3bc340405c35251948e05c8",
+    "semantic_hash": "10b8c701f3bc340405c35251948e05c8"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/table-valued-functions.png": {
+    "mtime": 1771928068.0587335,
+    "ast_hash": "28aeb3a40871d81596989e7e191bc388",
+    "semantic_hash": "28aeb3a40871d81596989e7e191bc388"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/tables.png": {
+    "mtime": 1771928068.0589945,
+    "ast_hash": "72614140f9185001a01aa1f1a984b808",
+    "semantic_hash": "72614140f9185001a01aa1f1a984b808"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/transaction-isolation-levels.png": {
+    "mtime": 1771928068.0595434,
+    "ast_hash": "4364f44b37f9ab7c98583ca42fd2fba9",
+    "semantic_hash": "4364f44b37f9ab7c98583ca42fd2fba9"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/tsql-vs-pl-pgsql.png": {
+    "mtime": 1771928068.0598428,
+    "ast_hash": "ae865115803c4608b4368dcf50f63e45",
+    "semantic_hash": "ae865115803c4608b4368dcf50f63e45"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/user-databases.png": {
+    "mtime": 1771928068.0602598,
+    "ast_hash": "4162b47d379985fb5c11f50ba25af979",
+    "semantic_hash": "4162b47d379985fb5c11f50ba25af979"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/what-is-o-rdbms.png": {
+    "mtime": 1771928068.060675,
+    "ast_hash": "77a98c585090572da0fa4cdd68b9e408",
+    "semantic_hash": "77a98c585090572da0fa4cdd68b9e408"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-for-mssql-dba/why-cant-i-print-message-in-postgresql.png": {
+    "mtime": 1771928068.0609329,
+    "ast_hash": "899d046e8cfcd3feb7717702d0efb24a",
+    "semantic_hash": "899d046e8cfcd3feb7717702d0efb24a"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-parameters-to-prevent-poor-performance/caching.png": {
+    "mtime": 1771928068.061396,
+    "ast_hash": "9ba0c0c88e99e16929354f3843d5dbd2",
+    "semantic_hash": "9ba0c0c88e99e16929354f3843d5dbd2"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-parameters-to-prevent-poor-performance/connection_pooling.png": {
+    "mtime": 1771928068.061648,
+    "ast_hash": "394f2d5b60d16109962eb49101aaa1ed",
+    "semantic_hash": "394f2d5b60d16109962eb49101aaa1ed"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-parameters-to-prevent-poor-performance/effective_cache_size.png": {
+    "mtime": 1771928068.062077,
+    "ast_hash": "04b68efc5b305d950982714c338b58c6",
+    "semantic_hash": "04b68efc5b305d950982714c338b58c6"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-parameters-to-prevent-poor-performance/indexes.png": {
+    "mtime": 1771928068.0624642,
+    "ast_hash": "36e0b490fbd51d9072cc22dcb524d419",
+    "semantic_hash": "36e0b490fbd51d9072cc22dcb524d419"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-parameters-to-prevent-poor-performance/max_connections.png": {
+    "mtime": 1771928068.0628793,
+    "ast_hash": "815b0ccaf144c1fa21a37db0b1e1d369",
+    "semantic_hash": "815b0ccaf144c1fa21a37db0b1e1d369"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-parameters-to-prevent-poor-performance/parameters.png": {
+    "mtime": 1771928068.0631151,
+    "ast_hash": "b9e34e54986cd5460c989786aabb0e5d",
+    "semantic_hash": "b9e34e54986cd5460c989786aabb0e5d"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-parameters-to-prevent-poor-performance/random_page_cost.png": {
+    "mtime": 1771928068.063409,
+    "ast_hash": "4820d36fc0f6538c9f92bc1cb3a936cd",
+    "semantic_hash": "4820d36fc0f6538c9f92bc1cb3a936cd"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-parameters-to-prevent-poor-performance/reading-of-data-components.png": {
+    "mtime": 1771928068.0636396,
+    "ast_hash": "8777c6ca2a488f0b85f4ed46d7902957",
+    "semantic_hash": "8777c6ca2a488f0b85f4ed46d7902957"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-parameters-to-prevent-poor-performance/shared_buffers.png": {
+    "mtime": 1771928068.0639853,
+    "ast_hash": "0371e6e5c3790710d39cc534dcb19cc6",
+    "semantic_hash": "0371e6e5c3790710d39cc534dcb19cc6"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-parameters-to-prevent-poor-performance/vacuum.png": {
+    "mtime": 1771928068.0644584,
+    "ast_hash": "79f35472908c9aa95a7128202dfe7c93",
+    "semantic_hash": "79f35472908c9aa95a7128202dfe7c93"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-parameters-to-prevent-poor-performance/what_if.png": {
+    "mtime": 1771928068.0648074,
+    "ast_hash": "abb1aadaf225064b2d01f500ab669e04",
+    "semantic_hash": "abb1aadaf225064b2d01f500ab669e04"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-parameters-to-prevent-poor-performance/work_mem.png": {
+    "mtime": 1771928068.0651722,
+    "ast_hash": "75ae127e9d0cdd8cdc96f5fec7cf56f8",
+    "semantic_hash": "75ae127e9d0cdd8cdc96f5fec7cf56f8"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-parameters-to-prevent-poor-performance/workload-and-data.png": {
+    "mtime": 1771928068.0654094,
+    "ast_hash": "1b614089f326f36f65a8b04b784ad655",
+    "semantic_hash": "1b614089f326f36f65a8b04b784ad655"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/Video-Learnings/images--pg-parameters-to-prevent-poor-performance/writing-of-data-components.png": {
+    "mtime": 1771928068.065644,
+    "ast_hash": "58a8b08b60f595aea96cfc2aca1842e4",
+    "semantic_hash": "58a8b08b60f595aea96cfc2aca1842e4"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/replication/image-physical-steaming-replication.png": {
+    "mtime": 1771928068.0943892,
+    "ast_hash": "4c2a72ea7ba180dd58d31961356abadd",
+    "semantic_hash": "4c2a72ea7ba180dd58d31961356abadd"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/replication/logical-replication-schema.png": {
+    "mtime": 1771928068.0946336,
+    "ast_hash": "1f57a5423095e1b3b0ce588ae9fc35e5",
+    "semantic_hash": "1f57a5423095e1b3b0ce588ae9fc35e5"
+  },
+  "/Users/ajaydwivedi/Documents/Github/Personal/PostgreSQL-Learning/replication/replication-slot-and-user.png": {
+    "mtime": 1771928068.0951617,
+    "ast_hash": "c78cc26095ca0f3706b96b9db3e82766",
+    "semantic_hash": "c78cc26095ca0f3706b96b9db3e82766"
+  }
+}
