@@ -3,6 +3,14 @@
   ansible.builtin.debug:
     msg: "Installing PostgreSQL {{ postgresql_version }} cluster with Patroni + etcd + pgbackrest + pgbouncer"
 
+- name: Install server MOTD login banner
+  ansible.builtin.copy:
+    src: server-motd.sh
+    dest: /etc/profile.d/server-motd.sh
+    owner: root
+    group: root
+    mode: '0755'
+
 - name: Include defaults/creds.yml
   include_vars:
     file: "{{ role_path }}/defaults/creds.yml"
