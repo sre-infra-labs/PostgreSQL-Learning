@@ -210,7 +210,8 @@ cd ~/Documents/Github/Personal/PostgreSQL-Learning/playbook-install-pg-cluster-d
 docker rmi pg-cluster-node:latest
 
 # Cleanup containers
-ansible-playbook -i hosts.yml playbook-cleanup.yml --tags containers 2>&1 | tee logs/playbook-cleanup.yml.log
+ANSIBLE_LOG_PATH="logs/playbook-cleanup--containers---$(date '+%Y-%m-%d__%H_%M_%S').log" \
+ansible-playbook -i hosts.yml playbook-cleanup.yml --tags containers
 
 # Phase 0: Validate ansible hosts
 ansible-inventory -i hosts.yml --graph
@@ -219,11 +220,13 @@ ansible -i hosts.yml primary_cluster --list-hosts
 ansible -i hosts.yml standby_cluster --list-hosts
 
 # Phase 1: Create Docker containers and network. Place logs in run_logs for analysis
-ansible-playbook -i hosts.yml playbook-setup-primary-cluster-containers.yml 2>&1 | tee logs/playbook-setup-primary-cluster-containers.yml.log
+ANSIBLE_LOG_PATH="logs/playbook-setup-primary-cluster-containers---$(date '+%Y-%m-%d__%H_%M_%S').log" \
+ansible-playbook -i hosts.yml playbook-setup-primary-cluster-containers.yml
 
 # Phase 2: Setup Primary Patroni/PostgreSQL Cluster with one or more nodes
+ANSIBLE_LOG_PATH="logs/playbook-install-primary-cluster---$(date '+%Y-%m-%d__%H_%M_%S').log" \
 ansible-playbook -i hosts.yml playbook-install-primary-cluster.yml --vault-password-file=vault-pass \
-  -e reinit_cluster=true 2>&1 | tee logs/playbook-install-primary-cluster.yml.log
+  -e reinit_cluster=true
 
 # Verify cluster status
 docker exec docpg-cls1-pg1 patronictl -c /etc/patroni/patroni.yml list

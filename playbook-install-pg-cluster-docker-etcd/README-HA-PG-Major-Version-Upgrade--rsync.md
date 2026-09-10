@@ -67,8 +67,10 @@ replace the examples and verify them before proceeding.
    Patroni keys. That is not the upgrade procedure.
 5. Do not run `playbook-cleanup.yml`, remove Docker volumes, or run
    `delete_old_cluster.sh` before acceptance.
-6. Do not start the old and new PostgreSQL clusters at the same time on one
-   node. Both clusters must never use the same port or data directory.
+6. Do not start the old cluster and the final upgraded cluster at the same time
+   on one node. The section 4 preflight is the only exception: it uses the
+   separate `$NEW_DATA-preflight` directory, Unix socket, and port `55432`.
+   The old and preflight clusters must never share a port or data directory.
 7. `pg_upgrade --link` requires the old and new data directories on the former
    leader to be on the same filesystem. It uses hard links, so the old PG15
    directory is **not an independent rollback copy** after PG18 starts writing.
@@ -343,6 +345,92 @@ drop only that empty package-created cluster:
 systemctl stop postgresql@18-main 2>/dev/null || true
 pg_dropcluster --stop 18 main
 test ! -e "$NEW_DATA" || test -z "$(ls -A "$NEW_DATA" 2>/dev/null)"
+```
+
+### CONTAINER — former leader only: PG18 configuration and schema preflight
+
+Do **not** populate the final `$NEW_DATA` before `pg_upgrade`. PostgreSQL
+requires that directory to contain only the compatible `initdb` output when
+`pg_upgrade` starts. Instead, build a disposable sibling target and validate
+PG18 there. This catches incompatible configuration settings and schema or
+extension problems without changing the actual `pg_upgrade` input.
+
+The `pg_dumpall --schema-only` output contains the cluster-wide objects and
+database definitions, including `CREATE DATABASE` and `\\connect` commands. It
+does not copy table rows, so this preflight does not duplicate the full
+application data set.
+
+```bash
+# CONTAINER — former leader only; source PostgreSQL is still running
+PREFLIGHT_NEWDATA="${NEW_DATA}-preflight"
+PREFLIGHT_NEWSOCKET="/var/run/postgresql/pg18-preflight"
+
+test ! -e "$PREFLIGHT_NEWDATA"
+test ! -e "$PREFLIGHT_NEWSOCKET"
+install -d -o postgres -g postgres -m 700 "$PREFLIGHT_NEWSOCKET"
+
+runuser -u postgres -- "$NEW_BIN/initdb" \
+  --pgdata="$PREFLIGHT_NEWDATA" \
+  --encoding=UTF8 \
+  --locale=en_US.UTF-8 \
+  --data-checksums
+
+# Copy the source configuration files into the preflight target. Do not copy
+# postgresql.auto.conf: it can contain Patroni's source-cluster recovery
+# settings such as primary_conninfo and restore_command.
+for config_file in postgresql.conf pg_hba.conf pg_ident.conf; do
+  if [ -f "$OLD_DATA/$config_file" ]; then
+    cp -p "$OLD_DATA/$config_file" "$PREFLIGHT_NEWDATA/$config_file"
+  fi
+done
+
+runuser -u postgres -- "$OLD_BIN/pg_dumpall" \
+  --schema-only --no-role-passwords \
+  > "$UPGRADE_DIR/pg18-preflight-schema.sql"
+chmod 600 "$UPGRADE_DIR/pg18-preflight-schema.sql"
+
+# Confirm that database creation and database switching were included.
+grep -E '^CREATE DATABASE ' "$UPGRADE_DIR/pg18-preflight-schema.sql" | head -20
+grep -F '\connect ' "$UPGRADE_DIR/pg18-preflight-schema.sql" | head -20
+
+# Override only the listener endpoint for the temporary standalone server.
+# The old port and Patroni-managed server must remain untouched.
+runuser -u postgres -- "$NEW_BIN/pg_ctl" \
+  -D "$PREFLIGHT_NEWDATA" \
+  -l "$UPGRADE_DIR/pg18-preflight.log" \
+  -o "-p 55432 -k $PREFLIGHT_NEWSOCKET -c listen_addresses=127.0.0.1" \
+  -w start
+
+runuser -u postgres -- "$NEW_BIN/pg_isready" \
+  -h "$PREFLIGHT_NEWSOCKET" -q
+runuser -u postgres -- "$NEW_BIN/psql" \
+  -h "$PREFLIGHT_NEWSOCKET" -U postgres -d postgres \
+  -v ON_ERROR_STOP=1 -f "$UPGRADE_DIR/pg18-preflight-schema.sql"
+
+runuser -u postgres -- "$NEW_BIN/psql" \
+  -h "$PREFLIGHT_NEWSOCKET" -U postgres -d postgres -x -c \
+  "SELECT version(), current_setting('data_directory') AS data_directory;"
+runuser -u postgres -- "$NEW_BIN/psql" \
+  -h "$PREFLIGHT_NEWSOCKET" -U postgres -d postgres -Atqc \
+  "SELECT datname FROM pg_database ORDER BY 1;"
+```
+
+The temporary server must report PostgreSQL 18, use `$PREFLIGHT_NEWDATA`, accept
+the schema dump without errors, and list every expected database. If it fails,
+inspect `pg18-preflight.log`, correct the PG18 packages or source
+configuration, and repeat the preflight before continuing.
+
+Stop the temporary server and preserve its files with the upgrade evidence. Do
+not leave it running and do not use its populated directory as the final
+`pg_upgrade` target:
+
+```bash
+# CONTAINER — former leader only
+runuser -u postgres -- "$NEW_BIN/pg_ctl" \
+  -D "$PREFLIGHT_NEWDATA" -m fast -w stop
+test ! -e "$PREFLIGHT_NEWDATA/postmaster.pid"
+rmdir "$PREFLIGHT_NEWSOCKET"
+mv "$PREFLIGHT_NEWDATA" "$UPGRADE_DIR/pg18-preflight-data"
 ```
 
 Do not remove `"$OLD_DATA"` on any node. The old replica directories are needed
