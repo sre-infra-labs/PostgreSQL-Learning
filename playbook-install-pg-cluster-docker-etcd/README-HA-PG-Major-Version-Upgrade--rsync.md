@@ -364,6 +364,7 @@ application data set.
 # CONTAINER — former leader only; source PostgreSQL is still running
 PREFLIGHT_NEWDATA="${NEW_DATA}-preflight"
 PREFLIGHT_NEWSOCKET="/var/run/postgresql/pg18-preflight"
+PREFLIGHT_PORT=55432
 
 test ! -e "$PREFLIGHT_NEWDATA"
 test ! -e "$PREFLIGHT_NEWSOCKET"
@@ -375,18 +376,65 @@ runuser -u postgres -- "$NEW_BIN/initdb" \
   --locale=en_US.UTF-8 \
   --data-checksums
 
-# Copy the source configuration files into the preflight target. Do not copy
-# postgresql.auto.conf: it can contain Patroni's source-cluster recovery
-# settings such as primary_conninfo and restore_command.
-for config_file in postgresql.conf pg_hba.conf pg_ident.conf; do
+# Copy and sanitize the source configuration files into the preflight target.
+# A byte-for-byte copy is unsafe: it can retain PG15 paths and recovery
+# settings intended for a Patroni replica.
+for config_file in \
+  postgresql.conf pg_hba.conf pg_ident.conf postgresql.base.conf; do
   if [ -f "$OLD_DATA/$config_file" ]; then
-    cp -p "$OLD_DATA/$config_file" "$PREFLIGHT_NEWDATA/$config_file"
+    sed -E \
+      -e "s#${OLD_BIN}#${NEW_BIN}#g" \
+      -e "s#${OLD_DATA}#${PREFLIGHT_NEWDATA}#g" \
+      -e "s#/usr/lib/postgresql/${OLD_MAJOR}#/usr/lib/postgresql/${TARGET_MAJOR}#g" \
+      -e "s#/etc/postgresql/${OLD_MAJOR}/main#${PREFLIGHT_NEWDATA}#g" \
+      -e '/^[[:space:]]*external_pid_file[[:space:]]*=/d' \
+      -e '/^[[:space:]]*(primary_conninfo|primary_slot_name|restore_command|recovery_target.*)[[:space:]]*=/d' \
+      "$OLD_DATA/$config_file" > "$PREFLIGHT_NEWDATA/$config_file"
+    chown postgres:postgres "$PREFLIGHT_NEWDATA/$config_file"
   fi
 done
+
+# The repository's postgresql.conf includes this local fragment. Fail early if
+# the source declares it but the preflight target does not contain it.
+if grep -Eq '^[[:space:]]*include[[:space:]]*=.*postgresql\.base\.conf' \
+  "$PREFLIGHT_NEWDATA/postgresql.conf"; then
+  test -f "$PREFLIGHT_NEWDATA/postgresql.base.conf"
+fi
+
+# Never carry Patroni's generated connection or recovery settings into the
+# standalone preflight. initdb creates this file; make its contents explicit.
+: > "$PREFLIGHT_NEWDATA/postgresql.auto.conf"
+chown postgres:postgres "$PREFLIGHT_NEWDATA/postgresql.auto.conf"
+chmod 600 "$PREFLIGHT_NEWDATA/postgresql.auto.conf"
+test ! -e "$PREFLIGHT_NEWDATA/standby.signal"
+test ! -e "$PREFLIGHT_NEWDATA/recovery.signal"
+
+PREFLIGHT_CONFIG_PATHS=(
+  "$PREFLIGHT_NEWDATA/postgresql.conf"
+  "$PREFLIGHT_NEWDATA/pg_hba.conf"
+  "$PREFLIGHT_NEWDATA/pg_ident.conf"
+  "$PREFLIGHT_NEWDATA/postgresql.auto.conf"
+)
+if [ -f "$PREFLIGHT_NEWDATA/postgresql.base.conf" ]; then
+  PREFLIGHT_CONFIG_PATHS+=("$PREFLIGHT_NEWDATA/postgresql.base.conf")
+fi
+
+if grep -nE \
+  "^[[:space:]]*(primary_conninfo|primary_slot_name|restore_command|recovery_target.*)[[:space:]]*=" \
+  "${PREFLIGHT_CONFIG_PATHS[@]}"; then
+  echo "Recovery settings remain in the standalone preflight configuration" >&2
+  exit 1
+fi
+if grep -nE "/usr/lib/postgresql/${OLD_MAJOR}|/var/lib/postgresql/${OLD_MAJOR}|/etc/postgresql/${OLD_MAJOR}|/var/run/postgresql/${OLD_MAJOR}" \
+  "${PREFLIGHT_CONFIG_PATHS[@]}"; then
+  echo "A source-major PostgreSQL path remains in the preflight configuration" >&2
+  exit 1
+fi
 
 runuser -u postgres -- "$OLD_BIN/pg_dumpall" \
   --schema-only --no-role-passwords \
   > "$UPGRADE_DIR/pg18-preflight-schema.sql"
+chown postgres:postgres "$UPGRADE_DIR/pg18-preflight-schema.sql"
 chmod 600 "$UPGRADE_DIR/pg18-preflight-schema.sql"
 
 # Confirm that database creation and database switching were included.
@@ -395,23 +443,32 @@ grep -F '\connect ' "$UPGRADE_DIR/pg18-preflight-schema.sql" | head -20
 
 # Override only the listener endpoint for the temporary standalone server.
 # The old port and Patroni-managed server must remain untouched.
-runuser -u postgres -- "$NEW_BIN/pg_ctl" \
-  -D "$PREFLIGHT_NEWDATA" \
-  -l "$UPGRADE_DIR/pg18-preflight.log" \
-  -o "-p 55432 -k $PREFLIGHT_NEWSOCKET -c listen_addresses=127.0.0.1" \
-  -w start
+if runuser -u postgres -- "$NEW_BIN/pg_ctl" \
+  -D "$PREFLIGHT_NEWDATA" status >/dev/null 2>&1; then
+  echo "PG18 preflight server is already running"
+else
+  test ! -e "$PREFLIGHT_NEWDATA/postmaster.pid" || {
+    echo "A stale or unverified postmaster.pid exists; inspect it before retrying" >&2
+    exit 1
+  }
+  runuser -u postgres -- "$NEW_BIN/pg_ctl" \
+    -D "$PREFLIGHT_NEWDATA" \
+    -l "$UPGRADE_DIR/pg18-preflight.log" \
+    -o "-p $PREFLIGHT_PORT -k $PREFLIGHT_NEWSOCKET -c listen_addresses=127.0.0.1 -c archive_mode=off -c archive_command=''" \
+    -w start
+fi
 
 runuser -u postgres -- "$NEW_BIN/pg_isready" \
-  -h "$PREFLIGHT_NEWSOCKET" -q
+  -h "$PREFLIGHT_NEWSOCKET" -p "$PREFLIGHT_PORT" -q
 runuser -u postgres -- "$NEW_BIN/psql" \
-  -h "$PREFLIGHT_NEWSOCKET" -U postgres -d postgres \
+  -h "$PREFLIGHT_NEWSOCKET" -p "$PREFLIGHT_PORT" -U postgres -d postgres \
   -v ON_ERROR_STOP=1 -f "$UPGRADE_DIR/pg18-preflight-schema.sql"
 
 runuser -u postgres -- "$NEW_BIN/psql" \
-  -h "$PREFLIGHT_NEWSOCKET" -U postgres -d postgres -x -c \
+  -h "$PREFLIGHT_NEWSOCKET" -p "$PREFLIGHT_PORT" -U postgres -d postgres -x -c \
   "SELECT version(), current_setting('data_directory') AS data_directory;"
 runuser -u postgres -- "$NEW_BIN/psql" \
-  -h "$PREFLIGHT_NEWSOCKET" -U postgres -d postgres -Atqc \
+  -h "$PREFLIGHT_NEWSOCKET" -p "$PREFLIGHT_PORT" -U postgres -d postgres -Atqc \
   "SELECT datname FROM pg_database ORDER BY 1;"
 ```
 
@@ -419,6 +476,10 @@ The temporary server must report PostgreSQL 18, use `$PREFLIGHT_NEWDATA`, accept
 the schema dump without errors, and list every expected database. If it fails,
 inspect `pg18-preflight.log`, correct the PG18 packages or source
 configuration, and repeat the preflight before continuing.
+
+If validation is continued from a new shell, redefine `PREFLIGHT_PORT=55432`
+before running `pg_isready` or `psql`; otherwise those clients default to port
+`5432` even though the temporary server is listening on `55432`.
 
 Stop the temporary server and preserve its files with the upgrade evidence. Do
 not leave it running and do not use its populated directory as the final
