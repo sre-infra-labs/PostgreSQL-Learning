@@ -472,6 +472,29 @@ runuser -u postgres -- "$NEW_BIN/psql" \
   "SELECT datname FROM pg_database ORDER BY 1;"
 ```
 
+The initial `SET` lines are normal. `--schema-only` does not copy table rows,
+but the restore still executes DDL for databases, tables, sequences, indexes,
+constraints, functions, extensions, triggers, grants, and ownership. `psql`
+does not print each successful DDL statement by default. If the restore appears
+to pause, monitor it from a second shell:
+
+```bash
+# CONTAINER — second shell while the schema restore is running
+runuser -u postgres -- "$NEW_BIN/psql" \
+  -h "$PREFLIGHT_NEWSOCKET" -p "$PREFLIGHT_PORT" -U postgres -d postgres -x -c \
+  "SELECT pid, datname, state, wait_event_type, wait_event,
+          now() - query_start AS elapsed,
+          left(query, 160) AS query
+     FROM pg_stat_activity
+    WHERE pid <> pg_backend_pid()
+    ORDER BY query_start;"
+```
+
+`state = active` indicates that a DDL statement is executing. A non-null
+`wait_event_type` shows what it is waiting on; `Lock` indicates a blocking
+session. Do not start Patroni or the final PG18 cluster while this preflight
+restore is running.
+
 The temporary server must report PostgreSQL 18, use `$PREFLIGHT_NEWDATA`, accept
 the schema dump without errors, and list every expected database. If it fails,
 inspect `pg18-preflight.log`, correct the PG18 packages or source
