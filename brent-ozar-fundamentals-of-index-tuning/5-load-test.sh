@@ -1,0 +1,1 @@
+ls ./5-workload/*.sql | xargs -I{} echo --file={} | xargs pgbench -c 10 -T 60 stackoverflow
