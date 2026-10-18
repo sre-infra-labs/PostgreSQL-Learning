@@ -75,21 +75,11 @@ create database stackoverflow2013 with owner=postgres TABLESPACE=vm_storage_01;
 \c stackoverflow2013
 \i /tmp/backups/stackoverflow2013.sql
 
+-- import using pg_restore in case of custom format (Large StackOverflow)
+pg_restore -h localhost -U postgres -d stackoverflow /stale-storage/Softwares/PostgreSQL/PostgreSQL-Sample-Dbs/stackoverflow-postgres-2024-v0.1/dump-stackoverflow-202408100709.sql
+
 -- validate tablespace alignment after import
-SELECT 
-    c.relname AS object_name,
-    CASE c.relkind 
-        WHEN 'r' THEN 'Table' 
-        WHEN 'i' THEN 'Index' 
-        WHEN 'm' THEN 'Materialized View' 
-    END AS object_type,
-    t.spcname AS current_tablespace,
-    pg_size_pretty(pg_relation_size(c.oid)) AS object_size
-FROM pg_class c
-LEFT JOIN pg_tablespace t ON c.reltablespace = t.oid
-WHERE c.relnamespace = 'public'::regnamespace 
-  AND c.relkind IN ('r', 'i', 'm')
-ORDER BY pg_relation_size(c.oid) DESC;
+\db+
 
 ```
 

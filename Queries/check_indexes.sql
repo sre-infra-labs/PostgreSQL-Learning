@@ -1,6 +1,5 @@
 --drop function check_indexes;
 
-
 CREATE OR REPLACE FUNCTION check_indexes (
     v_schema_name VARCHAR default null,
     v_table_name VARCHAR default null,
