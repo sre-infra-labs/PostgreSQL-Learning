@@ -2,8 +2,11 @@ export PGPASSWORD='<password>';
 
 # Restore Sample Database from *.tar File
   # assuming ~/.pgpass file is present along with peer authentication is enabled
-/PostgreSQL/14/bin> pg_restore -Cv -d postgres /stale-storage/Softwares/PostgreSQL/PostgreSQL-Sample-Dbs/dvdrental.tar
-/PostgreSQL/14/bin> pg_restore -Cv -d postgres /stale-storage/Softwares/PostgreSQL/PostgreSQL-Sample-Dbs/forumdb.tar
+  /PostgreSQL/14/bin> createdb dvdrental
+/PostgreSQL/14/bin> pg_restore -v -d dvdrental /stale-storage/Softwares/PostgreSQL/PostgreSQL-Sample-Dbs/dvdrental.tar
+
+/PostgreSQL/14/bin> createdb forumdb
+/PostgreSQL/14/bin> pg_restore -v -d forumdb /stale-storage/Softwares/PostgreSQL/PostgreSQL-Sample-Dbs/forumdb.tar
 
 # Backup database
 (base) saanvi@ryzen9:~$ pg_dump -U postgres -h localhost -d forumdb -F tar -f /stale-storage/Softwares/PostgreSQL/PostgreSQL-Sample-Dbs/forumdb.tar
