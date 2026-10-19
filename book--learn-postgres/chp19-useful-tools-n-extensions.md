@@ -208,9 +208,54 @@ Total 25
 
 ```
 
-# Disaster Recovery with pgbackrest
+# Disaster Recovery with pgbackrest - https://pgbackrest.org/user-guide.html
 ### [https://pgbackrest.org]
 - [https://pgbackrest.org/user-guide.html#installation](https://pgbackrest.org/user-guide.html#installation)
+
+```bash
+# create repo
+sudo mkdir -p /vm-storage-02/pgbackrest/
+sudo chmod 750 /vm-storage-02/pgbackrest/
+sudo chown postgres:postgres /vm-storage-02/pgbackrest
+sudo -u postgres mkdir /vm-storage-02/pgbackrest/localhost
+
+# create log & config
+sudo mkdir -p -m 770 /var/log/pgbackrest
+sudo chown postgres:postgres /var/log/pgbackrest
+sudo mkdir -p /etc/pgbackrest
+sudo mkdir -p /etc/pgbackrest/conf.d
+sudo touch /etc/pgbackrest/pgbackrest.conf
+sudo chmod 640 /etc/pgbackrest/pgbackrest.conf
+sudo chown postgres:postgres /etc/pgbackrest/pgbackrest.conf
+
+# Modify postgres config to allow wal archive & restore
+  # restart postgres
+archive_command = 'pgbackrest --stanza=localhost archive-push %p'
+archive_mode = on
+
+
+# populate config file. sudo nano /etc/pgbackrest/pgbackrest.conf
+[localhost]
+pg1-path=/var/lib/postgresql/18/main
+
+[global]
+repo1-path=/vm-storage-02/pgbackrest/localhost
+repo1-retention-full=1
+repo1-retention-diff=2
+repo1-bundle=y
+repo1-block=y
+start-fast=y
+
+
+[global:archive-push]
+compress-level=3
+
+
+# Create backup & verify
+sudo -u postgres pgbackrest --stanza=localhost --log-level-console=info stanza-create
+sudo -u postgres pgbackrest --stanza=localhost --log-level-console=info --annotation=description="Full backup after fresh setup" backup
+sudo -u postgres pgbackrest --stanza=localhost --log-level-console=info --annotation=description="Diff backup after fresh setup" --type=diff backup
+```
 
 ## Enable password less ssh between pgbackrest host and postgresql host
 ```

@@ -121,7 +121,7 @@ limit 100;
 
 
 /* Get the explain plan and buffers: */
-EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON)
+EXPLAIN (ANALYZE, SETTINGS, COSTS, TIMING, SUMMARY, WAL, VERBOSE, BUFFERS, FORMAT JSON)
 select u.reputation, u.displayname, u.websiteurl, u.location, u.id, u.aboutme
 from users u
 where u.location = 'Helsinki, Finland'
