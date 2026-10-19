@@ -219,6 +219,11 @@ sudo chmod 750 /vm-storage-02/pgbackrest/
 sudo chown postgres:postgres /vm-storage-02/pgbackrest
 sudo -u postgres mkdir /vm-storage-02/pgbackrest/localhost
 
+# spool path
+sudo mkdir -p -m 750 /var/spool/pgbackrest
+sudo chown postgres:postgres /var/spool/pgbackrest
+
+
 # create log & config
 sudo mkdir -p -m 770 /var/log/pgbackrest
 sudo chown postgres:postgres /var/log/pgbackrest
@@ -235,6 +240,7 @@ archive_mode = on
 
 
 # populate config file. sudo nano /etc/pgbackrest/pgbackrest.conf
+cat <<'EOF' | sudo tee /etc/pgbackrest/pgbackrest.conf > /dev/null
 [localhost]
 pg1-path=/var/lib/postgresql/18/main
 
@@ -245,16 +251,37 @@ repo1-retention-diff=2
 repo1-bundle=y
 repo1-block=y
 start-fast=y
+archive-async=y
+spool-path=/var/spool/pgbackrest
+process-max=4
+log-level-file=detail
+#log-path=/var/log/pgbackrest
+log-subprocess=y
 
+[global:archive-get]
+process-max=4
 
 [global:archive-push]
+process-max=2
 compress-level=3
-
+EOF
 
 # Create backup & verify
 sudo -u postgres pgbackrest --stanza=localhost --log-level-console=info stanza-create
-sudo -u postgres pgbackrest --stanza=localhost --log-level-console=info --annotation=description="Full backup after fresh setup" backup
-sudo -u postgres pgbackrest --stanza=localhost --log-level-console=info --annotation=description="Diff backup after fresh setup" --type=diff backup
+sudo -u postgres pgbackrest --stanza=localhost --log-level-console=detail --log-level-file=detail --annotation=description="Full backup after fresh setup" backup
+  # if backup filure happened onetime, and subsequent fails with missing file
+sudo -u postgres pgbackrest --stanza=localhost --log-level-console=detail --log-level-file=detail --no-resume --annotation=description="Full backup after fresh setup" backup
+sudo -u postgres pgbackrest --stanza=localhost --log-level-console=detail --annotation=description="Diff backup after fresh setup" --type=diff backup
+sudo -u postgres pgbackrest --stanza=localhost --type=incr backup
+
+sudo -u postgres pgbackrest --stanza=localhost --log-level-console=info info
+
+# Restore - https://pgbackrest.org/user-guide.html#restore
+sudo -u postgres pgbackrest --stanza=localhost --delta --log-level-console=detail restore
+
+sudo -u postgres pgbackrest --stanza=localhost --set=20261015-070800F_20261015-070809I info
+
+
 ```
 
 ## Enable password less ssh between pgbackrest host and postgresql host
