@@ -3,7 +3,10 @@
 -- [Database Diagram](https://sedeschema.github.io/)
 -- [Documentation about Schema](https://meta.stackexchange.com/questions/2677/database-schema-documentation-for-the-public-data-dump-and-sede/2678#2678)
 
--- [Download StackOverflow for Postgres](https://smartpostgres.com/go/getstack)
+-- Download StackOverflow for Postgres
+  - https://smartpostgres.com/go/getstack
+  - https://brentozar.com/go/querystack
+
   -- https://smartpostgres.com/posts/announcing-early-access-to-the-stack-overflow-sample-database-download-for-postgres/
 
 ## Dump `stackoverflow2013` database schema & data for backward compatibility. Later restore it on another server.

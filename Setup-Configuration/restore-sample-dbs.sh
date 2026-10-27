@@ -1,3 +1,5 @@
+# Sample StackOverflow databases - https://brentozar.com/go/querystack
+
 export PGPASSWORD='<password>';
 
 # Restore Sample Database from *.tar File

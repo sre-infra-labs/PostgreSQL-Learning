@@ -1,5 +1,7 @@
 # [Backup/Restore](https://stackoverflow.com/questions/15692508/a-faster-way-to-copy-a-postgresql-database-or-the-best-way)
 
+Sample StackOverflow databases - https://brentozar.com/go/querystack
+
 ```
 ### METHOD 01 - Custom Format
 # Create your dumps with custom format and compression
