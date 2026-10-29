@@ -5,6 +5,13 @@
 ```
 select * from pg_extension;
 
+[pg_tde](https://github.com/percona/pg_tde)
+This extension helps setup Application Level level for postgresql cluster. That is, Transparent Data Encryption, for data at rest.
+
+[pgmq](https://github.com/pgmq/pgmq)
+A lightweight message queue. Like AWS SQS and RSMQ but on Postgres.
+This is similar to Service Broker in SQLServer.
+
 [pgfincore]()
 This extension implements a set of functions to manage PostgreSQL data pages in the operating system's file cache.
 
