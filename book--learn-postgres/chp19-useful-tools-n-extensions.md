@@ -291,6 +291,14 @@ sudo -u postgres pgbackrest --stanza=localhost --set=20261015-070800F_20261015-0
 
 ```
 
+# Samba Shared Directory for pgbackrest of remote PostgreSQL Servers
+  # pgbackrest will run from KVM VM host like SqlRed or SqlBuntu
+  # Backup destination would be KVM Hypervisor host ryzen9 /stale-storage/share-stalestorage/pgbackrest_backups
+
+- PostgreSQL-Learning/book--learn-postgres/pgbackrest-from-kvm-vm-on-ryzen9-using-samba-share.md
+
+
+
 ## Enable password less ssh between pgbackrest host and postgresql host
 ```
 # generate ssh keys
