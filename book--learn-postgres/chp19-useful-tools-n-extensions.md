@@ -31,7 +31,7 @@ pg_stat_statements tracks all queries that are executed on the server and record
 pg_wait_sampling is an extension for collecting sampling statistics of wait events.
 
 pg_stat_plans
-pg_stat_plans extends on pg_stat_statements and records query plans for all executed quries. This is very helpful when you're experiencing performance regressions due to inefficient query plans due to changed parameters or table sizes.
+pg_stat_plans extends on pg_stat_statements and records query plans for all executed queries. This is very helpful when you're experiencing performance regressions due to inefficient query plans due to changed parameters or table sizes.
 
 [pg_activity](https://github.com/dalibo/pg_activity?tab=readme-ov-file)
 pg_activity is a htop like application for PostgreSQL server activity monitoring, written in Python.

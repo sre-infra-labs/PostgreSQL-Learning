@@ -14,7 +14,7 @@ Linux `Out Of Memory` killer terminates any process to relieve memory pressure o
 ### `min_wal_size`
 
 
-### `max_max_size`
+### `max_wal_size`
 
 
 ### `checkpoint_timeout`

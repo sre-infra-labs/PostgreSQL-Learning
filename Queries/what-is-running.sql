@@ -25,10 +25,12 @@ SELECT age(clock_timestamp(), a.query_start) as query_duration,
 FROM pg_stat_activity AS a
 LEFT JOIN blocking_info ON a.pid = blocking_info.pid
 WHERE 1=1
-and a.wait_event_type not in ('Activity')
-and a.state != 'idle'
-AND query NOT ILIKE '%pg_stat_activity%'
+--and a.wait_event_type not in ('Activity')
+--and a.state != 'idle'
+--AND query NOT ILIKE '%pg_stat_activity%'
 --AND wait_event_type IS NOT NULL
+and a.backend_type = 'client backend'
+--and a.datname = 'stackoverflow'
 ORDER BY a.state_change asc;
 --ORDER BY locked_since DESC;
 
