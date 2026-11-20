@@ -7,10 +7,11 @@ WITH blocking_info AS (
     GROUP BY pid
 )
 SELECT age(clock_timestamp(), a.query_start) as query_duration,
-    a.datname AS database_name,
-    a.usename AS user_name,
+    a.query,
+    a.application_name,
 	a.wait_event_type,
     a.wait_event,
+    a.backend_type,
     a.pid AS process_id,
     a.state,
     a.backend_start,
@@ -18,10 +19,10 @@ SELECT age(clock_timestamp(), a.query_start) as query_duration,
     a.query_start,
     a.state_change,
     now()::time - a.state_change::time AS locked_since,
-    a.backend_type,
     a.client_addr,
     blocking_info.locked_by,
-	a.query
+	a.datname AS database_name,
+    a.usename AS user_name
 FROM pg_stat_activity AS a
 LEFT JOIN blocking_info ON a.pid = blocking_info.pid
 WHERE 1=1
