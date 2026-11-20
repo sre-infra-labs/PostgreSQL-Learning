@@ -15,8 +15,9 @@ logging_collector = on
 log_destination = 'stderr'
 log_directory = '/var/log/postgresql'
 log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+log_file_mode = '0640'
 log_rotation_age = 1d
-log_rotation_size = 100MB
+log_rotation_size = 50MB
 log_truncate_on_rotation = on
 
 log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
@@ -28,7 +29,13 @@ log_temp_files = '20MB'
 log_checkpoints = on
 log_connections = on
 log_disconnections = on
-log_min_duration_statement = 2000   # log statements slower than 2 s
+
+log_min_duration_statement = 500   # log statements slower than 500 ms
+log_min_duration_sample = 100
+log_statement_sample_rate = 0.8
+log_transaction_sample_rate = 0.5
+
+
 ```
 
 For pgBadger-compatible logs (optional, see `pgBadger-settings.md`), add the sampling settings. Lower `log_min_duration_statement` above if pgBadger needs more detail:

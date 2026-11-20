@@ -1,3 +1,3 @@
 ## 10. Configure pg_exporter and add to Prometheus
 
-Not yet documented. Add steps here (install `postgres_exporter`, create a monitoring role, add the scrape job to `prometheus.yml`).
+Follow instructions on document [PostgreSQL-Learning/Monitoring/Postgres-Exporter.md](../../Monitoring/Postgres-Exporter.md)
