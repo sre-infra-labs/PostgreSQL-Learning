@@ -60,8 +60,7 @@ sudo ufw allow 9187/tcp
 
 ```bash
 # Create a systemd service file
-sudo cat <<'EOF' > /etc/systemd/system/postgres_exporter.service
-
+sudo tee /etc/systemd/system/postgres_exporter.service > /dev/null <<'EOF'
 [Unit]
 Description=PostgreSQL Exporter
 Documentation=https://github.com/prometheus-community/postgres_exporter
@@ -72,14 +71,19 @@ User=postgres
 Group=postgres
 EnvironmentFile=/etc/postgresql/postgres_exporter.env
 WorkingDirectory=/var/lib/postgresql/18/scripts/postgres_exporter-0.21.1.linux-amd64
-ExecStart=/var/lib/postgresql/18/scripts/postgres_exporter-0.21.1.linux-amd64/postgres_exporter
+ExecStart=/var/lib/postgresql/18/scripts/postgres_exporter-0.21.1.linux-amd64/postgres_exporter \
+  --collector.database_wraparound \
+  --collector.stat_checkpointer \
+  --collector.stat_activity_autovacuum \
+  --collector.statio_user_indexes \
+  --collector.long_running_transactions \
+  --collector.stat_statements
 Restart=on-failure
 StandardOutput=journal
 StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
-
 EOF
 
 
@@ -115,9 +119,42 @@ sudo systemctl status postgres_exporter.service
 Edit /etc/prometheus/prometheus.yml
 
 ```
-- job_name: postgres_exporter
+# job_name is "postgres" on official github website. So all dashboards use same.
+- job_name: postgres
   static_configs:
   - targets: ['localhost:9187']
     labels:
       host: "ryzen9"
 ```
+
+## *Step 3*: Enable additional collectors
+
+The exporter enables the common collectors by default. The collectors below are off by default, and the dashboards need some of them. The flags are already in the `ExecStart` line of Step 2.
+
+| Flag | Adds |
+|---|---|
+| `--collector.database_wraparound` | Transaction and multixact ID age per database (wraparound panels) |
+| `--collector.stat_checkpointer` | Checkpoint counters on PostgreSQL 17+ (checkpoint panels) |
+| `--collector.stat_activity_autovacuum` | Autovacuum worker activity |
+| `--collector.statio_user_indexes` | Index I/O statistics |
+| `--collector.long_running_transactions` | Transactions open longer than a threshold |
+| `--collector.stat_statements` | Per-query statistics; needs `pg_stat_statements` in the database the exporter connects to |
+
+Enabled by default (no flag needed): `database`, `locks`, `replication`, `replication_slots`, `settings`, `stat_activity`, `stat_archiver`, `stat_bgwriter`, `stat_database`, `stat_progress_vacuum`, `stat_replication`, `stat_user_tables`, `statio_user_tables`, `wal`.
+
+Apply the change:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart postgres_exporter
+```
+
+Check that the new metrics appear:
+
+```bash
+curl -s http://localhost:9187/metrics | grep -E 'wraparound|checkpointer|autovacuum' | cut -c1-120 | head
+```
+
+Notes:
+- `--auto-discover-databases` is needed to collect table-level statistics for databases other than the one in `DATA_SOURCE_NAME`. The exporter README marks it as deprecated, so check `postgres_exporter --help` on your version before using it.
+- The `--extend.query-path` option for custom queries is also deprecated in the README. Prefer the built-in collectors above.

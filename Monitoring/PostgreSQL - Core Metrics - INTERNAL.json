@@ -115,7 +115,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "floor(pg_settings_server_version_num{instance=\"$server\",job=\"postgres_exporter\"}/10000) + (pg_settings_server_version_num{instance=\"$server\",job=\"postgres_exporter\"} % 10000) / 10",
+          "expr": "floor(pg_settings_server_version_num{instance=\"$server\",job=\"postgres\"}/10000) + (pg_settings_server_version_num{instance=\"$server\",job=\"postgres\"} % 10000) / 10",
           "interval": "",
           "legendFormat": "",
           "range": true,
@@ -199,7 +199,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "max(pg_stat_replication_pg_wal_lsn_diff{instance=\"$server\",job=\"postgres_exporter\"})",
+          "expr": "max(pg_stat_replication_pg_wal_lsn_diff{instance=\"$server\",job=\"postgres\"})",
           "interval": "",
           "legendFormat": "",
           "range": true,
@@ -282,7 +282,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum(pg_stat_activity_count{state=\"active\",instance=\"$server\", job=\"postgres_exporter\"})",
+          "expr": "sum(pg_stat_activity_count{state=\"active\",instance=\"$server\", job=\"postgres\"})",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -364,7 +364,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum(pg_stat_database_blks_hit{instance=~\"$server\", job=\"postgres_exporter\"})/(sum(pg_stat_database_blks_hit{instance=~\"$server\", job=\"postgres_exporter\"})+sum(pg_stat_database_blks_read{instance=~\"$server\", job=\"postgres_exporter\"}))*100",
+          "expr": "sum(pg_stat_database_blks_hit{instance=~\"$server\", job=\"postgres\"})/(sum(pg_stat_database_blks_hit{instance=~\"$server\", job=\"postgres\"})+sum(pg_stat_database_blks_read{instance=~\"$server\", job=\"postgres\"}))*100",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -524,7 +524,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(pg_stat_database_xact_commit{instance=\"$server\", job=\"postgres_exporter\"})/(sum(pg_stat_database_xact_commit{instance=\"$server\", job=\"postgres_exporter\"}) + sum(pg_stat_database_xact_rollback{instance=\"$server\", job=\"postgres_exporter\"}))",
+          "expr": "sum(pg_stat_database_xact_commit{instance=\"$server\", job=\"postgres\"})/(sum(pg_stat_database_xact_commit{instance=\"$server\", job=\"postgres\"}) + sum(pg_stat_database_xact_rollback{instance=\"$server\", job=\"postgres\"}))",
           "refId": "A"
         }
       ],
@@ -604,7 +604,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "pg_settings_shared_buffers_bytes{instance=\"$server\", job=\"postgres_exporter\"}",
+          "expr": "pg_settings_shared_buffers_bytes{instance=\"$server\", job=\"postgres\"}",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -685,7 +685,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum((rate(pg_stat_database_xact_commit{instance=\"$server\", job=\"postgres_exporter\"}[$Interval])))+sum((rate(pg_stat_database_xact_rollback{instance=\"$server\", job=\"postgres_exporter\"}[$Interval])))",
+          "expr": "sum((rate(pg_stat_database_xact_commit{instance=\"$server\", job=\"postgres\"}[$Interval])))+sum((rate(pg_stat_database_xact_rollback{instance=\"$server\", job=\"postgres\"}[$Interval])))",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -765,7 +765,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "pg_settings_max_connections{instance=\"$server\", job=\"postgres_exporter\"}",
+          "expr": "pg_settings_max_connections{instance=\"$server\", job=\"postgres\"}",
           "refId": "A"
         }
       ],
@@ -863,7 +863,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "pg_stat_replication_pg_wal_lsn_diff {instance=\"$server\", job=\"postgres_exporter\"}/1024/1024",
+          "expr": "pg_stat_replication_pg_wal_lsn_diff {instance=\"$server\", job=\"postgres\"}/1024/1024",
           "hide": false,
           "interval": "",
           "legendFormat": "{{client_addr}}",
@@ -988,7 +988,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (datname) (pg_stat_activity_count{instance=\"$server\", job=\"postgres_exporter\"})",
+          "expr": "sum by (datname) (pg_stat_activity_count{instance=\"$server\", job=\"postgres\"})",
           "legendFormat": "{{datname}}",
           "refId": "A"
         }
@@ -1099,7 +1099,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (state) (pg_stat_activity_count{instance=\"$server\", job=\"postgres_exporter\"})",
+          "expr": "sum by (state) (pg_stat_activity_count{instance=\"$server\", job=\"postgres\"})",
           "interval": "",
           "legendFormat": "{{state}}",
           "refId": "A"
@@ -1203,7 +1203,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum((rate(pg_stat_database_tup_inserted{instance=\"$server\", job=\"postgres_exporter\"}[$Interval])))",
+          "expr": "sum((rate(pg_stat_database_tup_inserted{instance=\"$server\", job=\"postgres\"}[$Interval])))",
           "interval": "",
           "legendFormat": "Inserts",
           "range": true,
@@ -1214,7 +1214,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum((rate(pg_stat_database_tup_updated{instance=\"$server\", job=\"postgres_exporter\"}[$Interval])))",
+          "expr": "sum((rate(pg_stat_database_tup_updated{instance=\"$server\", job=\"postgres\"}[$Interval])))",
           "interval": "",
           "legendFormat": "Updates",
           "refId": "B"
@@ -1224,7 +1224,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum((rate(pg_stat_database_tup_deleted{instance=\"$server\", job=\"postgres_exporter\"}[$Interval])))",
+          "expr": "sum((rate(pg_stat_database_tup_deleted{instance=\"$server\", job=\"postgres\"}[$Interval])))",
           "interval": "",
           "legendFormat": "Deletes",
           "refId": "C"
@@ -1327,7 +1327,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum ((rate(pg_stat_database_xact_commit{instance=\"$server\", job=\"postgres_exporter\"}[$Interval])))",
+          "expr": "sum ((rate(pg_stat_database_xact_commit{instance=\"$server\", job=\"postgres\"}[$Interval])))",
           "interval": "",
           "legendFormat": "committed",
           "refId": "A"
@@ -1338,7 +1338,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum ((rate(pg_stat_database_xact_rollback{instance=\"$server\", job=\"postgres_exporter\"}[$Interval])))",
+          "expr": "sum ((rate(pg_stat_database_xact_rollback{instance=\"$server\", job=\"postgres\"}[$Interval])))",
           "hide": false,
           "interval": "",
           "legendFormat": "rollback",
@@ -1442,7 +1442,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum((rate(pg_stat_database_tup_fetched{instance=\"$server\", job=\"postgres_exporter\"}[$Interval])))",
+          "expr": "sum((rate(pg_stat_database_tup_fetched{instance=\"$server\", job=\"postgres\"}[$Interval])))",
           "interval": "",
           "legendFormat": "Fetched",
           "refId": "A"
@@ -1452,7 +1452,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum((rate(pg_stat_database_tup_returned{instance=\"$server\", job=\"postgres_exporter\"}[$Interval])))",
+          "expr": "sum((rate(pg_stat_database_tup_returned{instance=\"$server\", job=\"postgres\"}[$Interval])))",
           "interval": "",
           "legendFormat": "Returned",
           "refId": "B"
@@ -1555,7 +1555,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum ((rate(pg_stat_database_blk_read_time{instance=\"$server\", job=\"postgres_exporter\"}[$Interval])))",
+          "expr": "sum ((rate(pg_stat_database_blk_read_time{instance=\"$server\", job=\"postgres\"}[$Interval])))",
           "interval": "",
           "legendFormat": "blk_read_time",
           "refId": "A"
@@ -1565,7 +1565,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum ((rate(pg_stat_database_blk_write_time{instance=\"$server\", job=\"postgres_exporter\"}[$Interval])))",
+          "expr": "sum ((rate(pg_stat_database_blk_write_time{instance=\"$server\", job=\"postgres\"}[$Interval])))",
           "interval": "",
           "legendFormat": "blk_read_time",
           "refId": "B"
@@ -1674,7 +1674,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (datname) ((rate(pg_stat_database_deadlocks{instance=\"$server\", job=\"postgres_exporter\"}[$Interval])))",
+          "expr": "sum by (datname) ((rate(pg_stat_database_deadlocks{instance=\"$server\", job=\"postgres\"}[$Interval])))",
           "interval": "",
           "legendFormat": "{{datname}}",
           "refId": "A"
@@ -1782,7 +1782,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (mode) (pg_locks_count{instance=\"$server\", job=\"postgres_exporter\"})",
+          "expr": "sum by (mode) (pg_locks_count{instance=\"$server\", job=\"postgres\"})",
           "legendFormat": "{{mode}}",
           "refId": "A"
         }
@@ -1890,7 +1890,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (datname) ((rate(pg_stat_database_temp_files{instance=\"$server\", job=\"postgres_exporter\"}[$Interval])))",
+          "expr": "sum by (datname) ((rate(pg_stat_database_temp_files{instance=\"$server\", job=\"postgres\"}[$Interval])))",
           "interval": "",
           "legendFormat": "{{datname}}",
           "refId": "A"
@@ -1984,7 +1984,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "pg_stat_activity_count{state=\"active\",instance=\"$server\", job=\"postgres_exporter\",datname=~\"$db\"}",
+          "expr": "pg_stat_activity_count{state=\"active\",instance=\"$server\", job=\"postgres\",datname=~\"$db\"}",
           "refId": "A"
         }
       ],
@@ -2063,7 +2063,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "pg_stat_database_blks_hit{instance=~\"$server\", job=\"postgres_exporter\",datname=~\"$db\"}/(pg_stat_database_blks_hit{instance=~\"$server\", job=\"postgres_exporter\",datname=~\"$db\"}+pg_stat_database_blks_read{instance=~\"$server\", job=\"postgres_exporter\",datname=~\"$db\"})",
+          "expr": "pg_stat_database_blks_hit{instance=~\"$server\", job=\"postgres\",datname=~\"$db\"}/(pg_stat_database_blks_hit{instance=~\"$server\", job=\"postgres\",datname=~\"$db\"}+pg_stat_database_blks_read{instance=~\"$server\", job=\"postgres\",datname=~\"$db\"})",
           "refId": "A"
         }
       ],
@@ -2142,7 +2142,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "pg_stat_database_xact_commit{instance=\"$server\", job=\"postgres_exporter\",datname=~\"$db\"}/(pg_stat_database_xact_commit{instance=\"$server\", job=\"postgres_exporter\",datname=~\"$db\"} + pg_stat_database_xact_rollback{instance=\"$server\", job=\"postgres_exporter\",datname=~\"$db\"})",
+          "expr": "pg_stat_database_xact_commit{instance=\"$server\", job=\"postgres\",datname=~\"$db\"}/(pg_stat_database_xact_commit{instance=\"$server\", job=\"postgres\",datname=~\"$db\"} + pg_stat_database_xact_rollback{instance=\"$server\", job=\"postgres\",datname=~\"$db\"})",
           "refId": "A"
         }
       ],
@@ -2293,7 +2293,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (state) (pg_stat_activity_count{instance=\"$server\", job=\"postgres_exporter\",datname=\"$db\"})",
+          "expr": "sum by (state) (pg_stat_activity_count{instance=\"$server\", job=\"postgres\",datname=\"$db\"})",
           "legendFormat": "{{state}}",
           "refId": "A"
         }
@@ -2373,7 +2373,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum((rate(pg_stat_database_xact_commit{instance=\"$server\", job=\"postgres_exporter\",datname=\"$db\"}[$Interval])))+sum((rate(pg_stat_database_xact_rollback{instance=\"$server\", job=\"postgres_exporter\",datname=\"$db\"}[$Interval])))",
+          "expr": "sum((rate(pg_stat_database_xact_commit{instance=\"$server\", job=\"postgres\",datname=\"$db\"}[$Interval])))+sum((rate(pg_stat_database_xact_rollback{instance=\"$server\", job=\"postgres\",datname=\"$db\"}[$Interval])))",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -2476,7 +2476,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "rate(pg_stat_database_xact_commit{instance=\"$server\", job=\"postgres_exporter\",datname=\"$db\"}[$Interval])",
+          "expr": "rate(pg_stat_database_xact_commit{instance=\"$server\", job=\"postgres\",datname=\"$db\"}[$Interval])",
           "interval": "",
           "legendFormat": "committed",
           "refId": "A"
@@ -2486,7 +2486,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "rate(pg_stat_database_xact_rollback{instance=\"$server\", job=\"postgres_exporter\",datname=\"$db\"}[$Interval])",
+          "expr": "rate(pg_stat_database_xact_rollback{instance=\"$server\", job=\"postgres\",datname=\"$db\"}[$Interval])",
           "hide": false,
           "interval": "",
           "legendFormat": "rollback",
@@ -2591,7 +2591,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "rate(pg_stat_database_tup_fetched{instance=\"$server\", job=\"postgres_exporter\",datname=\"$db\"}[$Interval])",
+          "expr": "rate(pg_stat_database_tup_fetched{instance=\"$server\", job=\"postgres\",datname=\"$db\"}[$Interval])",
           "interval": "",
           "legendFormat": "Fetched",
           "refId": "A"
@@ -2601,7 +2601,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "rate(pg_stat_database_tup_returned{instance=\"$server\", job=\"postgres_exporter\",datname=\"$db\"}[$Interval])",
+          "expr": "rate(pg_stat_database_tup_returned{instance=\"$server\", job=\"postgres\",datname=\"$db\"}[$Interval])",
           "interval": "",
           "legendFormat": "Returned",
           "refId": "B"
@@ -2705,7 +2705,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "rate(pg_stat_database_tup_inserted{instance=\"$server\", job=\"postgres_exporter\",datname=\"$db\"}[$Interval])",
+          "expr": "rate(pg_stat_database_tup_inserted{instance=\"$server\", job=\"postgres\",datname=\"$db\"}[$Interval])",
           "interval": "",
           "legendFormat": "Inserts",
           "refId": "A"
@@ -2715,7 +2715,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "rate(pg_stat_database_tup_updated{instance=\"$server\", job=\"postgres_exporter\",datname=\"$db\"}[$Interval])",
+          "expr": "rate(pg_stat_database_tup_updated{instance=\"$server\", job=\"postgres\",datname=\"$db\"}[$Interval])",
           "interval": "",
           "legendFormat": "Updates",
           "refId": "B"
@@ -2725,7 +2725,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "rate(pg_stat_database_tup_deleted{instance=\"$server\", job=\"postgres_exporter\",datname=\"$db\"}[$Interval])",
+          "expr": "rate(pg_stat_database_tup_deleted{instance=\"$server\", job=\"postgres\",datname=\"$db\"}[$Interval])",
           "interval": "",
           "legendFormat": "Deletes",
           "refId": "C"
@@ -2877,7 +2877,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(pg_stat_database_deadlocks{instance=\"$server\", job=\"postgres_exporter\",datname=\"$db\"}[$Interval])",
+          "expr": "rate(pg_stat_database_deadlocks{instance=\"$server\", job=\"postgres\",datname=\"$db\"}[$Interval])",
           "interval": "",
           "legendFormat": "{{datname}}",
           "range": true,
@@ -2988,7 +2988,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (mode) (pg_locks_count{instance=\"$server\", job=\"postgres_exporter\",datname=\"$db\"})",
+          "expr": "sum by (mode) (pg_locks_count{instance=\"$server\", job=\"postgres\",datname=\"$db\"})",
           "legendFormat": "{{mode}}",
           "refId": "A"
         }
@@ -3138,7 +3138,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "rate(pg_stat_database_temp_files{instance=\"$server\", job=\"postgres_exporter\",datname=\"$db\"}[$Interval])",
+          "expr": "rate(pg_stat_database_temp_files{instance=\"$server\", job=\"postgres\",datname=\"$db\"}[$Interval])",
           "interval": "",
           "legendFormat": "temp_files",
           "refId": "A"
@@ -3248,7 +3248,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "(\n  pg_stat_database_blks_hit{instance=\"$server\", job=\"postgres_exporter\", datname=\"$db\"}\n  /\n  (\n    pg_stat_database_blks_hit{instance=\"$server\", job=\"postgres_exporter\", datname=\"$db\"}\n    +\n    pg_stat_database_blks_read{instance=\"$server\", job=\"postgres_exporter\", datname=\"$db\"}\n  )\n) * 100\n",
+          "expr": "(\n  pg_stat_database_blks_hit{instance=\"$server\", job=\"postgres\", datname=\"$db\"}\n  /\n  (\n    pg_stat_database_blks_hit{instance=\"$server\", job=\"postgres\", datname=\"$db\"}\n    +\n    pg_stat_database_blks_read{instance=\"$server\", job=\"postgres\", datname=\"$db\"}\n  )\n) * 100\n",
           "hide": false,
           "legendFormat": "{{datname}}",
           "range": true,
@@ -3320,7 +3320,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "pgc_status_autovacuum_running{instance=\"$server\", job=\"postgres_exporter\"}",
+          "expr": "pgc_status_autovacuum_running{instance=\"$server\", job=\"postgres\"}",
           "hide": false,
           "interval": "",
           "legendFormat": "{{datname}}",
@@ -3391,7 +3391,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "pg_database_wraparound_age_datminmxid_seconds{instance=\"$server\", job=\"postgres_exporter\",datname=\"$db\"}",
+          "expr": "pg_database_wraparound_age_datminmxid_seconds{instance=\"$server\", job=\"postgres\",datname=\"$db\"}",
           "hide": false,
           "interval": "",
           "legendFormat": "{{datname}}",
@@ -3462,7 +3462,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "pg_database_wraparound_age_datfrozenxid_seconds{instance=\"$server\", job=\"postgres_exporter\",datname=\"$db\"}",
+          "expr": "pg_database_wraparound_age_datfrozenxid_seconds{instance=\"$server\", job=\"postgres\",datname=\"$db\"}",
           "hide": false,
           "interval": "",
           "legendFormat": "{{datname}}",
@@ -3536,7 +3536,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "pg_stat_user_tables_n_dead_tup{instance=\"$server\", job=\"postgres_exporter\",datname=\"$db\",schemaname=\"public\"}",
+          "expr": "pg_stat_user_tables_n_dead_tup{instance=\"$server\", job=\"postgres\",datname=\"$db\",schemaname=\"public\"}",
           "hide": false,
           "interval": "",
           "legendFormat": "{{relname}}",
@@ -3610,7 +3610,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "(pg_stat_user_tables_n_dead_tup{instance=\"$server\", job=\"postgres_exporter\",schemaname=\"public\"}/pg_stat_user_tables_n_live_tup{instance=\"$server\", job=\"postgres_exporter\",schemaname=\"public\",datname=\"$db\"}) * 100",
+          "expr": "(pg_stat_user_tables_n_dead_tup{instance=\"$server\", job=\"postgres\",schemaname=\"public\"}/pg_stat_user_tables_n_live_tup{instance=\"$server\", job=\"postgres\",schemaname=\"public\",datname=\"$db\"}) * 100",
           "hide": false,
           "interval": "",
           "legendFormat": "{{relname}}",
@@ -3685,7 +3685,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "pg_stat_user_tables_last_autovacuum{datname=\"$db\", schemaname=\"public\", job=\"postgres_exporter\",instance=\"$server\", job=\"postgres_exporter\"} == 0",
+          "expr": "pg_stat_user_tables_last_autovacuum{datname=\"$db\", schemaname=\"public\", job=\"postgres\",instance=\"$server\", job=\"postgres\"} == 0",
           "hide": false,
           "interval": "",
           "legendFormat": "{{relname}}",
@@ -3760,7 +3760,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "(pg_stat_user_tables_last_autovacuum{job=\"postgres_exporter\",instance=\"$server\", job=\"postgres_exporter\",datname=\"$db\"}>0)*1000\n",
+          "expr": "(pg_stat_user_tables_last_autovacuum{job=\"postgres\",instance=\"$server\", job=\"postgres\",datname=\"$db\"}>0)*1000\n",
           "hide": false,
           "interval": "",
           "legendFormat": "{{relname}}",
@@ -3835,7 +3835,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "(time() - pg_stat_user_tables_last_autovacuum{datname=\"$db\", schemaname=\"public\", job=\"postgres_exporter\"}) > 2592000",
+          "expr": "(time() - pg_stat_user_tables_last_autovacuum{datname=\"$db\", schemaname=\"public\", job=\"postgres\"}) > 2592000",
           "hide": false,
           "interval": "",
           "legendFormat": "{{relname}}",
@@ -3910,7 +3910,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "(pg_stat_user_tables_last_autoanalyze{job=\"postgres_exporter\",instance=\"$server\", job=\"postgres_exporter\",datname=\"$db\"}>0)*1000",
+          "expr": "(pg_stat_user_tables_last_autoanalyze{job=\"postgres\",instance=\"$server\", job=\"postgres\",datname=\"$db\"}>0)*1000",
           "hide": false,
           "interval": "",
           "legendFormat": "{{relname}}",
@@ -3953,14 +3953,14 @@
           "type": "prometheus",
           "uid": "${DS_PROMETHEUS}"
         },
-        "definition": "label_values({job=\"postgres_exporter\"},instance)",
+        "definition": "label_values({job=\"postgres\"},instance)",
         "includeAll": false,
         "label": "Server",
         "name": "server",
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values({job=\"postgres_exporter\"},instance)",
+          "query": "label_values({job=\"postgres\"},instance)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -3976,13 +3976,13 @@
           "type": "prometheus",
           "uid": "${DS_PROMETHEUS}"
         },
-        "definition": "label_values({instance=\"$server\", job=\"postgres_exporter\"}, datname)",
+        "definition": "label_values({instance=\"$server\", job=\"postgres\"}, datname)",
         "includeAll": false,
         "label": "Database",
         "name": "db",
         "options": [],
         "query": {
-          "query": "label_values({instance=\"$server\", job=\"postgres_exporter\"}, datname)",
+          "query": "label_values({instance=\"$server\", job=\"postgres\"}, datname)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,
