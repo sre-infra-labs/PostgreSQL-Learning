@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 
-# Usage: ./run_workload.sh [progress_sec] [clients] [duration_sec]
-# Example: ./run_workload.sh 10 8 120
+# Usage: ./run_workload.sh [duration_sec] [clients] [progress_sec]
+# Example: ./run_workload.sh 300 6 30
 
 #ls ./5-workload/*.sql | xargs -I{} echo --file={} | xargs pgbench -P 30 -c 6 -j 6 -T 300 stackoverflow
 
-PROGRESS="${1:-30}"
+DURATION="${1:-300}"
 CLIENTS="${2:-6}"
-DURATION="${3:-300}"
+PROGRESS="${3:-30}"
+
 DB_NAME="stackoverflow"
 
 # Collect all SQL workload files safely into an array

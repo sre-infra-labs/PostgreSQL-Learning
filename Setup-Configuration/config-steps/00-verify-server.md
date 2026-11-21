@@ -11,6 +11,7 @@ sudo -u postgres psql -c 'SHOW data_directory;'
 Set a password for the `postgres` superuser (needed for TCP/password logins):
 
 ```sql
+CREATE ROLE <role_name> with login superuser replication bypassrls password '<SomeStringPasswordHere>';
 ALTER USER postgres PASSWORD 'newpassword';
 ```
 
