@@ -17,7 +17,7 @@ for f in ./5-workload/*.sql; do
     files+=("--file=$f")
 done
 
-echo "Starting pgbench on '$DB_NAME' | Clients: $CLIENTS | Duration: ${DURATION}s | Progress every: ${PROGRESS}s"
+echo "Starting pgbench on '$DB_NAME' | Duration: ${DURATION}s | Clients: $CLIENTS | Progress every: ${PROGRESS}s"
 
 pgbench -n -P "$PROGRESS" -c "$CLIENTS" -j "$CLIENTS" -T "$DURATION" "${files[@]}" "$DB_NAME"
 
