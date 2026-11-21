@@ -43,7 +43,15 @@ sudo chmod 750 /var/lib/postgresql/log
 # 3. Make existing log files group-readable, and remove the stray other-execute bit
 sudo find /var/lib/postgresql/log -type f -exec chmod 640 {} +
 
-# 4. Test from the local machine, after logging out and back in
+# 4. Refresh the terminal permissions
+newgrp postgres
+
+# 5. Change timezone to IST
+sudo timedatectl set-timezone Asia/Kolkata
+timedatectl | grep 'Time zone'
+date
+
+# 6. Test from the local machine, after logging out and back in
 ssh sqlred 'ls -l /var/lib/postgresql/log/ | tail -3'
 ```
 
@@ -121,7 +129,9 @@ while read -r name source; do
   # $source is intentionally unquoted so local globs expand.
   # -I parses only new lines, using LAST_PARSED in the output folder.
   # -f stderr skips format detection, which fails for ssh:// sources.
-  if "${limit[@]}" pgbadger -q -I -f stderr --outdir "$BASE/$name" $source 2> "$BASE/$name/last_error.txt"; then
+  # </dev/null stops ssh inside pgbadger from reading the rest of servers.conf from stdin,
+  # which would silently skip every server listed after this one.
+  if "${limit[@]}" pgbadger -q -I -f stderr --outdir "$BASE/$name" $source 2> "$BASE/$name/last_error.txt" < /dev/null; then
     date '+%F %T' > "$BASE/$name/last_ok.txt"
     rm -f "$BASE/$name/last_error.txt"
   else
@@ -302,6 +312,8 @@ sg www-data -c 'cat /var/lib/pgbadger/data/html/<server>/last_error.txt'
 | `No route to host` | Server is powered off or not reachable | `ping <host>`, and check the machine and network. |
 | `unable to detect log file format ... please use -f option` | Format detection fails on `ssh://` sources | Use `-f stderr` in the script (section 11.4). |
 | `Received SIGTERM abort parsing` | Remote parse ran past `timeout` | Raise `timeout` in the script (section 11.4). Lower it once the first import is done. |
+| A server's `last_error.txt` and `last_ok.txt` are never updated, and the journal is silent | The loop stopped before reaching that server. A command inside the loop read stdin and consumed the rest of `servers.conf`. Servers after the first working remote one are then skipped. | Use `< /dev/null` on the `pgbadger` line in the script (section 11.4). |
+| `FATAL: another process is already started` when running pgBadger by hand | The timer's run is holding `/tmp/pgbadger.pid` | Wait for `systemctl is-active pgbadger-import.service` to print `inactive`, then retry. Use `--pid-dir` for manual tests. |
 | `previous import still running, skipping` in journal | A run takes longer than the interval, so the lock is held | Check run time. Raise the interval, or reduce the log window. |
 | Service fails with `control process exited` but a server is OK | The script exits non-zero if any server fails | Look at the failing server's `last_error.txt`. This is expected behavior, not a separate bug. |
 | Unit edits have no effect | systemd hasn't reloaded | `sudo systemctl daemon-reload`, then `sudo systemctl restart pgbadger-import.timer`. |

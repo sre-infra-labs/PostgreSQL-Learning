@@ -22,4 +22,5 @@ Work through the steps in order. Each step is in its own file in [config-steps/]
 - [16. Final verification checklist](config-steps/16-final-verification.md)
 - [17. Set up ~/.pgpass for your user and the postgres user](config-steps/17-pgpass.md)
 - [18. Configure PgBouncer (connection pooler)](config-steps/18-pgbouncer.md)
+- [19. Configure Redis Cache Server for ryzen9 postgresql (localhost)](config-steps/19-redis.md)
 
